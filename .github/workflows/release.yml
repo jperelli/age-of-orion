@@ -2,24 +2,33 @@ name: Release
 
 # Push a tag like v0.2.0 (matching the version in Cargo.toml and CHANGELOG.md) to publish:
 # the web build (zip), desktop installers for Linux, Windows and macOS, and the CLI.
+# It can also be run by hand for an existing tag (Actions > Release > Run workflow).
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish (for example v0.1.0)
+        required: true
 
 permissions:
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - uses: ./.github/actions/build-web
       - name: Package
-        run: cd web/dist && zip -r "../../age-of-orion-web-${GITHUB_REF_NAME}.zip" .
+        run: cd web/dist && zip -r "../../age-of-orion-web-${TAG}.zip" .
       - uses: actions/upload-artifact@v7
         with:
           name: web-dist
@@ -44,6 +53,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/download-artifact@v8
         with:
           name: web-dist
@@ -96,13 +107,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p aoo-cli
       - name: Package
         shell: bash
         run: |
-          name="aoo-cli-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="aoo-cli-${TAG}-${{ matrix.target }}"
           mkdir "$name"
           cp README.md LICENSE "$name"/
           if [ "$RUNNER_OS" = "Windows" ]; then
@@ -115,13 +128,17 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: release-cli-${{ matrix.target }}
-          path: aoo-cli-*.*
+          path: |
+            aoo-cli-*.tar.gz
+            aoo-cli-*.zip
 
   publish:
     needs: [web, desktop, cli]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/download-artifact@v8
         with:
           pattern: release-*
@@ -129,13 +146,13 @@ jobs:
           merge-multiple: true
       - name: Release notes from CHANGELOG.md
         run: |
-          v="${GITHUB_REF_NAME#v}"
+          v="${TAG#v}"
           awk -v v="$v" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "Release $GITHUB_REF_NAME" > notes.md
+          [ -s notes.md ] || echo "Release $TAG" > notes.md
           cat notes.md
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -l dist
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Age of Orion $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          find dist -maxdepth 1 -type f -print0 | xargs -0 gh release create "$TAG" --title "Age of Orion $TAG" --notes-file notes.md --verify-tag
