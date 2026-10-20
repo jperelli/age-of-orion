@@ -44,28 +44,32 @@ flowchart LR
 | 1oom | Rust | Status |
 |---|---|---|
 | `rnd.c` | `rng.rs` | Ported exactly |
-| `game_new.c` (planets, names, homes) | `galaxy.rs` | Planet generation ported exactly; home placement and nebulae simplified/omitted |
+| `game_new.c` (nebulae, planets, names, homes, research lists) | `galaxy.rs`, `tech.rs` | Nebulae, planets and research lists ported exactly; home placement simplified |
 | `game_misc.c` production, growth, tech output | `turn.rs` | Ported |
-| `game_turn.c` eco, def, ship, ind, reserve, movement | `turn.rs` | Ported with 1oom's fix options; stargates, soil enrichment and atmospheric terraforming not yet |
-| `game_tech.c` costs and thresholds | `rules.rs` | Cost formula and thresholds ported; research is linear (every tech number is a level) instead of choosing among available techs |
-| `game_battle*.c` | `combat.rs` | Simplified: battles resolve in rounds of simultaneous fire, no tactical grid |
+| `game_turn.c` eco, def, ship, ind, reserve, movement, explore | `turn.rs` | Ported with 1oom's fix options, including soil enrichment, atmospheric terraforming, stargates, nebulae and relocation |
+| `game_tech.c` | `tech.rs`, `rules.rs` | Ported: research lists, choices, interest, breakthroughs, field levels, tech effects, Orion and artifact loot |
+| `game_battle*.c` | `combat.rs` | Shot formula (`game_battle_attack`), ship and base stats (`game_parsed.c`), Guardian ported; battles resolve in rounds of simultaneous fire without the tactical grid, movement and most specials |
+| `game_bomb.c`, `game_turn_transport_shoot` | `combat.rs` | Ported |
 | `game_ground.c` | `combat.rs` | Ported (d100 + bonus rounds) |
-| `game_shipdesign.c`, `game_design.c` | `rules.rs` (`Design`) | Fixed designs (the five MOO1 starting designs), editable through rules |
-| `game_ai_classic.c` | `ai.rs` | Replaced by a compact strategy |
+| `game_shiptech.c`, `game_shipdesign.c`, `game_design.c` | `data.rs` (generated), `design.rs` | Ported: part tables, cost, space, engines, hit points, starting designs |
+| `game_ai_classic.c` | `ai.rs` | Research choice and focus ported; the rest is a compact strategy with an automatic ship designer |
 | `game_diplo.c`, `game_audience.c`, `game_spy.c`, `game_election.c`, `game_event.c`, `game_news.c` | - | Not yet: every empire is at war with every other |
 | `game_save.c` | `serde` JSON | New format; MOO1 save import not yet |
 
 ## Milestones
 
-### 0.1.0 (this release)
+### 0.1.0 (done)
 Playable game from start to conquest in the browser and on the desktop, two themes, LBX
 import, mods, CI/CD, releases, website.
 
-### 0.2.0: closer to MOO1
-- Ship design screen (hulls, weapons, shields, armour, specials from `game_shiptech.c`).
-- Research choices among available techs per tier (`game_tech.c`), tech names and texts.
+### 0.2.0: closer to MOO1 (done)
+- Ship design screen with every MOO1 part (`game_shiptech.c`, `game_design.c`).
+- Research choices among the available techs per tier (`game_tech.c`), tech names.
 - Soil enrichment, atmospheric terraforming, stargates, nebulae.
-- Fleet order improvements: split/merge, relocation of new ships, scrap.
+- Fleet orders: split (send part of an orbit), automatic merge in orbit, rally points for
+  new ships, scrapping. Orbital bombing and transport losses as in MOO1.
+- Still open from this list: tech descriptions (MOO1 keeps them in RESEARCH.LBX, to be
+  imported), the effects of combat specials that need the tactical grid.
 
 ### 0.3.0: diplomacy and events
 - Contact, treaties, trade and audiences (`game_diplo.c`, `game_audience.c`).
@@ -77,7 +81,8 @@ import, mods, CI/CD, releases, website.
 - Tactical combat on a grid (`game_battle_human.c`) with sprites from imported SHIPS.LBX or
   theme art.
 - Music and sound: XMIDI to MIDI in the importer (`fmt_mus.c`) and a SoundFont synth.
-- LBX import in a Web Worker, more aliases (ships, starmap, screens), fonts.
+- Combat specials (repulsor, stasis, black hole, teleporter, ...), retreat.
+- LBX import in a Web Worker, more aliases (ships, screens), tech descriptions from RESEARCH.LBX, fonts.
 
 ### Later
 - Comparison harness against C 1oom (same seed, turn-by-turn state diff) to pin the rules.

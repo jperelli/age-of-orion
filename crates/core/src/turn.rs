@@ -2,7 +2,9 @@
 //! (with the 1oom "fix" options for the waste, population tenths and refit bugs).
 
 use crate::combat;
+use crate::design::{BUILD_STARGATE, MAX_DESIGNS};
 use crate::state::*;
+use crate::tech;
 use crate::types::*;
 
 fn adjust_by_special(prod: i32, special: Special) -> i32 {
@@ -65,8 +67,7 @@ pub fn clean_eco_percent(p: &Planet, e: &Empire) -> i32 {
 
 /// Ships in orbit and en route of an empire, per design.
 pub fn ship_totals(st: &State, empire: EmpireId) -> Vec<u32> {
-    let n = st.rules.designs.len();
-    let mut t = vec![0u32; n];
+    let mut t = vec![0u32; MAX_DESIGNS];
     for o in &st.empires[empire as usize].orbit {
         for (i, c) in o.iter().enumerate() {
             t[i] += c;
@@ -90,8 +91,7 @@ pub fn update_production(st: &mut State) {
         let Some(o) = p.owner else { continue };
         let e = &st.empires[o as usize];
         let workers = p.pop * p.pop_oper_fact;
-        let mut extra =
-            p.pop * (e.tech.level[TechField::Planetology as usize] as i32 * 3 + 50) / 100;
+        let mut extra = p.pop * (e.tech.level[FIELD_PLANETOLOGY] as i32 * 3 + 50) / 100;
         if e.race == Race::Klackon {
             extra *= 2;
         }
@@ -116,7 +116,10 @@ pub fn update_production(st: &mut State) {
             .map(|(d, &c)| c as i64 * st.ship_cost(e, d) as i64)
             .sum();
         let bases: i32 = st.colonies(e).map(|(_, p)| p.bases).sum();
-        let maint = (ships / 50) as i32 + bases * st.base_cost(e) / 50;
+        let gates = st.colonies(e).filter(|(_, p)| p.stargate).count() as i32;
+        let ship_maint =
+            ((ships / 50) as i32 + gates * st.rules.stargate_maint).min(st.rules.max_ship_maint);
+        let maint = ship_maint + bases * st.base_cost(e) / 50;
         let em = &mut st.empires[ei];
         em.maintenance = maint.min(raw_total[ei]);
         em.total_prod = raw_total[ei];
@@ -172,9 +175,50 @@ fn pop_growth_for_eco(p: &Planet, race: Race, inc_pop_cost: i32, eco: i32) -> i3
 }
 
 /// 1oom `game_turn_build_eco`: waste, eco cleanup, terraforming, population growth.
+/// 1oom `game_turn_atmos_tform`.
+fn atmos_terraform(p: &mut Planet) {
+    let inc = if p.kind < PlanetType::Dead {
+        20
+    } else if p.kind < PlanetType::Barren {
+        10
+    } else {
+        0
+    };
+    p.kind = PlanetType::Minimal;
+    p.size += inc;
+    p.base_max_pop += inc;
+    p.max_pop += inc;
+    p.growth = Growth::Normal;
+}
+
+/// 1oom `game_turn_soil_enrich` (with the rounding fix).
+fn soil_enrich(p: &mut Planet, best_tform: i32, advanced: bool, max_pop: i32) {
+    p.growth = if advanced {
+        Growth::Gaia
+    } else {
+        Growth::Fertile
+    };
+    let inc = if advanced {
+        (p.size + 9) / 10 * 5
+    } else {
+        (p.size + 19) / 20 * 5
+    }
+    .max(5);
+    let old = p.base_max_pop;
+    p.base_max_pop = p.size + inc;
+    p.max_pop += p.base_max_pop - old;
+    p.max_pop = p.max_pop.min(best_tform + p.base_max_pop).min(max_pop);
+}
+
 fn build_eco(st: &mut State) {
     let max_pop_cap = st.rules.max_pop;
-    for p in st.planets.iter_mut() {
+    let (atmos_cost, soil_cost, adv_soil_cost) = (
+        st.rules.atmos_cost,
+        st.rules.soil_cost,
+        st.rules.adv_soil_cost,
+    );
+    let mut done = Vec::new();
+    for (i, p) in st.planets.iter_mut().enumerate() {
         let Some(o) = p.owner else { continue };
         if p.pop == 0 || !p.habitable() {
             continue;
@@ -205,6 +249,44 @@ fn build_eco(st: &mut State) {
         if mp2 - p.waste < 10 {
             p.waste = (mp2 - 10).max(0);
         }
+        let mut improved = false;
+        if ecoprod > 0 && a.atmos_terraform && p.growth == Growth::Hostile {
+            p.bc_to_ecoproj += ecoprod;
+            if p.bc_to_ecoproj >= atmos_cost {
+                atmos_terraform(p);
+                ecoprod = p.bc_to_ecoproj - atmos_cost;
+                p.bc_to_ecoproj = 0;
+                improved = true;
+            } else {
+                ecoprod = 0;
+            }
+        }
+        if ecoprod > 0 && a.soil_enrich && p.growth == Growth::Normal {
+            p.bc_to_ecoproj += ecoprod;
+            if p.bc_to_ecoproj > soil_cost {
+                soil_enrich(p, a.terraform, false, max_pop_cap);
+                ecoprod = p.bc_to_ecoproj - soil_cost;
+                p.bc_to_ecoproj = p.bc_to_ecoproj.min(soil_cost);
+                improved = true;
+            } else {
+                ecoprod = 0;
+            }
+        }
+        if ecoprod > 0 && a.adv_soil_enrich && p.growth < Growth::Gaia && p.growth > Growth::Hostile
+        {
+            p.bc_to_ecoproj += ecoprod;
+            if p.bc_to_ecoproj > adv_soil_cost {
+                soil_enrich(p, a.terraform, true, max_pop_cap);
+                ecoprod = p.bc_to_ecoproj - adv_soil_cost;
+                p.bc_to_ecoproj = 0;
+                improved = true;
+            } else {
+                ecoprod = 0;
+            }
+        }
+        if improved {
+            done.push((i, o));
+        }
         if ecoprod > 0 && (p.max_pop - p.base_max_pop) < a.terraform && p.max_pop < max_pop_cap {
             let v = ecoprod / a.terraform_cost;
             let tmax = a.terraform + p.base_max_pop;
@@ -225,45 +307,19 @@ fn build_eco(st: &mut State) {
         p.pop_tenths = v % 10;
         p.pop = p.pop.clamp(0, p.max_pop);
     }
+    for (planet, owner) in done {
+        st.push_event(vec![owner], EventKind::EnvironmentImproved { planet });
+    }
 }
 
+/// Research points per empire, then 1oom `game_tech_research`.
 fn research(st: &mut State) {
     for ei in 0..st.empires.len() {
         let race = st.empires[ei].race;
         let total: i32 = st.colonies(ei as u8).map(|(_, p)| tech_prod(p, race)).sum();
         st.empires[ei].research = total;
-        let alloc = st.empires[ei].tech.alloc;
-        let asum: u32 = alloc.iter().sum::<u32>().max(1);
-        for f in 0..NUM_FIELDS {
-            let rp = total as u32 * alloc[f] / asum;
-            st.empires[ei].tech.invested[f] += rp;
-            loop {
-                let e = &st.empires[ei];
-                let level = e.tech.level[f];
-                if level >= 50 {
-                    st.empires[ei].tech.invested[f] = 0;
-                    break;
-                }
-                let cost = st
-                    .rules
-                    .research_cost(race, f, level + 1, e.ai, st.difficulty);
-                if e.tech.invested[f] < cost {
-                    break;
-                }
-                let e = &mut st.empires[ei];
-                e.tech.invested[f] -= cost;
-                e.tech.level[f] += 1;
-                let level = e.tech.level[f];
-                st.push_event(
-                    vec![ei as u8],
-                    EventKind::TechAdvance {
-                        field: TechField::ALL[f],
-                        level,
-                    },
-                );
-            }
-        }
     }
+    tech::research(st);
 }
 
 /// 1oom `game_turn_build_def`: planetary shield first, then missile bases.
@@ -278,7 +334,11 @@ fn build_def(st: &mut State) {
         let costs = st.rules.shield_cost;
         let p = &mut st.planets[i];
         let mut prod = spend(p, SLIDER_DEF) + p.bc_to_base;
-        let tosh = (shield_cost - p.bc_to_shield).max(0);
+        let mut tosh = (shield_cost - p.bc_to_shield).max(0);
+        if p.nebula {
+            tosh = 0;
+            p.bc_to_shield = 0;
+        }
         if prod <= tosh {
             p.bc_to_shield += prod;
             prod = 0;
@@ -290,36 +350,86 @@ fn build_def(st: &mut State) {
         }
         p.bc_to_base = prod;
         let cur = shield_cost.min(p.bc_to_shield);
-        p.shield = 5 * (1..5).filter(|&j| cur >= costs[j]).count() as i32;
+        p.shield = if p.nebula {
+            0
+        } else {
+            5 * (1..5).filter(|&j| cur >= costs[j]).count() as i32
+        };
     }
 }
 
-/// 1oom `game_turn_build_ship`.
+/// 1oom `game_turn_build_ship`: ships, or a stargate; new ships go to the rally point.
 fn build_ships(st: &mut State) {
     for i in 0..st.planets.len() {
         let Some(o) = st.planets[i].owner else {
             continue;
         };
         let p = &st.planets[i];
-        let design = p.build.min(st.rules.designs.len() - 1);
-        let cost = st.ship_cost(o, design);
         let mut prod = spend(p, SLIDER_SHIP) + p.bc_to_ship;
         if p.sliders[SLIDER_SHIP] > 0 {
             prod += 1;
         }
+        if p.build == BUILD_STARGATE {
+            let cost = st.rules.stargate_cost;
+            let can = st.empires[o as usize].abilities().stargates && !p.stargate;
+            let p = &mut st.planets[i];
+            if can && prod >= cost {
+                p.stargate = true;
+                p.build = 0;
+                p.bc_to_ship = prod - cost;
+                st.push_event(vec![o], EventKind::StargateBuilt { planet: i });
+            } else {
+                p.bc_to_ship = prod;
+                if !can {
+                    p.build = 0;
+                }
+            }
+            continue;
+        }
+        let ndesigns = st.empires[o as usize].designs.len();
+        if ndesigns == 0 {
+            continue;
+        }
+        let design = p.build.min(ndesigns - 1);
+        let cost = st.ship_cost(o, design).max(1);
         let count = (prod / cost) as u32;
         prod -= count as i32 * cost;
         st.planets[i].bc_to_ship = prod;
-        if count > 0 {
-            st.empires[o as usize].orbit[i][design] += count;
-            st.push_event(
-                vec![o],
-                EventKind::ShipsBuilt {
-                    planet: i,
-                    design,
-                    count,
-                },
-            );
+        if count == 0 {
+            continue;
+        }
+        st.push_event(
+            vec![o],
+            EventKind::ShipsBuilt {
+                planet: i,
+                design,
+                count,
+            },
+        );
+        match st.planets[i]
+            .rally
+            .filter(|&r| r != i && r < st.planets.len())
+        {
+            Some(to) => {
+                let mut ships = vec![0u32; MAX_DESIGNS];
+                ships[design] = count;
+                let speed = st.fleet_speed(o, &ships);
+                let gate = st.planets[i].stargate
+                    && st.planets[to].stargate
+                    && st.planets[to].owner == Some(o);
+                let id = st.alloc_id();
+                st.fleets.push(Fleet {
+                    id,
+                    owner: o,
+                    x: st.planets[i].x as f64,
+                    y: st.planets[i].y as f64,
+                    dest: to,
+                    ships,
+                    speed,
+                    gate,
+                });
+            }
+            None => st.empires[o as usize].orbit[i][design] += count,
         }
     }
 }
@@ -397,10 +507,11 @@ fn build_ind(st: &mut State) {
     }
 }
 
+/// Moves `(x, y)` towards `dest`; returns true on arrival. Half speed inside nebulae.
 fn step_towards(st: &State, x: &mut f64, y: &mut f64, dest: PlanetId, speed: i32) -> bool {
     let (tx, ty) = (st.planets[dest].x as f64, st.planets[dest].y as f64);
     let d = ((tx - *x).powi(2) + (ty - *y).powi(2)).sqrt();
-    let step = st.rules.parsec * speed.max(1) as f64;
+    let step = st.move_step(*x, *y, speed);
     if d <= step + 1e-9 {
         *x = tx;
         *y = ty;
@@ -413,14 +524,22 @@ fn step_towards(st: &State, x: &mut f64, y: &mut f64, dest: PlanetId, speed: i32
 }
 
 /// Moves fleets and transports; fleets that arrive join the orbit of their destination.
-/// Returns transports that arrived this turn.
+/// Fleets between two own stargates arrive in one turn. Returns the arrived transports.
 fn move_ships(st: &mut State) -> Vec<Transport> {
     let mut fleets = std::mem::take(&mut st.fleets);
     fleets.retain_mut(|f| {
-        let (mut x, mut y) = (f.x, f.y);
-        let arrived = step_towards(st, &mut x, &mut y, f.dest, f.speed);
-        f.x = x;
-        f.y = y;
+        let arrived = if f.gate {
+            let p = &st.planets[f.dest];
+            f.x = p.x as f64;
+            f.y = p.y as f64;
+            true
+        } else {
+            let (mut x, mut y) = (f.x, f.y);
+            let a = step_towards(st, &mut x, &mut y, f.dest, f.speed);
+            f.x = x;
+            f.y = y;
+            a
+        };
         if arrived {
             let o = &mut st.empires[f.owner as usize].orbit[f.dest];
             for (i, c) in f.ships.iter().enumerate() {
@@ -474,35 +593,49 @@ pub fn found_colony(st: &mut State, planet: PlanetId, owner: EmpireId, pop: i32)
     st.empires[owner as usize].explored[planet] = true;
     st.push_event(vec![owner], EventKind::ColonyFounded { planet });
     if planet == st.orion {
-        let bonus = st.rules.orion_tech_bonus;
-        let e = &mut st.empires[owner as usize];
-        for l in e.tech.level.iter_mut() {
-            *l = (*l + bonus).min(50);
-        }
         st.push_event(vec![], EventKind::OrionColonized { planet, by: owner });
+        tech::orion_loot(st, owner);
     }
 }
 
-pub fn can_colonize(st: &State, empire: EmpireId, planet: PlanetId) -> bool {
+/// Whether `planet` is free and its type is at least `worst` (Silicoids settle anything).
+fn settleable(st: &State, empire: EmpireId, planet: PlanetId, worst: PlanetType) -> bool {
     let p = &st.planets[planet];
-    let a = st.empires[empire as usize].abilities();
-    p.owner.is_none()
-        && p.habitable()
-        && p.kind >= a.colony_for
-        && !(planet == st.orion && st.guardian_alive())
+    let worst = if st.empires[empire as usize].race == Race::Silicoid {
+        PlanetType::Radiated
+    } else {
+        worst
+    };
+    p.owner.is_none() && p.habitable() && p.kind >= worst && !(planet == st.orion && st.guardian)
 }
 
-/// Colony ships in orbit settle their planet when nothing hostile is armed there.
+/// Whether the empire has, or could design, a colony ship for `planet`.
+pub fn can_colonize(st: &State, empire: EmpireId, planet: PlanetId) -> bool {
+    let a = st.empires[empire as usize].abilities();
+    settleable(st, empire, planet, a.colony_for)
+}
+
+/// Worst planet type the empire's colony ships at `planet` can settle, and which design.
+fn colony_ship_at(st: &State, empire: EmpireId, planet: PlanetId) -> Option<(usize, PlanetType)> {
+    let e = &st.empires[empire as usize];
+    e.designs
+        .iter()
+        .enumerate()
+        .filter(|(d, _)| e.orbit[planet][*d] > 0)
+        .filter_map(|(d, sd)| sd.colony_type().map(|t| (d, t)))
+        .min_by_key(|&(_, t)| t)
+}
+
+/// Colony ships in orbit settle their planet when nothing hostile is armed there
+/// (1oom `game_turn_explore`; humans always accept).
 fn colonize(st: &mut State) {
     for planet in 0..st.planets.len() {
         for ei in 0..st.empires.len() {
             let e = ei as u8;
-            let Some(d) = (0..st.rules.designs.len())
-                .find(|&d| st.rules.designs[d].colony && st.empires[ei].orbit[planet][d] > 0)
-            else {
+            let Some((d, worst)) = colony_ship_at(st, e, planet) else {
                 continue;
             };
-            if !can_colonize(st, e, planet) || combat::hostile_armed_at(st, planet, e) {
+            if !settleable(st, e, planet, worst) || combat::hostile_armed_at(st, planet, e) {
                 continue;
             }
             st.empires[ei].orbit[planet][d] -= 1;
@@ -520,10 +653,15 @@ pub fn update_exploration(st: &mut State) {
             if st.empires[ei].explored[p] {
                 continue;
             }
-            let seen =
-                st.empires[ei].orbit[p].iter().any(|&c| c > 0) || st.range_to(ei as u8, p) <= range;
-            if seen {
-                st.empires[ei].explored[p] = true;
+            let by_ship = st.empires[ei].orbit[p].iter().any(|&c| c > 0);
+            if !by_ship && st.range_to(ei as u8, p) > range {
+                continue;
+            }
+            let first = st.empires.iter().all(|e| !e.explored[p]);
+            st.empires[ei].explored[p] = true;
+            if by_ship && first && st.planets[p].special == Special::Artifacts && !st.empires[ei].ai
+            {
+                tech::artifact_loot(st, ei as u8);
             }
         }
     }

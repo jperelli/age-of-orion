@@ -2,11 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::data::*;
+use crate::data_types::REDUCE_50;
+use crate::design::{ShipDesign, HULL_LARGE};
 use crate::rng::Rng;
 use crate::rules::{Abilities, Rules};
+use crate::tech::{Source, TIERS};
 use crate::types::*;
 
-pub const SAVE_VERSION: u32 = 1;
+pub const SAVE_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Planet {
@@ -19,10 +23,14 @@ pub struct Planet {
     pub growth: Growth,
     /// Picture index (1oom `infogfx`; PLANETS.LBX entry in the classic theme).
     pub image: u8,
+    /// Size of the planet before soil enrichment (1oom `max_pop1`).
+    pub size: i32,
     /// Natural maximum population (1oom `max_pop2`).
     pub base_max_pop: i32,
     /// Current maximum population including terraforming (1oom `max_pop3`).
     pub max_pop: i32,
+    /// Inside a nebula: no shields, slower travel.
+    pub nebula: bool,
     pub owner: Option<EmpireId>,
     pub pop: i32,
     pub pop_tenths: i32,
@@ -30,12 +38,15 @@ pub struct Planet {
     pub waste: i32,
     pub bases: i32,
     pub shield: i32,
+    pub stargate: bool,
     /// Colonists per factory this colony has been refitted for.
     pub pop_oper_fact: i32,
     /// Spending in percent: ship, defense, industry, ecology, technology.
     pub sliders: [i32; NUM_SLIDERS],
-    /// Design index built with the ship slider.
+    /// Design index built with the ship slider, or `design::BUILD_STARGATE`.
     pub build: usize,
+    /// Where newly built ships go (1oom `reloc`); `None` = stay in orbit.
+    pub rally: Option<PlanetId>,
     /// Production after maintenance, last turn.
     pub prod: i32,
     pub bc_to_ship: i32,
@@ -43,6 +54,7 @@ pub struct Planet {
     pub bc_to_base: i32,
     pub bc_to_shield: i32,
     pub bc_to_refit: i32,
+    pub bc_to_ecoproj: i32,
 }
 
 impl Planet {
@@ -53,11 +65,50 @@ impl Planet {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tech {
-    pub level: [u32; NUM_FIELDS],
-    /// Research points accumulated towards the next level.
+    /// Completed tech numbers per field, ascending (1oom `researchcompleted`).
+    pub completed: Vec<Vec<u8>>,
+    /// Tech being researched per field, 0 = none.
+    pub project: [u8; NUM_FIELDS],
+    /// Cost of the project in research points.
+    pub cost: [u32; NUM_FIELDS],
     pub invested: [u32; NUM_FIELDS],
     /// Share of research per field in percent.
     pub alloc: [u32; NUM_FIELDS],
+    /// Tech level per field (1oom `tech.percent`).
+    pub level: [u32; NUM_FIELDS],
+    /// Techs this empire can research: per field, tiers of up to 3 (1oom `researchlist`).
+    pub list: Vec<[[u8; 3]; TIERS]>,
+}
+
+impl Default for Tech {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Tech {
+    /// Every field starts with tech 1 known (1oom `game_generate_research`).
+    pub fn new() -> Self {
+        Tech {
+            completed: vec![vec![1]; NUM_FIELDS],
+            project: [0; NUM_FIELDS],
+            cost: [0; NUM_FIELDS],
+            invested: [0; NUM_FIELDS],
+            alloc: [17, 17, 16, 17, 17, 16],
+            level: [1; NUM_FIELDS],
+            list: vec![[[0; 3]; TIERS]; NUM_FIELDS],
+        }
+    }
+
+    pub fn has(&self, field: usize, n: u8) -> bool {
+        self.completed[field].binary_search(&n).is_ok()
+    }
+
+    pub fn add(&mut self, field: usize, n: u8) {
+        if let Err(i) = self.completed[field].binary_search(&n) {
+            self.completed[field].insert(i, n);
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -68,6 +119,11 @@ pub struct Empire {
     pub ai: bool,
     pub alive: bool,
     pub tech: Tech,
+    pub designs: Vec<ShipDesign>,
+    /// Bomb enemy planets when holding their orbit (human choice; AIs decide each time).
+    pub bombard: bool,
+    /// Names offered for new designs (1oom `game_str_tbl_ship_names`, 3 per hull).
+    pub ship_names: Vec<String>,
     pub reserve: i32,
     pub total_prod: i32,
     pub research: i32,
@@ -80,7 +136,7 @@ pub struct Empire {
 
 impl Empire {
     pub fn abilities(&self) -> Abilities {
-        Abilities::new(&self.tech.level, self.race)
+        Abilities::new(&self.tech, self.race)
     }
 }
 
@@ -93,6 +149,9 @@ pub struct Fleet {
     pub dest: PlanetId,
     pub ships: Vec<u32>,
     pub speed: i32,
+    /// Travels through stargates: arrives next turn.
+    #[serde(default)]
+    pub gate: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -104,6 +163,15 @@ pub struct Transport {
     pub dest: PlanetId,
     pub pop: i32,
     pub speed: i32,
+}
+
+/// A nebula: up to four rectangles `[x0, y0, x1, y1]` (1oom `tbl_nebula_data`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Nebula {
+    pub kind: u8,
+    pub x: i32,
+    pub y: i32,
+    pub rects: Vec<[i32; 4]>,
 }
 
 /// Something that happened during a turn. The UI turns it into text with the key
@@ -119,12 +187,19 @@ pub enum EventKind {
         design: usize,
         count: u32,
     },
+    StargateBuilt {
+        planet: PlanetId,
+    },
     FactoriesComplete {
         planet: PlanetId,
     },
-    TechAdvance {
+    EnvironmentImproved {
+        planet: PlanetId,
+    },
+    TechDiscovered {
         field: TechField,
-        level: u32,
+        tech: u8,
+        source: Source,
     },
     Battle {
         planet: PlanetId,
@@ -198,16 +273,23 @@ pub struct State {
     pub width: i32,
     pub height: i32,
     pub planets: Vec<Planet>,
+    pub nebulae: Vec<Nebula>,
     pub empires: Vec<Empire>,
     pub fleets: Vec<Fleet>,
     pub transports: Vec<Transport>,
     pub orion: PlanetId,
-    pub guardian_hp: i32,
+    /// The Guardian of Orion is alive.
+    pub guardian: bool,
     pub winner: Option<EmpireId>,
     pub next_id: u32,
     /// Events of the last processed turn.
     pub events: Vec<Event>,
     pub rules: Rules,
+}
+
+/// 1oom `get_tech_reduce_50` (by tech level 1..).
+fn reduce(level: u32) -> u32 {
+    REDUCE_50[(level.clamp(1, 50) - 1) as usize] as u32
 }
 
 impl State {
@@ -237,11 +319,46 @@ impl State {
             .unwrap_or(i32::MAX)
     }
 
+    /// 1oom `game_xy_is_in_nebula`.
+    pub fn in_nebula(&self, x: f64, y: f64) -> bool {
+        self.nebulae.iter().any(|n| {
+            n.rects.iter().any(|r| {
+                x >= r[0] as f64 && x <= r[2] as f64 && y >= r[1] as f64 && y <= r[3] as f64
+            })
+        })
+    }
+
+    /// Turns to reach `dest`; ships inside nebulae move at half speed (1oom `game_calc_eta_ship`).
     pub fn eta(&self, x: f64, y: f64, dest: PlanetId, speed: i32) -> u32 {
-        let d = self.dist_xy(x, y, dest);
-        (d / (self.rules.parsec * speed.max(1) as f64))
-            .ceil()
-            .max(1.0) as u32
+        let (tx, ty) = (self.planets[dest].x as f64, self.planets[dest].y as f64);
+        let (mut x, mut y) = (x, y);
+        let mut turns = 0;
+        while (x - tx).abs() > 1e-9 || (y - ty).abs() > 1e-9 {
+            let step = self.move_step(x, y, speed);
+            let d = ((tx - x).powi(2) + (ty - y).powi(2)).sqrt();
+            if d <= step + 1e-9 {
+                x = tx;
+                y = ty;
+            } else {
+                x += (tx - x) * step / d;
+                y += (ty - y) * step / d;
+            }
+            turns += 1;
+            if turns > 500 {
+                break;
+            }
+        }
+        turns.max(1)
+    }
+
+    /// Distance covered in one turn from `(x, y)`.
+    pub fn move_step(&self, x: f64, y: f64, speed: i32) -> f64 {
+        let step = self.rules.parsec * speed.max(1) as f64;
+        if self.in_nebula(x, y) {
+            step / 2.0
+        } else {
+            step
+        }
     }
 
     pub fn colonies(&self, empire: EmpireId) -> impl Iterator<Item = (PlanetId, &Planet)> {
@@ -249,10 +366,6 @@ impl State {
             .iter()
             .enumerate()
             .filter(move |(_, p)| p.owner == Some(empire))
-    }
-
-    pub fn guardian_alive(&self) -> bool {
-        self.guardian_hp > 0
     }
 
     pub fn push_event(&mut self, to: Vec<EmpireId>, kind: EventKind) {
@@ -265,25 +378,112 @@ impl State {
     }
 
     pub fn ship_cost(&self, empire: EmpireId, design: usize) -> i32 {
-        let a = self.empires[empire as usize].abilities();
-        (self.rules.designs[design].cost * a.cost_pct / 100).max(1)
+        let e = &self.empires[empire as usize];
+        e.designs
+            .get(design)
+            .map_or(1, |d| d.cost(&e.tech.level) as i32)
     }
 
+    /// Speed of a group of ships: the slowest design.
+    pub fn fleet_speed(&self, empire: EmpireId, ships: &[u32]) -> i32 {
+        let e = &self.empires[empire as usize];
+        ships
+            .iter()
+            .enumerate()
+            .filter(|(_, &c)| c > 0)
+            .filter_map(|(d, _)| e.designs.get(d).map(|d| d.speed()))
+            .min()
+            .unwrap_or(1)
+    }
+
+    /// 1oom `game_get_base_weapon`: the best two-shot missile, for missile bases.
+    pub fn base_weapon(&self, empire: EmpireId) -> usize {
+        let t = &self.empires[empire as usize].tech;
+        let level = t.level[FIELD_WEAPON];
+        let mut r = 2;
+        for (i, w) in WEAPONS.iter().enumerate() {
+            if w.tech as u32 <= level
+                && w.damage_min == w.damage_max
+                && w.shots == 2
+                && w.miss_type == 0
+                && !w.bio
+                && w.streams == 1
+                && t.has(FIELD_WEAPON, w.tech)
+            {
+                r = i;
+            }
+        }
+        r
+    }
+
+    /// 1oom `game_get_base_weapon_2`: scatter packs, for the second base weapon.
+    pub fn base_weapon_2(&self, empire: EmpireId) -> usize {
+        let t = &self.empires[empire as usize].tech;
+        let mut r = self.base_weapon(empire);
+        for (i, w) in WEAPONS.iter().enumerate().take(60) {
+            if w.streams > 1 && t.has(FIELD_WEAPON, w.tech) {
+                r = i;
+            }
+        }
+        r
+    }
+
+    /// Best shield, computer and jammer for bases (1oom `game_get_best_*`).
+    pub fn base_parts(&self, empire: EmpireId) -> (usize, usize, usize) {
+        let t = &self.empires[empire as usize].tech;
+        let best = |techs: &mut dyn Iterator<Item = u8>, field: usize| -> usize {
+            let level = t.level[field];
+            techs
+                .enumerate()
+                .filter(|&(_, n)| n as u32 <= level && t.has(field, n))
+                .map(|(i, _)| i)
+                .filter(|&i| i > 0)
+                .max()
+                .unwrap_or(0)
+        };
+        (
+            best(&mut SHIELDS.iter().map(|s| s.tech), FIELD_FORCE_FIELD),
+            best(&mut COMPS.iter().map(|s| s.tech), FIELD_COMPUTER),
+            best(&mut JAMMERS.iter().map(|s| s.tech), FIELD_COMPUTER),
+        )
+    }
+
+    /// 1oom `game_get_base_cost`.
     pub fn base_cost(&self, empire: EmpireId) -> i32 {
         let e = &self.empires[empire as usize];
-        let a = e.abilities();
-        let mut c = (self.rules.base_cost * a.cost_pct / 100)
-            + 2 * e.tech.level[TechField::Weapon as usize] as i32
-            + 2 * e.tech.level[TechField::ForceField as usize] as i32;
+        let t = &e.tech;
+        let lv = &t.level;
+        let l = HULL_LARGE as usize;
+        let mut armor = (0..ARMOR.len())
+            .filter(|&i| t.has(FIELD_CONSTRUCTION, ARMOR[i].tech))
+            .max()
+            .unwrap_or(0);
+        armor = armor.saturating_sub(1);
+        let (shield, comp, _) = self.base_parts(empire);
+        let jammer = (0..JAMMERS.len())
+            .filter(|&i| t.has(FIELD_COMPUTER, JAMMERS[i].tech))
+            .max()
+            .unwrap_or(0);
+        let mut cost = (ARMOR[armor].cost[l] as u32 + HULLS[l].cost as u32)
+            * reduce(lv[FIELD_CONSTRUCTION])
+            / 1500;
+        cost += WEAPONS[self.base_weapon(empire)].cost as u32 * reduce(lv[FIELD_WEAPON]) * 9 / 1000;
+        cost += SHIELDS[shield].cost[l] as u32 * reduce(lv[FIELD_FORCE_FIELD]) / 1000
+            + SHIELDS[shield].power[l] as u32 / 10;
+        cost += COMPS[comp].cost[l] as u32 * reduce(lv[FIELD_COMPUTER]) / 1000
+            + COMPS[comp].power[l] as u32 / 10;
+        cost += JAMMERS[jammer].cost[l] as u32 * reduce(lv[FIELD_COMPUTER]) / 1000
+            + JAMMERS[jammer].power[l] as u32 / 10;
+        let mut cost = (cost * 3 / 5) as i32;
         if e.ai {
-            c = match self.difficulty {
-                Difficulty::Easy => c * 9 / 10,
-                Difficulty::Average => c * 8 / 10,
-                Difficulty::Hard => c * 7 / 10,
-                Difficulty::Impossible => c / 2,
-                Difficulty::Simple => c,
+            cost = match self.difficulty {
+                Difficulty::Easy => cost * 9 / 10,
+                Difficulty::Average => cost * 8 / 10,
+                Difficulty::Hard => cost * 7 / 10,
+                Difficulty::Impossible => cost / 2,
+                Difficulty::Simple => cost,
             };
         }
-        c.max(50)
+        cost.max(50)
     }
 }

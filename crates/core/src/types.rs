@@ -183,3 +183,11 @@ pub const SLIDER_TECH: usize = 4;
 pub const NUM_SLIDERS: usize = 5;
 
 pub const NUM_FIELDS: usize = 6;
+
+/// Field indices (1oom `tech_field_t`).
+pub const FIELD_COMPUTER: usize = 0;
+pub const FIELD_CONSTRUCTION: usize = 1;
+pub const FIELD_FORCE_FIELD: usize = 2;
+pub const FIELD_PLANETOLOGY: usize = 3;
+pub const FIELD_PROPULSION: usize = 4;
+pub const FIELD_WEAPON: usize = 5;

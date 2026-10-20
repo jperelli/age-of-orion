@@ -139,6 +139,8 @@ function newGame(): void {
       leader_names: RACES.map((r, i) => theme.list("names.leaders")[i] || t(`race.${r}.leader`)),
       leader: leader.value.trim() || null,
       orion_name: theme.has("names.orion") ? t("names.orion") : null,
+      start_design_names: ["scout", "fighter", "destroyer", "bomber", "colony_ship"].map((k) => t(`design.${k}`)),
+      ship_names: RACES.map((r) => theme.list(`names.ships.${r}`)),
       rules: theme.mod?.rules ?? undefined,
     };
     try {

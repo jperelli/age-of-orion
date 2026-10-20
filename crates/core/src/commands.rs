@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::design::{self, ShipDesign, BUILD_STARGATE, MAX_DESIGNS};
 use crate::state::*;
+use crate::tech;
 use crate::types::*;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -13,8 +15,13 @@ pub enum Command {
         planet: PlanetId,
         sliders: [i32; NUM_SLIDERS],
     },
-    /// Design built with the ship slider.
+    /// Design built with the ship slider, or `BUILD_STARGATE` (6).
     SetBuild { planet: PlanetId, design: usize },
+    /// Where a colony sends its new ships; `None` keeps them in orbit.
+    SetRally {
+        planet: PlanetId,
+        to: Option<PlanetId>,
+    },
     /// Sends ships from an orbit (counts per design) to another planet.
     SendFleet {
         from: PlanetId,
@@ -23,7 +30,9 @@ pub enum Command {
     },
     /// Changes the destination of a fleet in flight.
     RedirectFleet { fleet: u32, to: PlanetId },
-    /// Moves colonists to another planet (own: reinforce, enemy: invade, empty: settle).
+    /// Scraps ships in orbit; a quarter of their cost goes to the reserve.
+    ScrapShips { planet: PlanetId, ships: Vec<u32> },
+    /// Moves colonists to another planet (own: reinforce, enemy: invade).
     SendTransport {
         from: PlanetId,
         to: PlanetId,
@@ -31,6 +40,17 @@ pub enum Command {
     },
     /// Research share per field in percent (normalized to a total of 100).
     SetResearch { alloc: [u32; NUM_FIELDS] },
+    /// Chooses the tech researched in a field (an ongoing project loses its investment).
+    SetResearchProject { field: usize, tech: u8 },
+    /// Adds a design, or replaces design `slot` (scrapping its ships).
+    SaveDesign {
+        slot: Option<usize>,
+        design: ShipDesign,
+    },
+    /// Removes a design and scraps all its ships.
+    ScrapDesign { design: usize },
+    /// Whether ships holding the orbit of enemy colonies bomb them.
+    SetBombard { enabled: bool },
 }
 
 /// Why a command was rejected; the UI shows the text `error.<code>`.
@@ -84,14 +104,37 @@ fn normalize<const N: usize>(v: [i64; N]) -> Option<[i64; N]> {
 
 /// Fuel range of a group of ships: the empire range plus the smallest design bonus.
 pub fn fleet_range(st: &State, empire: EmpireId, ships: &[u32]) -> i32 {
+    let e = &st.empires[empire as usize];
     let extra = ships
         .iter()
         .enumerate()
         .filter(|(_, &c)| c > 0)
-        .map(|(d, _)| st.rules.designs[d].extra_range)
+        .map(|(d, _)| e.designs.get(d).map_or(0, |d| d.extra_range()))
         .min()
         .unwrap_or(0);
-    st.empires[empire as usize].abilities().fuel_range + extra
+    e.abilities().fuel_range + extra
+}
+
+fn gate(st: &State, empire: EmpireId, from: PlanetId, to: PlanetId) -> bool {
+    let (a, b) = (&st.planets[from], &st.planets[to]);
+    a.stargate && b.stargate && a.owner == Some(empire) && b.owner == Some(empire)
+}
+
+/// Removes ships of `design` everywhere and refunds a quarter of their cost.
+fn scrap_all(st: &mut State, empire: EmpireId, design: usize) {
+    let cost = st.ship_cost(empire, design);
+    let e = &mut st.empires[empire as usize];
+    let mut count: u32 = 0;
+    for o in e.orbit.iter_mut() {
+        count += o[design];
+        o[design] = 0;
+    }
+    for f in st.fleets.iter_mut().filter(|f| f.owner == empire) {
+        count += f.ships[design];
+        f.ships[design] = 0;
+    }
+    st.fleets.retain(|f| f.ships.iter().any(|&c| c > 0));
+    st.empires[empire as usize].reserve += count as i32 * cost / 4;
 }
 
 pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), CommandError> {
@@ -108,10 +151,22 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
         }
         Command::SetBuild { planet, design } => {
             own(st, empire, planet)?;
-            if design >= st.rules.designs.len() {
+            let e = &st.empires[empire as usize];
+            if design == BUILD_STARGATE {
+                if !e.abilities().stargates || st.planets[planet].stargate {
+                    return err("invalid_design");
+                }
+            } else if design >= e.designs.len() {
                 return err("invalid_design");
             }
             st.planets[planet].build = design;
+        }
+        Command::SetRally { planet, to } => {
+            own(st, empire, planet)?;
+            if let Some(t) = to {
+                own(st, empire, t)?;
+            }
+            st.planets[planet].rally = to.filter(|&t| t != planet);
         }
         Command::SendFleet {
             from,
@@ -133,7 +188,8 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             if st.range_to(empire, to) > fleet_range(st, empire, ships) {
                 return err("out_of_range");
             }
-            let speed = st.empires[empire as usize].abilities().speed;
+            let speed = st.fleet_speed(empire, ships);
+            let gate = gate(st, empire, from, to);
             let o = &mut st.empires[empire as usize].orbit[from];
             for (have, &c) in o.iter_mut().zip(ships) {
                 *have -= c;
@@ -148,6 +204,7 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
                 dest: to,
                 ships: ships.clone(),
                 speed,
+                gate,
             });
         }
         Command::RedirectFleet { fleet, to } => {
@@ -159,11 +216,34 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             else {
                 return err("no_ships");
             };
+            if st.fleets[i].gate {
+                return err("in_stargate");
+            }
             let ships = st.fleets[i].ships.clone();
             if st.range_to(empire, to) > fleet_range(st, empire, &ships) {
                 return err("out_of_range");
             }
             st.fleets[i].dest = to;
+        }
+        Command::ScrapShips { planet, ref ships } => {
+            check_planet(st, planet)?;
+            let orbit = &st.empires[empire as usize].orbit[planet];
+            if ships.len() != orbit.len()
+                || ships.iter().all(|&c| c == 0)
+                || ships.iter().zip(orbit).any(|(&c, &have)| c > have)
+            {
+                return err("no_ships");
+            }
+            let refund: i32 = ships
+                .iter()
+                .enumerate()
+                .map(|(d, &c)| c as i32 * st.ship_cost(empire, d) / 4)
+                .sum();
+            let e = &mut st.empires[empire as usize];
+            for (have, &c) in e.orbit[planet].iter_mut().zip(ships) {
+                *have -= c;
+            }
+            e.reserve += refund;
         }
         Command::SendTransport { from, to, pop } => {
             own(st, empire, from)?;
@@ -178,10 +258,10 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             if !st.planets[to].habitable() {
                 return err("not_habitable");
             }
-            if st.range_to(empire, to) > st.empires[empire as usize].abilities().fuel_range {
+            let a = st.empires[empire as usize].abilities();
+            if st.range_to(empire, to) > a.fuel_range {
                 return err("out_of_range");
             }
-            let speed = st.empires[empire as usize].abilities().speed;
             let (x, y) = (p.x as f64, p.y as f64);
             st.planets[from].pop -= pop;
             let id = st.alloc_id();
@@ -192,7 +272,7 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
                 y,
                 dest: to,
                 pop,
-                speed,
+                speed: a.engine_warp,
             });
         }
         Command::SetResearch { alloc } => {
@@ -201,6 +281,62 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             };
             st.empires[empire as usize].tech.alloc = a.map(|x| x as u32);
         }
+        Command::SetResearchProject { field, tech } => {
+            if field >= NUM_FIELDS
+                || !tech::next_techs(&st.empires[empire as usize].tech, field).contains(&tech)
+            {
+                return err("invalid_tech");
+            }
+            if st.empires[empire as usize].tech.project[field] != tech {
+                tech::start_project(st, empire, field, tech);
+            }
+        }
+        Command::SaveDesign { slot, ref design } => {
+            let mut d = design.clone();
+            d.name = d.name.trim().chars().take(24).collect();
+            d.update();
+            if let Err(code) = design::validate(&d, &st.empires[empire as usize].tech) {
+                return Err(CommandError { code });
+            }
+            let len = st.empires[empire as usize].designs.len();
+            match slot {
+                Some(i) if i < len => {
+                    scrap_all(st, empire, i);
+                    st.empires[empire as usize].designs[i] = d;
+                }
+                Some(_) => return err("invalid_design"),
+                None if len >= MAX_DESIGNS => return err("too_many_designs"),
+                None => st.empires[empire as usize].designs.push(d),
+            }
+        }
+        Command::ScrapDesign { design } => {
+            let len = st.empires[empire as usize].designs.len();
+            if design >= len {
+                return err("invalid_design");
+            }
+            if len <= 1 {
+                return err("last_design");
+            }
+            scrap_all(st, empire, design);
+            let e = &mut st.empires[empire as usize];
+            e.designs.remove(design);
+            for o in e.orbit.iter_mut() {
+                o.remove(design);
+                o.push(0);
+            }
+            for f in st.fleets.iter_mut().filter(|f| f.owner == empire) {
+                f.ships.remove(design);
+                f.ships.push(0);
+            }
+            for p in st.planets.iter_mut().filter(|p| p.owner == Some(empire)) {
+                if p.build == design {
+                    p.build = 0;
+                } else if p.build > design && p.build != BUILD_STARGATE {
+                    p.build -= 1;
+                }
+            }
+        }
+        Command::SetBombard { enabled } => st.empires[empire as usize].bombard = enabled,
     }
     Ok(())
 }

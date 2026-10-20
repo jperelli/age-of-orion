@@ -20,13 +20,21 @@ device, and the **Classic** theme then shows the original planet pictures and ra
 - MOO1 economy: the five colony sliders (ship, defense, industry, ecology, technology),
   factories and refits, pollution and cleanup, terraforming, population growth, ship and
   base maintenance (`game_turn.c`, `game_misc.c`).
-- Six research fields with the MOO1 cost formula and tech thresholds (robotic controls,
-  factory cost, fuel range, colonizable planet types, planetary shields...).
+- MOO1 research (`game_tech.c`): every empire gets its own list of the 240 MOO1 techs,
+  you choose one project per field, investment earns interest and breakthroughs are
+  random once it exceeds the cost. Completed techs unlock everything else (robotic
+  controls, factory cost, fuel range, colonizable planet types, terraforming, soil
+  enrichment, planetary shields, stargates...).
+- Ship design (`game_shiptech.c`, `game_design.c`): 4 hulls, 64 weapons, computers,
+  shields, ECM, armor, engines and 30 specials with the MOO1 cost, space and power
+  formulas, including miniaturization as your tech levels rise. Up to six designs.
 - Ten races with their bonuses and research costs, five difficulty levels, 2 to 6 empires,
-  four galaxy sizes.
-- Fleets with fuel range and speed, colonization, missile bases, space battles, bombing,
-  transports and ground invasions, the Guardian of Orion, victory by conquest.
-- Computer opponents that expand, research, build fleets and invade.
+  four galaxy sizes, nebulae.
+- Fleets with fuel range and speed, colonization with colony bases for hostile planets,
+  rally points, stargates, scrapping, missile bases, space battles on the MOO1 to-hit and
+  damage formulas, orbital bombing, transports and ground invasions, the Guardian of
+  Orion, victory by conquest.
+- Computer opponents that expand, research, design new ships, build fleets and invade.
 - Two themes: **Age** (medieval world map, the default) and **Classic** (starfield, with
   your original MOO1 art when imported). Every text and picture can be replaced by a mod.
 - Autosave every turn, save/load to a file, keyboard shortcuts (Enter ends the turn).
@@ -74,10 +82,11 @@ aoo sim --seed 7 --size medium --players 4 --turns 300
 
 | Path | What it is |
 |---|---|
-| `crates/core` | Game rules: galaxy generation, economy, research, fleets, combat, AI, saves (no I/O) |
+| `crates/core` | Game rules: galaxy generation, economy, research, ship design, fleets, combat, AI, saves (no I/O) |
 | `crates/lbx` | LBX reader (container, graphics, palettes, string tables) and LBX to PNG/JSON converter |
 | `crates/wasm` | WebAssembly bindings for the UI (game API with JSON in/out, LBX importer) |
 | `crates/cli` | `aoo` command line tool |
+| `tools/gen_1oom_tables.py` | Generates the ship part and tech tables (`crates/core/src/data.rs`) from a 1oom checkout |
 | `web/` | HTML/CSS/canvas UI (TypeScript, Vite), themes and texts in `web/public/` |
 | `desktop/` | Tauri shell that packages `web/dist` as a native app |
 | `docs/` | Plan and modding guide |

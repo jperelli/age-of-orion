@@ -1,12 +1,19 @@
 //! Computer players. A compact strategy written for this port (the 4,500-line classic AI
 //! of 1oom `game_ai_classic.c` is on the roadmap): expand with colony ships, scout, build
-//! industry, research, then attack weak neighbours and invade them with transports.
+//! industry, research, design better ships as techs arrive, then attack weak neighbours and
+//! invade them with transports. Research choices and slider focus follow the classic AI.
 
 use crate::commands::{apply, fleet_range, Command};
+use crate::data::{SHIELDS, WEAPONS};
+use crate::design::{
+    auto_design, Role, ShipDesign, HULL_LARGE, HULL_MEDIUM, HULL_SMALL, MAX_DESIGNS,
+};
 use crate::state::*;
+use crate::tech;
 use crate::turn::{can_colonize, clean_eco_percent};
 use crate::types::*;
 
+#[derive(Debug, Default)]
 struct Roles {
     scout: Option<usize>,
     colony: Option<usize>,
@@ -15,62 +22,208 @@ struct Roles {
     cheap_warship: Option<usize>,
 }
 
-fn roles(st: &State) -> Roles {
-    let d = &st.rules.designs;
-    let find = |f: &dyn Fn(&crate::rules::Design) -> bool| (0..d.len()).find(|&i| f(&d[i]));
-    let armed: Vec<usize> = (0..d.len())
-        .filter(|&i| d[i].attack > 0 && !d[i].colony && d[i].bombs == 0)
-        .collect();
-    Roles {
-        scout: find(&|x| x.extra_range > 0 && !x.armed()),
-        colony: find(&|x| x.colony),
-        bomber: find(&|x| x.bombs > 0),
-        warship: armed
-            .iter()
-            .copied()
-            .max_by_key(|&i| d[i].attack * d[i].hp * 100 / d[i].cost.max(1) + d[i].cost),
-        cheap_warship: armed.iter().copied().min_by_key(|&i| d[i].cost),
+fn role_of(d: &ShipDesign) -> Role {
+    if d.colony_type().is_some() {
+        Role::Colony
+    } else if d.bombs() {
+        Role::Bomber
+    } else if d.armed() {
+        Role::Warship
+    } else {
+        Role::Scout
     }
 }
 
-/// Combat strength used to compare forces: total attack x total hit points.
-fn strength(st: &State, empire: usize, ships: &[u32]) -> i64 {
-    let a = st.empires[empire].abilities();
-    let (mut att, mut hp) = (0i64, 0i64);
-    for (d, &c) in ships.iter().enumerate() {
-        let des = &st.rules.designs[d];
-        att += (des.attack.max(des.bombs / 4) * a.attack_pct / 100) as i64 * c as i64;
-        hp += (des.hp * a.hp_pct / 100) as i64 * c as i64;
+fn roles(st: &State, me: EmpireId) -> Roles {
+    let e = &st.empires[me as usize];
+    let lv = &e.tech.level;
+    let of = |r: Role| (0..e.designs.len()).filter(move |&i| role_of(&e.designs[i]) == r);
+    Roles {
+        scout: of(Role::Scout).find(|&i| e.designs[i].extra_range() > 0),
+        colony: of(Role::Colony).min_by_key(|&i| e.designs[i].colony_type()),
+        bomber: of(Role::Bomber).max_by_key(|&i| e.designs[i].strength()),
+        warship: of(Role::Warship).max_by_key(|&i| {
+            e.designs[i].strength() * 100 / e.designs[i].cost(lv).max(1) as i64
+                + e.designs[i].cost(lv) as i64
+        }),
+        cheap_warship: of(Role::Warship).min_by_key(|&i| e.designs[i].cost(lv)),
     }
-    att * hp
+}
+
+/// Combat value of ships of an empire: damage per turn times hit points.
+fn strength(e: &Empire, ships: &[u32]) -> i64 {
+    ships
+        .iter()
+        .zip(&e.designs)
+        .map(|(&c, d)| c as i64 * d.strength())
+        .sum()
 }
 
 fn defence_strength(st: &State, me: usize, planet: PlanetId) -> i64 {
     let p = &st.planets[planet];
     let mut s: i64 = 0;
-    if planet == st.orion && st.guardian_alive() {
-        s += st.rules.guardian_attack as i64 * st.guardian_hp as i64;
+    if planet == st.orion && st.guardian {
+        s += 4_000_000 * (st.difficulty as i64 + 1);
     }
     if let Some(o) = p.owner.filter(|&o| o as usize != me) {
-        let a = st.empires[o as usize].abilities();
-        let b = p.bases as i64;
-        s += (b * (st.rules.base_attack * a.attack_pct / 100) as i64)
-            * (b * (st.rules.base_hp * a.hp_pct / 100) as i64);
+        let w = &WEAPONS[st.base_weapon(o)];
+        let (shield, _, _) = st.base_parts(o);
+        let dmg = w.damage_max as i64 * 6;
+        let hp = st.rules.base_hp[st.empires[o as usize].abilities().armor_tier.min(6)] as i64
+            + (SHIELDS[shield].absorb as i64 + p.shield as i64) * 5;
+        s += p.bases as i64 * dmg * hp;
     }
     for (ei, e) in st.empires.iter().enumerate() {
         if ei != me {
-            s += strength(st, ei, &e.orbit[planet]);
+            s += strength(e, &e.orbit[planet]);
         }
     }
     s
 }
 
-fn armed_only(st: &State, ships: &[u32]) -> Vec<u32> {
+fn armed_only(e: &Empire, ships: &[u32]) -> Vec<u32> {
     ships
         .iter()
-        .zip(&st.rules.designs)
-        .map(|(&c, d)| if d.armed() && !d.colony { c } else { 0 })
+        .enumerate()
+        .map(|(d, &c)| {
+            if e.designs
+                .get(d)
+                .is_some_and(|d| d.armed() && d.colony_type().is_none())
+            {
+                c
+            } else {
+                0
+            }
+        })
         .collect()
+}
+
+/// A name from the race's list that no current design uses (1oom `game_get_random_shipnames`).
+fn ship_name(st: &mut State, me: EmpireId, hull: u8) -> String {
+    let pick = hull as usize * 3 + st.rng.below(3) as usize;
+    let e = &st.empires[me as usize];
+    let names = &e.ship_names;
+    let pick = pick.min(names.len().saturating_sub(1));
+    for i in (pick..names.len()).chain((0..pick).rev()) {
+        if !e.designs.iter().any(|d| d.name == names[i]) {
+            return names[i].clone();
+        }
+    }
+    format!(
+        "{} {}",
+        names.get(pick).cloned().unwrap_or_default(),
+        st.turn
+    )
+}
+
+/// Creates better designs as techs arrive (every tenth turn per empire).
+fn redesign(st: &mut State, me: EmpireId) {
+    if st.turn % 10 != me as u32 % 10 {
+        return;
+    }
+    let total_prod = st.empires[me as usize].total_prod;
+    let hull = if total_prod > 400 {
+        HULL_LARGE
+    } else if total_prod > 80 {
+        HULL_MEDIUM
+    } else {
+        HULL_SMALL
+    };
+    for role in [Role::Warship, Role::Bomber, Role::Colony] {
+        let hull = match role {
+            Role::Colony => HULL_LARGE,
+            Role::Bomber => hull.max(HULL_MEDIUM),
+            _ => hull,
+        };
+        let e = &st.empires[me as usize];
+        let name = String::new();
+        let mut d = auto_design(&e.tech, role, hull, name);
+        if !d.armed() && role != Role::Colony {
+            continue;
+        }
+        let lv = e.tech.level;
+        let totals = crate::turn::ship_totals(st, me);
+        let e = &st.empires[me as usize];
+        let same: Vec<usize> = (0..e.designs.len())
+            .filter(|&i| role_of(&e.designs[i]) == role)
+            .collect();
+        let better = match role {
+            Role::Colony => same
+                .iter()
+                .all(|&i| d.colony_type() < e.designs[i].colony_type()),
+            _ => same.iter().all(|&i| {
+                d.strength() * 100 / d.cost(&lv).max(1) as i64
+                    > e.designs[i].strength() * 120 / e.designs[i].cost(&lv).max(1) as i64
+            }),
+        };
+        if !better {
+            continue;
+        }
+        d.name = ship_name(st, me, hull);
+        let e = &st.empires[me as usize];
+        let slot = if e.designs.len() < MAX_DESIGNS {
+            None
+        } else {
+            // Replace the least used design of the same role (or any warship).
+            let pool: Vec<usize> = if same.is_empty() {
+                (0..e.designs.len())
+                    .filter(|&i| role_of(&e.designs[i]) == Role::Warship)
+                    .collect()
+            } else {
+                same.clone()
+            };
+            pool.into_iter().min_by_key(|&i| totals[i])
+        };
+        if e.designs.len() >= MAX_DESIGNS && slot.is_none() {
+            continue;
+        }
+        let _ = apply(st, me, &Command::SaveDesign { slot, design: d });
+    }
+}
+
+/// The classic AI's research focus, every ten years (1oom `game_ai_classic_turn_p3`).
+fn research_focus(st: &mut State, me: EmpireId) {
+    let race = st.empires[me as usize].race;
+    if st.turn % 10 == me as u32 % 10 {
+        let mut sl = [5u32; NUM_FIELDS];
+        let early = st.turn < 30 && st.rng.below(2) == 1;
+        let own = st.rng.below(4) == 0;
+        let focus = if early {
+            FIELD_PROPULSION
+        } else {
+            match race {
+                Race::Bulrathi | Race::Mrrshan if own => FIELD_WEAPON,
+                Race::Darlok if own => FIELD_COMPUTER,
+                Race::Meklar if own => {
+                    if st.rng.below(2) == 1 {
+                        FIELD_CONSTRUCTION
+                    } else {
+                        FIELD_PLANETOLOGY
+                    }
+                }
+                Race::Alkari if own => FIELD_PROPULSION,
+                Race::Sakkra if own => FIELD_PLANETOLOGY,
+                _ => [
+                    FIELD_COMPUTER,
+                    FIELD_CONSTRUCTION,
+                    FIELD_CONSTRUCTION,
+                    FIELD_FORCE_FIELD,
+                    FIELD_PROPULSION,
+                    FIELD_PLANETOLOGY,
+                    FIELD_PLANETOLOGY,
+                    FIELD_WEAPON,
+                    FIELD_WEAPON,
+                ][st.rng.below(9) as usize],
+            }
+        };
+        sl[focus] = 75;
+        let _ = apply(st, me, &Command::SetResearch { alloc: sl });
+    }
+    for f in 0..NUM_FIELDS {
+        if st.empires[me as usize].tech.project[f] == 0 {
+            tech::ai_choose(st, me, f);
+        }
+    }
 }
 
 fn set_economy(st: &mut State, me: EmpireId, r: &Roles, want_colony_ships: i32) {
@@ -79,7 +232,11 @@ fn set_economy(st: &mut State, me: EmpireId, r: &Roles, want_colony_ships: i32) 
     let threatened: Vec<bool> = (0..st.planets.len())
         .map(|p| {
             st.fleets.iter().any(|f| {
-                f.owner != me && f.dest == p && armed_only(st, &f.ships).iter().any(|&c| c > 0)
+                f.owner != me
+                    && f.dest == p
+                    && armed_only(&st.empires[f.owner as usize], &f.ships)
+                        .iter()
+                        .any(|&c| c > 0)
             }) || st
                 .planets
                 .iter()
@@ -88,8 +245,7 @@ fn set_economy(st: &mut State, me: EmpireId, r: &Roles, want_colony_ships: i32) 
         })
         .collect();
     let mut colony_builders = 0;
-    let colonies: Vec<PlanetId> = st.colonies(me).map(|(i, _)| i).collect();
-    let mut by_prod = colonies.clone();
+    let mut by_prod: Vec<PlanetId> = st.colonies(me).map(|(i, _)| i).collect();
     by_prod.sort_by_key(|&i| -st.planets[i].prod);
     let mut orders = Vec::new();
     for &i in &by_prod {
@@ -108,7 +264,8 @@ fn set_economy(st: &mut State, me: EmpireId, r: &Roles, want_colony_ships: i32) 
         };
         let mut left = 100 - eco - def;
         let target_fact = p.max_pop * a.colonist_oper_factories;
-        let wants_colony = colony_builders < want_colony_ships && p.prod >= 20;
+        let wants_colony =
+            r.colony.is_some() && colony_builders < want_colony_ships && p.prod >= 20;
         let (ship, ind);
         if p.factories < target_fact && p.pop > 0 {
             let s = if wants_colony || i == st.empires[me as usize].home {
@@ -132,11 +289,11 @@ fn set_economy(st: &mut State, me: EmpireId, r: &Roles, want_colony_ships: i32) 
         } else if st.turn < 4 && r.scout.is_some() && i == st.empires[me as usize].home {
             r.scout
         } else if prod < 25 {
-            r.cheap_warship
+            r.cheap_warship.or(r.warship)
         } else if st.turn % 4 == 0 {
             r.bomber.or(r.warship)
         } else {
-            r.warship
+            r.warship.or(r.cheap_warship)
         };
         orders.push(Command::SetSliders {
             planet: i,
@@ -154,13 +311,19 @@ fn set_economy(st: &mut State, me: EmpireId, r: &Roles, want_colony_ships: i32) 
     }
 }
 
-fn colony_targets(st: &State, me: EmpireId) -> Vec<(PlanetId, i64)> {
+fn colony_targets(st: &State, me: EmpireId, r: &Roles) -> Vec<(PlanetId, i64)> {
     let e = &st.empires[me as usize];
+    let Some(cd) = r.colony else {
+        return Vec::new();
+    };
+    let worst = e.designs[cd].colony_type().unwrap_or(PlanetType::Minimal);
     let range = e.abilities().fuel_range;
     let mut v: Vec<(PlanetId, i64)> = (0..st.planets.len())
         .filter(|&p| {
+            let pl = &st.planets[p];
             e.explored[p]
                 && can_colonize(st, me, p)
+                && (pl.kind >= worst || e.race == Race::Silicoid)
                 && st.range_to(me, p) <= range
                 && !crate::combat::hostile_armed_at(st, p, me)
         })
@@ -195,7 +358,7 @@ fn move_colony_ships(st: &mut State, me: EmpireId, r: &Roles, targets: &[(Planet
         .collect();
     for from in 0..st.planets.len() {
         let mut n = st.empires[me as usize].orbit[from][cd];
-        if n > 0 && can_colonize(st, me, from) {
+        if n > 0 && targets.iter().any(|&(t, _)| t == from) {
             taken.push(from);
             n -= 1;
         }
@@ -206,7 +369,7 @@ fn move_colony_ships(st: &mut State, me: EmpireId, r: &Roles, targets: &[(Planet
             else {
                 break;
             };
-            let mut ships = vec![0; st.rules.designs.len()];
+            let mut ships = vec![0; MAX_DESIGNS];
             ships[cd] = 1;
             if send(st, me, from, to, ships) {
                 taken.push(to);
@@ -223,7 +386,7 @@ fn move_scouts(st: &mut State, me: EmpireId, r: &Roles) {
         .filter(|f| f.owner == me)
         .map(|f| f.dest)
         .collect();
-    let mut ships = vec![0; st.rules.designs.len()];
+    let mut ships = vec![0; MAX_DESIGNS];
     ships[sd] = 1;
     let range = fleet_range(st, me, &ships);
     for from in 0..st.planets.len() {
@@ -251,22 +414,21 @@ fn military(st: &mut State, me: EmpireId) {
             None => return,
         }
     };
-    // Gather armed ships idling at own colonies at the staging planet.
     for from in 0..st.planets.len() {
         if from == staging || st.planets[from].owner != Some(me) {
             continue;
         }
-        let ships = armed_only(st, &st.empires[mi].orbit[from]);
+        let ships = armed_only(&st.empires[mi], &st.empires[mi].orbit[from]);
         if ships.iter().any(|&c| c > 0) {
             send(st, me, from, staging, ships);
         }
     }
-    let force = armed_only(st, &st.empires[mi].orbit[staging]);
-    let mine = strength(st, mi, &force);
+    let force = armed_only(&st.empires[mi], &st.empires[mi].orbit[staging]);
+    let mine = strength(&st.empires[mi], &force);
     if mine == 0 {
         return;
     }
-    let range = st.empires[mi].abilities().fuel_range;
+    let range = fleet_range(st, me, &force);
     let already: Vec<PlanetId> = st
         .fleets
         .iter()
@@ -277,7 +439,7 @@ fn military(st: &mut State, me: EmpireId) {
         .filter(|&p| {
             let pl = &st.planets[p];
             let enemy = pl.owner.is_some_and(|o| o != me);
-            let orion = p == st.orion && st.guardian_alive();
+            let orion = p == st.orion && st.guardian;
             st.empires[mi].explored[p]
                 && (enemy || orion)
                 && !already.contains(&p)
@@ -298,7 +460,7 @@ fn invade(st: &mut State, me: EmpireId) {
         let Some(owner) = st.planets[target].owner else {
             continue;
         };
-        let holding = armed_only(st, &st.empires[mi].orbit[target])
+        let holding = armed_only(&st.empires[mi], &st.empires[mi].orbit[target])
             .iter()
             .any(|&c| c > 0);
         if owner == me || !holding || st.planets[target].bases > 0 {
@@ -351,18 +513,17 @@ pub fn play(st: &mut State, me: EmpireId) {
     if !st.empires[me as usize].alive {
         return;
     }
-    let r = roles(st);
-    let targets = colony_targets(st, me);
-    let have = r.colony.map_or(0, |c| {
-        let t = crate::turn::ship_totals(st, me);
-        t[c] as i32
-    });
+    research_focus(st, me);
+    redesign(st, me);
+    let r = roles(st, me);
+    let targets = colony_targets(st, me, &r);
+    let have = r
+        .colony
+        .map_or(0, |c| crate::turn::ship_totals(st, me)[c] as i32);
     let want = (targets.len() as i32 - have).clamp(0, 2);
     move_colony_ships(st, me, &r, &targets);
     move_scouts(st, me, &r);
     military(st, me);
     invade(st, me);
     set_economy(st, me, &r, want);
-    let w = st.rules.research_weights_ai;
-    let _ = apply(st, me, &Command::SetResearch { alloc: w });
 }

@@ -1,6 +1,6 @@
 // Typed wrapper around the WebAssembly build of the Rust core (crates/wasm).
-import init, { LbxImporter, WasmGame, version } from "./wasm/aoo.js";
-import type { Command, NewGameOptions, View } from "./types";
+import init, { LbxImporter, WasmGame, parts, version } from "./wasm/aoo.js";
+import type { Command, DesignStats, NewGameOptions, Parts, ShipDesign, View } from "./types";
 
 let ready: Promise<unknown> | null = null;
 
@@ -11,6 +11,14 @@ export function loadEngine(): Promise<unknown> {
 
 export function engineVersion(): string {
   return version();
+}
+
+let partsCache: Parts | null = null;
+
+/** Static ship part tables. */
+export function shipParts(): Parts {
+  partsCache ??= JSON.parse(parts()) as Parts;
+  return partsCache;
 }
 
 export class Game {
@@ -40,6 +48,10 @@ export class Game {
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }
+  }
+
+  designStats(d: ShipDesign): DesignStats {
+    return JSON.parse(this.g.designStats(JSON.stringify(d))) as DesignStats;
   }
 
   endTurn(): void {

@@ -1,7 +1,7 @@
 //! WebAssembly API used by the web and desktop UI. Data crosses the boundary as JSON
 //! strings (game state, views, commands) and byte arrays (LBX files, PNG assets).
 
-use aoo_core::{Command, Game, NewGameOptions, Rules};
+use aoo_core::{Command, Game, NewGameOptions, Rules, ShipDesign};
 use wasm_bindgen::prelude::*;
 
 fn js_err(e: impl std::fmt::Display) -> JsError {
@@ -11,6 +11,12 @@ fn js_err(e: impl std::fmt::Display) -> JsError {
 #[wasm_bindgen]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Ship part tables (weapons, computers, shields, ... hulls) as JSON.
+#[wasm_bindgen]
+pub fn parts() -> String {
+    Game::parts_json()
 }
 
 /// Default rules as JSON: the starting point for rule mods.
@@ -60,6 +66,16 @@ impl WasmGame {
     pub fn command(&mut self, command_json: &str) -> Result<(), JsError> {
         let cmd: Command = serde_json::from_str(command_json).map_err(js_err)?;
         self.game.command(self.player, &cmd).map_err(js_err)
+    }
+
+    /// Cost, space and combat figures of a `ShipDesign` (JSON) with the player's tech.
+    #[wasm_bindgen(js_name = designStats)]
+    pub fn design_stats(&self, design_json: &str) -> Result<String, JsError> {
+        let d: ShipDesign = serde_json::from_str(design_json).map_err(js_err)?;
+        Ok(
+            serde_json::to_string(&self.game.design_stats(self.player, &d))
+                .expect("stats serialize"),
+        )
     }
 
     #[wasm_bindgen(js_name = endTurn)]

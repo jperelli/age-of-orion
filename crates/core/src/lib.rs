@@ -15,18 +15,23 @@
 mod ai;
 mod combat;
 mod commands;
+pub mod data;
+pub mod data_types;
+pub mod design;
 mod galaxy;
 mod rng;
 mod rules;
 mod state;
+pub mod tech;
 mod turn;
 mod types;
 mod view;
 
 pub use commands::{Command, CommandError};
-pub use galaxy::{NewGameOptions, HOME_NAMES, STAR_NAMES};
+pub use design::{DesignStats, ShipDesign};
+pub use galaxy::{NewGameOptions, HOME_NAMES, SHIP_NAMES, STAR_NAMES};
 pub use rng::Rng;
-pub use rules::{Abilities, Design, Rules};
+pub use rules::{Abilities, Rules};
 pub use state::*;
 pub use types::*;
 pub use view::*;
@@ -44,10 +49,14 @@ impl Game {
 
     /// Restores a game from [`Game::save`] output.
     pub fn load(json: &str) -> Result<Self, String> {
-        let st: State = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if st.version != SAVE_VERSION {
-            return Err(format!("unsupported save version {}", st.version));
+        let value: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
+        if version != SAVE_VERSION as u64 {
+            return Err(format!(
+                "save format {version} is from another version of the game (this one reads format {SAVE_VERSION})"
+            ));
         }
+        let st: State = serde_json::from_value(value).map_err(|e| e.to_string())?;
         Ok(Game { st })
     }
 
@@ -83,6 +92,37 @@ impl Game {
 
     pub fn view(&self, empire: EmpireId) -> View {
         view::view(&self.st, empire)
+    }
+
+    /// All ship part tables, for the design screen.
+    pub fn parts_json() -> String {
+        #[derive(serde::Serialize)]
+        struct Parts {
+            weapons: &'static [data_types::Weapon],
+            comps: &'static [data_types::Comp],
+            jammers: &'static [data_types::Comp],
+            engines: &'static [data_types::Engine],
+            armor: &'static [data_types::Armor],
+            shields: &'static [data_types::Shield],
+            specials: &'static [data_types::Special],
+            hulls: &'static [data_types::Hull],
+        }
+        serde_json::to_string(&Parts {
+            weapons: &data::WEAPONS,
+            comps: &data::COMPS,
+            jammers: &data::JAMMERS,
+            engines: &data::ENGINES,
+            armor: &data::ARMOR,
+            shields: &data::SHIELDS,
+            specials: &data::SPECIALS,
+            hulls: &data::HULLS,
+        })
+        .expect("parts serialize")
+    }
+
+    /// Cost, space and combat figures of a design with an empire's current tech.
+    pub fn design_stats(&self, empire: EmpireId, design: &ShipDesign) -> DesignStats {
+        design::stats(design, &self.st.empires[empire as usize].tech)
     }
 }
 
@@ -140,10 +180,15 @@ mod tests {
             },
         )
         .unwrap();
-        for _ in 0..10 {
+        for _ in 0..40 {
             g.end_turn();
         }
         assert!(g.state().empires[0].tech.level.iter().any(|&l| l > 1));
+        assert!(g.state().empires[0]
+            .tech
+            .completed
+            .iter()
+            .any(|c| c.len() > 1));
         assert!(g
             .view(0)
             .events
@@ -163,7 +208,7 @@ mod tests {
             .min_by_key(|p| p.range)
             .map(|p| p.id)
             .expect("a colonizable neighbour");
-        let mut ships = vec![0; 5];
+        let mut ships = vec![0; 6];
         ships[4] = 1;
         g.command(
             0,
@@ -206,7 +251,7 @@ mod tests {
                 &Command::SendFleet {
                     from: home,
                     to: far,
-                    ships: vec![0, 1, 0, 0, 0],
+                    ships: vec![0, 1, 0, 0, 0, 0],
                 },
             )
             .unwrap_err();
@@ -251,5 +296,235 @@ mod tests {
             }
         }
         assert!(finished >= 1, "AI never wins a game in 400 turns");
+    }
+
+    fn own_colony(g: &mut Game, empire: u8) -> usize {
+        let home = g.st.empires[empire as usize].home;
+        let p = (0..g.st.planets.len())
+            .filter(|&p| g.st.planets[p].owner.is_none() && p != g.st.orion)
+            .min_by_key(|&p| g.st.parsecs(home, p))
+            .unwrap();
+        turn::found_colony(&mut g.st, p, empire, 20);
+        p
+    }
+
+    #[test]
+    fn stargates_move_fleets_in_one_turn() {
+        let mut g = Game::new(&opts(11)).unwrap();
+        let home = g.st.empires[0].home;
+        let far = own_colony(&mut g, 0);
+        g.st.empires[0].tech.add(FIELD_PROPULSION, 27);
+        assert!(g
+            .command(
+                0,
+                &Command::SetBuild {
+                    planet: home,
+                    design: design::BUILD_STARGATE
+                }
+            )
+            .is_ok());
+        g.st.planets[home].bc_to_ship = 5000;
+        g.st.planets[home].sliders = [100, 0, 0, 0, 0];
+        g.end_turn();
+        assert!(g.st.planets[home].stargate);
+        g.st.planets[far].stargate = true;
+        let mut ships = vec![0; 6];
+        ships[0] = 1;
+        g.command(
+            0,
+            &Command::SendFleet {
+                from: home,
+                to: far,
+                ships,
+            },
+        )
+        .unwrap();
+        assert!(g.st.fleets.iter().any(|f| f.owner == 0 && f.gate));
+        g.end_turn();
+        assert_eq!(g.st.empires[0].orbit[far][0], 1);
+    }
+
+    #[test]
+    fn rally_points_send_new_ships() {
+        let mut g = Game::new(&opts(12)).unwrap();
+        let home = g.st.empires[0].home;
+        let col = own_colony(&mut g, 0);
+        g.command(
+            0,
+            &Command::SetRally {
+                planet: home,
+                to: Some(col),
+            },
+        )
+        .unwrap();
+        g.command(
+            0,
+            &Command::SetBuild {
+                planet: home,
+                design: 1,
+            },
+        )
+        .unwrap();
+        g.command(
+            0,
+            &Command::SetSliders {
+                planet: home,
+                sliders: [100, 0, 0, 0, 0],
+            },
+        )
+        .unwrap();
+        g.end_turn();
+        assert!(g
+            .st
+            .fleets
+            .iter()
+            .any(|f| f.owner == 0 && f.dest == col && f.ships[1] > 0));
+    }
+
+    #[test]
+    fn designs_can_be_saved_and_scrapped() {
+        let mut g = Game::new(&opts(13)).unwrap();
+        let mut d = g.st.empires[0].designs[1].clone();
+        d.name = "Lancer".into();
+        d.hull = design::HULL_MEDIUM;
+        d.weapon_counts[0] = 2;
+        assert_eq!(g.design_stats(0, &d).error, None);
+        g.command(
+            0,
+            &Command::SaveDesign {
+                slot: None,
+                design: d.clone(),
+            },
+        )
+        .unwrap();
+        assert_eq!(g.st.empires[0].designs.len(), 6);
+        assert_eq!(
+            g.command(
+                0,
+                &Command::SaveDesign {
+                    slot: None,
+                    design: d.clone()
+                }
+            )
+            .unwrap_err()
+            .code,
+            "too_many_designs"
+        );
+        let home = g.st.empires[0].home;
+        assert_eq!(g.st.empires[0].orbit[home][1], 2);
+        g.command(0, &Command::ScrapDesign { design: 1 }).unwrap();
+        assert_eq!(g.st.empires[0].designs.len(), 5);
+        assert_eq!(g.st.empires[0].designs[4].name, "Lancer");
+        assert_eq!(g.st.empires[0].orbit[home][1], 0, "fighters were scrapped");
+        assert!(g.st.empires[0].reserve > 0);
+        d.weapon_counts[0] = 60;
+        assert_eq!(
+            g.command(
+                0,
+                &Command::SaveDesign {
+                    slot: Some(0),
+                    design: d
+                }
+            )
+            .unwrap_err()
+            .code,
+            "no_space"
+        );
+    }
+
+    #[test]
+    fn research_projects_follow_the_list() {
+        let mut g = Game::new(&opts(14)).unwrap();
+        let v = g.view(0);
+        let f = &v.tech[FIELD_WEAPON];
+        assert!(f.project > 1 && !f.choices.is_empty());
+        let other = f.choices.iter().find(|c| c.tech != f.project).unwrap().tech;
+        g.command(
+            0,
+            &Command::SetResearchProject {
+                field: FIELD_WEAPON,
+                tech: other,
+            },
+        )
+        .unwrap();
+        assert_eq!(g.st.empires[0].tech.project[FIELD_WEAPON], other);
+        assert_eq!(
+            g.command(
+                0,
+                &Command::SetResearchProject {
+                    field: FIELD_WEAPON,
+                    tech: 49
+                }
+            )
+            .unwrap_err()
+            .code,
+            "invalid_tech"
+        );
+        tech::grant(&mut g.st, 0, FIELD_WEAPON, other, tech::Source::Research);
+        assert_eq!(g.st.empires[0].tech.project[FIELD_WEAPON], 0);
+        assert!(g.st.empires[0].tech.has(FIELD_WEAPON, other));
+    }
+
+    #[test]
+    fn soil_enrichment_grows_planets() {
+        let mut g = Game::new(&opts(15)).unwrap();
+        let home = g.st.empires[0].home;
+        g.st.empires[0].tech.add(FIELD_PLANETOLOGY, 16);
+        let before = g.st.planets[home].base_max_pop;
+        g.command(
+            0,
+            &Command::SetSliders {
+                planet: home,
+                sliders: [0, 0, 0, 100, 0],
+            },
+        )
+        .unwrap();
+        for _ in 0..6 {
+            g.end_turn();
+        }
+        let p = &g.st.planets[home];
+        assert_eq!(p.growth, Growth::Fertile);
+        assert!(p.base_max_pop > before);
+    }
+
+    #[test]
+    fn nebulae_slow_ships_and_block_shields() {
+        let g = Game::new(&NewGameOptions {
+            seed: 3,
+            galaxy_size: GalaxySize::Huge,
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(!g.st.nebulae.is_empty());
+        let n = &g.st.nebulae[0].rects[0];
+        let (x, y) = ((n[0] + n[2]) as f64 / 2.0, (n[1] + n[3]) as f64 / 2.0);
+        assert!(g.st.in_nebula(x, y));
+        assert_eq!(g.st.move_step(x, y, 2), g.st.rules.parsec);
+        for p in g.st.planets.iter().filter(|p| p.nebula) {
+            assert!(g.st.in_nebula(p.x as f64, p.y as f64));
+        }
+    }
+
+    #[test]
+    fn bombers_bomb_undefended_colonies() {
+        let mut g = Game::new(&opts(16)).unwrap();
+        let target = g.st.empires[1].home;
+        g.st.empires[0].orbit[target][3] = 20; // bombers
+        let pop = g.st.planets[target].pop;
+        combat::bomb(&mut g.st);
+        assert!(g.st.planets[target].pop < pop);
+        assert!(g
+            .st
+            .events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::Bombed { .. })));
+    }
+
+    #[test]
+    fn old_saves_are_rejected_clearly() {
+        let err = Game::load(r#"{"version": 1, "planets": []}"#)
+            .err()
+            .unwrap();
+        assert!(err.contains("format 1"), "{err}");
     }
 }

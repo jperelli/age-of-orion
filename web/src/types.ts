@@ -23,11 +23,15 @@ export const PLANET_TYPES: PlanetType[] = [
   "minimal", "desert", "steppe", "arid", "ocean", "jungle", "terran",
 ];
 
+export const BUILD_STARGATE = 6;
+
 export interface Colony {
   sliders: number[];
   spending: number[];
   build: number;
+  build_cost: number;
   bc_to_ship: number;
+  rally: number | null;
   factory_cost: number;
   max_factories: number;
   research: number;
@@ -43,6 +47,7 @@ export interface PlanetView {
   y: number;
   star: StarType;
   explored: boolean;
+  nebula: boolean;
   range: number;
   orion: boolean;
   guardian: boolean;
@@ -56,6 +61,7 @@ export interface PlanetView {
   factories: number | null;
   bases: number | null;
   shield: number | null;
+  stargate: boolean;
   prod: number | null;
   colonizable: boolean;
   colony: Colony | null;
@@ -70,6 +76,9 @@ export interface FleetView {
   dest: number | null;
   eta: number | null;
   ships: number[];
+  names: string[];
+  speed: number;
+  range: number;
 }
 
 export interface TransportView {
@@ -92,14 +101,90 @@ export interface EmpireView {
   known_colonies: number;
 }
 
-export interface DesignView {
+export interface ShipDesign {
+  name: string;
+  hull: number;
+  look: number;
+  weapons: number[];
+  weapon_counts: number[];
+  engine: number;
+  engines?: number;
+  specials: number[];
+  shield: number;
+  jammer: number;
+  comp: number;
+  armor: number;
+  man: number;
+  hp?: number;
+}
+
+export interface DesignStats {
+  cost: number;
+  space: number;
+  free_space: number;
+  engines: number;
+  hp: number;
+  speed: number;
+  attack_level: number;
+  defense: number;
+  missile_defense: number;
+  absorb: number;
+  max_weapons: number[];
+  error: string | null;
+}
+
+export interface DesignView extends ShipDesign {
+  stats: DesignStats;
+  count: number;
+  range: number;
+  colony: PlanetType | null;
+}
+
+export interface KnownParts {
+  weapons: number[];
+  engines: number[];
+  comps: number[];
+  jammers: number[];
+  shields: number[];
+  armor: number[];
+  specials: number[];
+}
+
+export interface TechChoice {
+  tech: number;
   key: string;
   cost: number;
-  attack: number;
-  hp: number;
-  bombs: number;
-  colony: boolean;
-  range: number;
+}
+
+export interface FieldView {
+  field: TechField;
+  level: number;
+  project: number;
+  project_key: string;
+  cost: number;
+  invested: number;
+  alloc: number;
+  choices: TechChoice[];
+  completed: TechChoice[];
+}
+
+export interface Nebula {
+  kind: number;
+  x: number;
+  y: number;
+  rects: number[][];
+}
+
+/** Static ship part tables (crates/core/src/data.rs). */
+export interface Parts {
+  weapons: { key: string; damage_min: number; damage_max: number; range: number; extra_acc: number; halve_shield: boolean; bomb: boolean; fire: number; shots: number; bio: boolean; streams: number; tech: number }[];
+  comps: { key: string; level: number }[];
+  jammers: { key: string; level: number }[];
+  engines: { key: string; warp: number }[];
+  armor: { key: string; armor: number }[];
+  shields: { key: string; absorb: number }[];
+  specials: { key: string; kind: number }[];
+  hulls: { key: string; hits: number; space: number; defense: number }[];
 }
 
 export interface Abilities {
@@ -110,10 +195,10 @@ export interface Abilities {
   scanner_range: number;
   colony_for: PlanetType;
   planet_shield: number;
-  attack_pct: number;
-  hp_pct: number;
   ground_bonus: number;
-  [k: string]: number | string;
+  engine_warp: number;
+  stargates: boolean;
+  [k: string]: number | string | boolean;
 }
 
 export interface GameEvent {
@@ -134,14 +219,18 @@ export interface View {
   total_prod: number;
   maintenance: number;
   research: number;
-  tech: { level: number[]; invested: number[]; next_cost: number[]; alloc: number[] };
+  bombard: boolean;
+  tech: FieldView[];
   abilities: Abilities;
   base_cost: number;
+  stargate_cost: number;
   planets: PlanetView[];
+  nebulae: Nebula[];
   empires: EmpireView[];
   fleets: FleetView[];
   transports: TransportView[];
   designs: DesignView[];
+  parts: KnownParts;
   events: GameEvent[];
 }
 
@@ -151,7 +240,13 @@ export type Command =
   | { type: "send_fleet"; from: number; to: number; ships: number[] }
   | { type: "redirect_fleet"; fleet: number; to: number }
   | { type: "send_transport"; from: number; to: number; pop: number }
-  | { type: "set_research"; alloc: number[] };
+  | { type: "set_research"; alloc: number[] }
+  | { type: "set_research_project"; field: number; tech: number }
+  | { type: "set_rally"; planet: number; to: number | null }
+  | { type: "scrap_ships"; planet: number; ships: number[] }
+  | { type: "save_design"; slot: number | null; design: ShipDesign }
+  | { type: "scrap_design"; design: number }
+  | { type: "set_bombard"; enabled: boolean };
 
 export interface NewGameOptions {
   seed: number;
@@ -165,5 +260,7 @@ export interface NewGameOptions {
   leader_names?: string[];
   leader?: string | null;
   orion_name?: string | null;
+  start_design_names?: string[];
+  ship_names?: string[][];
   rules?: unknown;
 }

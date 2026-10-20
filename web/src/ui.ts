@@ -38,7 +38,8 @@ export function modal(title: string, body: Child | Child[], buttons: string[] = 
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close(-1);
-      if (e.key === "Enter" && buttons.length === 1) close(0);
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
+      if (e.key === "Enter" && buttons.length === 1 && !typing) close(0);
     };
     document.addEventListener("keydown", onKey);
     const overlay = h(
@@ -55,6 +56,14 @@ export function modal(title: string, body: Child | Child[], buttons: string[] = 
     document.body.append(overlay);
     overlay.querySelector<HTMLButtonElement>(".dialog-buttons button")?.focus();
   });
+}
+
+/** Runs `fn` (which re-renders part of a dialog) keeping the dialog's scroll position. */
+export function keepScroll(el: HTMLElement, fn: () => void): void {
+  const sc = el.closest(".dialog-body");
+  const top = sc?.scrollTop ?? 0;
+  fn();
+  if (sc) sc.scrollTop = top;
 }
 
 export function toast(msg: string): void {

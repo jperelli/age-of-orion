@@ -1,7 +1,7 @@
 [package]
 name = "age-of-orion"
 description = "Age of Orion desktop app: the web build (Rust core compiled to WebAssembly) in a native window"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "GPL-2.0-only"
 repository = "https://github.com/jperelli/age-of-orion"

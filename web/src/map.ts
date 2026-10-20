@@ -11,6 +11,12 @@ export interface Targeting {
   speed: number;
   ok: (planet: number) => boolean;
   pick: (planet: number) => void;
+  /** Text shown in the side panel while choosing. */
+  prompt?: string;
+  /** Draw the dashed range circles (default true). */
+  ranges?: boolean;
+  /** Label next to a valid target; `null` shows the travel time. */
+  label?: (planet: number) => string | null;
 }
 
 const BIOME: Record<PlanetType, string> = {
@@ -352,9 +358,10 @@ export class MapView {
     else if (this.terrain) ctx.drawImage(this.terrain, 0, 0, v.width, v.height);
 
     const world = this.theme.def.map === "world";
+    this.drawNebulae(v);
     if (world) this.drawBiomes(v);
     this.drawFog(v);
-    if (this.targeting) this.drawRanges(v);
+    if (this.targeting && this.targeting.ranges !== false) this.drawRanges(v);
     for (const f of v.fleets) if (f.dest !== null) this.drawRoute(v, f.x, f.y, f.dest, this.theme.banner(v.empires[f.owner].banner));
     for (const t of v.transports) this.drawRoute(v, t.x, t.y, t.dest, this.theme.banner(v.empires[t.owner].banner));
     for (const p of v.planets) (world ? this.drawSite : this.drawStar).call(this, v, p.id);
@@ -368,6 +375,47 @@ export class MapView {
 
   private px(n: number): number {
     return n / this.zoom;
+  }
+
+  /** Nebulae: purple clouds in space, drifting mists on the world map. */
+  private drawNebulae(v: View): void {
+    const ctx = this.ctx;
+    const world = this.theme.def.map === "world";
+    for (const n of v.nebulae) {
+      const img = this.theme.img(`nebula/${n.kind}`);
+      if (img) {
+        ctx.drawImage(img, n.x, n.y, img.width / 2, img.height / 2);
+        continue;
+      }
+      for (const [x0, y0, x1, y1] of n.rects) {
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const rx = Math.max(4, (x1 - x0) / 2 + 4), ry = Math.max(4, (y1 - y0) / 2 + 4);
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+        g.addColorStop(0, world ? "rgba(214,214,232,0.55)" : "rgba(170,90,220,0.45)");
+        g.addColorStop(1, world ? "rgba(214,214,232,0)" : "rgba(120,50,190,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  private drawGate(x: number, y: number, u: number): void {
+    const ctx = this.ctx;
+    const img = this.theme.img("stargate");
+    if (img) {
+      ctx.drawImage(img, x - u, y - u, u * 2, u * 2);
+      return;
+    }
+    ctx.strokeStyle = this.theme.def.map === "world" ? "#e8d27a" : "#7fd8ff";
+    ctx.lineWidth = this.px(2);
+    ctx.beginPath();
+    ctx.arc(x, y, u * 0.8, Math.PI, 0);
+    ctx.lineTo(x + u * 0.8, y + u * 0.6);
+    ctx.moveTo(x - u * 0.8, y);
+    ctx.lineTo(x - u * 0.8, y + u * 0.6);
+    ctx.stroke();
   }
 
   private drawBiomes(v: View): void {
@@ -497,6 +545,7 @@ export class MapView {
       }
     }
     if (p.guardian) this.drawGuardian(p.x, p.y - u * 2.2, u);
+    if (p.stargate) this.drawGate(p.x - u * 2.4, p.y + u * 0.4, u);
   }
 
   private drawCity(x: number, y: number, u: number, color: string, pop: number, walls: boolean): void {
@@ -581,6 +630,7 @@ export class MapView {
       ctx.arc(p.x, p.y, r * 2.2, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (p.stargate) this.drawGate(p.x - r * 3, p.y, r * 1.4);
     if (p.guardian) {
       ctx.strokeStyle = "#ff3b2f";
       ctx.lineWidth = this.px(1.5);
@@ -711,7 +761,7 @@ export class MapView {
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
     const eta = Math.max(1, Math.ceil(Math.hypot(p.x - t.from.x, p.y - t.from.y) / (11 * t.speed)));
-    const label = ok ? this.theme.t("map.eta", { turns: eta }) : this.theme.t("map.out_of_range");
+    const label = ok ? (t.label?.(id) ?? this.theme.t("map.eta", { turns: eta })) : this.theme.t("map.out_of_range");
     ctx.font = `bold ${this.px(13)}px sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "bottom";

@@ -36,7 +36,12 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `star.<colour>` | `yellow`, `red`, `green`, `white`, `blue`, `neutron` |
 | `special.*`, `growth.*` | Planet specials and environments |
 | `race.<race>`, `race.<race>.plural`, `race.<race>.trait`, `race.<race>.leader` | Races: `human`, `mrrshan`, `silicoid`, `sakkra`, `psilon`, `alkari`, `klackon`, `bulrathi`, `meklar`, `darlok` |
-| `design.<key>` | Ship designs (`scout`, `fighter`, `destroyer`, `bomber`, `colony_ship`, or your own keys) |
+| `design.<key>` | Names of the five starting designs (`scout`, `fighter`, `destroyer`, `bomber`, `colony_ship`) |
+| `names.ships.<race>` | 12 names per race offered to new designs, 3 per hull size (small to huge) |
+| `tech.<field>.<key>` | Tech names (keys in `crates/core/src/data.rs`, `TECHS`), `tech.advanced` for techs above 50 |
+| `part.<kind>.<key>` | Ship part names: `hull`, `weapon`, `comp`, `jammer`, `shield`, `armor`, `engine`, `special` (`.info` for the description of weapons and specials) |
+| `designer.*`, `design.error.*` | Ship design screen |
+| `research.*` | Research screen |
 | `field.<field>` | Research fields: `computer`, `construction`, `force_field`, `planetology`, `propulsion`, `weapon` |
 | `slider.<slider>` | Colony sliders: `ship`, `def`, `ind`, `eco`, `tech` |
 | `event.<type>` | Turn report lines; placeholders like `{planet}`, `{count}`, `{design}`, `{empire}` |
@@ -58,6 +63,8 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `army` | Fleets on the map |
 | `caravan` | Transports on the map |
 | `guardian` | The Guardian of Orion |
+| `nebula/<n>` | Nebula of type `n` (0 to 9), drawn at half its size in map units (STARMAP.LBX 0x0f..) |
+| `stargate` | Stargate next to a planet (STARMAP.LBX 0x2d) |
 | `map/background` | Whole map background (stretched to the map size) |
 
 ## Rules
@@ -69,19 +76,27 @@ WebAssembly module. Main fields:
 | Field | Default | Meaning |
 |---|---|---|
 | `start_year` | 2300 | First year |
-| `designs` | 5 MOO1 designs | `{key, cost, hp, attack, bombs, colony, extra_range}` each |
-| `start_ships` | `[2, 2, 0, 0, 1]` | Ships per design at the start (same length as `designs`) |
+| `start_designs` | 5 MOO1 designs | Ship designs every empire starts with (up to 6; same format as the designs in a save: `name`, `hull`, `weapons`, `weapon_counts`, `engine`, `specials`, `shield`, `jammer`, `comp`, `armor`, `man`, indices into the part tables) |
+| `start_ships` | `[2, 2, 0, 0, 1]` | Ships per start design (same length as `start_designs`) |
 | `home_pop`, `home_max_pop`, `home_factories` | 50, 100, 30 | Home world |
 | `colony_ship_pop` | 2 | Colonists brought by a colony ship |
-| `research_cost_percent` | 40 | Research cost relative to the 1oom formula |
+| `research_cost_percent` | 100 | Research cost relative to the 1oom formula |
 | `race_tech_cost` | 1oom table | Research cost per race (10 rows) and field (6 columns), percent |
-| `base_cost`, `base_attack`, `base_hp` | 100, 10, 40 | Missile bases |
-| `guardian_attack`, `guardian_hp` | 150, 2500 | The Guardian of Orion |
-| `orion_tech_bonus` | 5 | Levels gained in every field when colonizing Orion |
+| `difficulty_tech_cost`, `ai_tech_cost` | 1oom tables | Research cost per difficulty for humans and computers |
+| `base_hp` | 50 .. 200 | Missile base hit points by best armor |
+| `stargate_cost`, `stargate_maint` | 3000, 100 | Stargates |
+| `atmos_cost`, `soil_cost`, `adv_soil_cost` | 200, 150, 300 | Environment projects (ecology spending) |
+| `pop_hp`, `fact_hp` | 200, 50 | Bombing damage per population unit and per factory |
+| `combat_rounds` | 10 | Rounds of fire per battle |
+| `nebulae` | true | Generate nebulae |
 | `parsec` | 11 | Map units per parsec (distance unit of range and speed) |
 
-The AI picks designs by role: a design with `colony: true` settles, one with `extra_range`
-and no weapons scouts, `bombs` bombards, the rest fight.
+The ship part tables (`crates/core/src/data.rs`) are generated from 1oom by
+`tools/gen_1oom_tables.py` and are not part of `rules.json` yet.
+
+The AI picks designs by role: a design with a colony base settles, one with reserve fuel
+tanks and no weapons scouts, one with bombs bombards, the rest fight. It adds new designs of
+its own as its techs improve.
 
 ## Imported asset tree
 

@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::design::MAX_DESIGNS;
 use crate::rng::Rng;
 use crate::rules::Rules;
 use crate::state::*;
@@ -126,6 +127,150 @@ pub const HOME_NAMES: [&str; 10] = [
     "Sol", "Fierias", "Cryslon", "Sssla", "Mentar", "Altair", "Kholdan", "Ursa", "Meklon", "Nazin",
 ];
 
+/// Ship names per race, 3 per hull size (1oom `game_str_tbl_ship_names`).
+pub const SHIP_NAMES: [[&str; 12]; 10] = [
+    [
+        "Fighter",
+        "Gunboat",
+        "Courier",
+        "Frigate",
+        "Destroyer",
+        "Corvette",
+        "Cruiser",
+        "Escort",
+        "Warship",
+        "Dreadnought",
+        "Battleship",
+        "Dreadstar",
+    ],
+    [
+        "Wolverine",
+        "Griffin",
+        "Ferret",
+        "Lynx",
+        "Cheetah",
+        "Bobcat",
+        "Panther",
+        "Leopard",
+        "Warcat",
+        "Sabretooth",
+        "Puma",
+        "Tiger",
+    ],
+    [
+        "Piranha",
+        "Stingray",
+        "Minnow",
+        "Manta",
+        "Barracuda",
+        "Morey",
+        "Shark",
+        "Mako",
+        "Whale",
+        "Kraken",
+        "Monitor",
+        "Polaris",
+    ],
+    [
+        "Goblin",
+        "Cyclops",
+        "Daemon",
+        "Banshee",
+        "Spectre",
+        "Spirit",
+        "Juggernaut",
+        "Valkyrie",
+        "Hydra",
+        "Titan",
+        "Colossus",
+        "Dragon",
+    ],
+    [
+        "Starfighter",
+        "Comet",
+        "Seeker",
+        "Star Wing",
+        "Star Blazer",
+        "Star Streak",
+        "Star Blade",
+        "Dark Star",
+        "Coraona",
+        "Sun Fire",
+        "Star Fury",
+        "Nova",
+    ],
+    [
+        "Foxbat",
+        "Sparrowhawk",
+        "Pelican",
+        "Falcon",
+        "Sky Hawk",
+        "Space Gull",
+        "Warbird",
+        "Warhawk",
+        "Wareagle",
+        "Condor",
+        "Dreadwing",
+        "Sky Master",
+    ],
+    [
+        "Sabre",
+        "Cutlass",
+        "Dagger",
+        "Lancer",
+        "Pegasus",
+        "Horseman",
+        "Ranger",
+        "Knight",
+        "Avenger",
+        "Dragoon",
+        "Paladin",
+        "Excaliber",
+    ],
+    [
+        "Paw",
+        "Panda",
+        "Patrol",
+        "Hunter",
+        "Gladiator",
+        "Sentinel",
+        "Claw",
+        "Tooth",
+        "Warbear",
+        "Grizzly",
+        "Punisher",
+        "Rhino",
+    ],
+    [
+        "Marauder",
+        "Hyperion",
+        "Drachma",
+        "Intruder",
+        "Penetrator",
+        "Tormenter",
+        "Ajax",
+        "Tornado",
+        "Nexus",
+        "Nemesis",
+        "Devastator",
+        "Annihilator",
+    ],
+    [
+        "Spider",
+        "Bumblebee",
+        "Needle",
+        "Hornet",
+        "Scorpion",
+        "Venom",
+        "Tarantula",
+        "Viper",
+        "Cobra",
+        "King Cobra",
+        "Black Widow",
+        "Death Wyn",
+    ],
+];
+
 /// 1oom `tbl_planet_type_infogfx` (1-based PLANETS.LBX pictures per planet type).
 const PLANET_IMAGES: [[u8; 6]; 14] = [
     [0x01, 0x01, 0x01, 0x01, 0x01, 0x01],
@@ -164,6 +309,10 @@ pub struct NewGameOptions {
     pub leader_names: Vec<String>,
     pub leader: Option<String>,
     pub orion_name: Option<String>,
+    /// Names of the starting designs (5 entries).
+    pub start_design_names: Vec<String>,
+    /// Ship names per race (10 lists of 12, 3 per hull size), offered for new designs.
+    pub ship_names: Vec<Vec<String>>,
     pub rules: Option<Rules>,
 }
 
@@ -182,6 +331,8 @@ impl Default for NewGameOptions {
             leader_names: Vec::new(),
             leader: None,
             orion_name: None,
+            start_design_names: Vec::new(),
+            ship_names: Vec::new(),
             rules: None,
         }
     }
@@ -206,8 +357,10 @@ fn empty_planet(x: i32, y: i32) -> Planet {
         special: Special::Normal,
         growth: Growth::Normal,
         image: 0,
+        size: 10,
         base_max_pop: 10,
         max_pop: 10,
+        nebula: false,
         owner: None,
         pop: 0,
         pop_tenths: 0,
@@ -215,16 +368,135 @@ fn empty_planet(x: i32, y: i32) -> Planet {
         waste: 0,
         bases: 0,
         shield: 0,
+        stargate: false,
         pop_oper_fact: 2,
         sliders: [0, 0, 100, 0, 0],
         build: 1,
+        rally: None,
         prod: 0,
         bc_to_ship: 0,
         bc_to_factory: 0,
         bc_to_base: 0,
         bc_to_shield: 0,
         bc_to_refit: 0,
+        bc_to_ecoproj: 0,
     }
+}
+
+/// 1oom `tbl_nebula_data`: per nebula type, the x0, y0, x1 and y1 of four rectangles.
+const NEBULA_DATA: [[[i32; 4]; 4]; 10] = [
+    [
+        [0x14, 0x07, 0x0f, 0x1f],
+        [0x05, 0x12, 0x0c, 0x02],
+        [0x28, 0x1c, 0x1f, 0x24],
+        [0x14, 0x27, 0x1b, 0x04],
+    ],
+    [
+        [0x0a, 0x14, 0x1b, 0x1e],
+        [0x11, 0x0d, 0x0d, 0x05],
+        [0x1a, 0x26, 0x29, 0x29],
+        [0x25, 0x18, 0x10, 0x10],
+    ],
+    [
+        [0x09, 0x03, 0x17, 0x1a],
+        [0x02, 0x08, 0x12, 0x0f],
+        [0x16, 0x19, 0x29, 0x23],
+        [0x19, 0x15, 0x20, 0x24],
+    ],
+    [
+        [0x19, 0x08, 0x0a, 0x10],
+        [0x0c, 0x0f, 0x09, 0x07],
+        [0x1e, 0x1c, 0x16, 0x17],
+        [0x1c, 0x1d, 0x0f, 0x09],
+    ],
+    [
+        [0x07, 0x0f, 0x15, 0x19],
+        [0x02, 0x0f, 0x16, 0x23],
+        [0x19, 0x25, 0x29, 0x29],
+        [0x13, 0x1c, 0x23, 0x27],
+    ],
+    [
+        [0x03, 0x08, 0x0e, 0x09],
+        [0x0e, 0x15, 0x02, 0x0a],
+        [0x23, 0x24, 0x1a, 0x22],
+        [0x14, 0x23, 0x1f, 0x0f],
+    ],
+    [
+        [0x0d, 0x09, 0x13, 0x05],
+        [0x03, 0x0b, 0x21, 0x16],
+        [0x1b, 0x22, 0x1b, 0x08],
+        [0x21, 0x20, 0x25, 0x1e],
+    ],
+    [
+        [0x08, 0x0f, 0x1c, 0x25],
+        [0x08, 0x18, 0x02, 0x0a],
+        [0x25, 0x22, 0x23, 0x27],
+        [0x19, 0x1f, 0x07, 0x12],
+    ],
+    [
+        [0x08, 0x05, 0x05, 0x1b],
+        [0x06, 0x01, 0x0c, 0x03],
+        [0x23, 0x0c, 0x09, 0x25],
+        [0x1f, 0x08, 0x15, 0x0a],
+    ],
+    [
+        [0x04, 0x08, 0x0d, 0x25],
+        [0x02, 0x12, 0x0e, 0x11],
+        [0x2a, 0x26, 0x26, 0x29],
+        [0x12, 0x1e, 0x21, 0x1d],
+    ],
+];
+
+/// Port of the nebula part of 1oom `game_generate_galaxy`.
+fn generate_nebulae(rng: &mut Rng, size: GalaxySize, enabled: bool) -> Vec<Nebula> {
+    let (w, h) = size.grid();
+    let a = match size {
+        GalaxySize::Small => rng.below(2),
+        GalaxySize::Medium => rng.one_to(3),
+        GalaxySize::Large => rng.one_to(2) + 1,
+        GalaxySize::Huge => rng.one_to(3) + 1,
+    } as usize;
+    let mut num = if enabled { a } else { 0 };
+    let gw = ((w as i32 - 1) * 0x1c + 0x14 - 70) as u16;
+    let gh = ((h as i32 - 1) * 0x20 + 0x10 - 70) as u16;
+    let mut out: Vec<(u8, i32, i32)> = Vec::new();
+    let mut loops = 0;
+    while out.len() < num {
+        let kind = rng.below(10) as u8;
+        let x = rng.one_to(gw) as i32 + 4;
+        let y = rng.one_to(gh) as i32 + 4;
+        let clash = out
+            .iter()
+            .any(|&(k, nx, ny)| k == kind || ((nx - x).abs() < 0x3c && (ny - y).abs() < 0x3c));
+        if !clash {
+            out.push((kind, x, y));
+        }
+        loops += 1;
+        if loops > 200 {
+            num = out.len();
+        }
+    }
+    out.into_iter()
+        .map(|(kind, x, y)| {
+            let t = &NEBULA_DATA[kind as usize];
+            Nebula {
+                kind,
+                x,
+                y,
+                rects: (0..4)
+                    .map(|j| [t[0][j] + x, t[1][j] + y, t[2][j] + x, t[3][j] + y])
+                    .collect(),
+            }
+        })
+        .collect()
+}
+
+fn inside(nebulae: &[Nebula], x: i32, y: i32) -> bool {
+    nebulae.iter().any(|n| {
+        n.rects
+            .iter()
+            .any(|r| x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])
+    })
 }
 
 fn planet_type_for(star: StarType, r: i32) -> PlanetType {
@@ -318,7 +590,7 @@ fn planet_type_for(star: StarType, r: i32) -> PlanetType {
 }
 
 /// Port of 1oom `game_generate_planets` (positions, star colour, type, size, specials).
-fn generate_planets(rng: &mut Rng, w: u16, h: u16) -> Vec<Planet> {
+fn generate_planets(rng: &mut Rng, w: u16, h: u16, nebulae: &[Nebula]) -> Vec<Planet> {
     let mut pos: Vec<(i32, i32)> = Vec::new();
     for gy in 0..h as i32 {
         for gx in 0..w as i32 {
@@ -350,7 +622,10 @@ fn generate_planets(rng: &mut Rng, w: u16, h: u16) -> Vec<Planet> {
         rng.below(2); // look
         rng.below(50); // animation frame
         rng.below(4); // keeps the original random sequence
-        let r = rng.one_to(20) as i32;
+        let in_nebula = inside(nebulae, p.x, p.y);
+        p.nebula = in_nebula;
+        let neb = if in_nebula { 4 } else { 0 };
+        let r = rng.one_to(20) as i32 - neb;
         p.kind = planet_type_for(p.star, r);
         let t = p.kind.index() as i32;
         let mut a: i32 = match p.kind {
@@ -373,7 +648,9 @@ fn generate_planets(rng: &mut Rng, w: u16, h: u16) -> Vec<Planet> {
         a = a.min(120);
         p.base_max_pop = a;
         p.max_pop = a;
-        rng.one_to(4); // battle background
+        if !in_nebula {
+            rng.one_to(4); // battle background
+        }
         let star_mod = |s: StarType| match s {
             StarType::Red => -4,
             StarType::Green => -2,
@@ -392,10 +669,12 @@ fn generate_planets(rng: &mut Rng, w: u16, h: u16) -> Vec<Planet> {
                 p.special = Special::UltraPoor;
             }
         }
-        if PlanetType::Steppe.index() as i32 - t > rng.one_to(20) as i32 + rich_mod(p.star) {
+        if PlanetType::Steppe.index() as i32 - t
+            > rng.one_to(20) as i32 - neb * 2 + rich_mod(p.star)
+        {
             p.special = Special::Rich;
         }
-        if (rng.one_to(20) as i32 + rich_mod(p.star)) < 6 && p.special == Special::Rich {
+        if (rng.one_to(20) as i32 - neb * 2 + rich_mod(p.star)) < 6 && p.special == Special::Rich {
             p.special = Special::UltraRich;
         }
         if p.kind >= PlanetType::Minimal
@@ -418,6 +697,7 @@ fn generate_planets(rng: &mut Rng, w: u16, h: u16) -> Vec<Planet> {
             p.growth = Growth::Normal;
             p.special = Special::Normal;
         }
+        p.size = p.base_max_pop;
         p.image = PLANET_IMAGES[p.kind.index()][rng.below(6) as usize] - 1;
         planets.push(p);
     }
@@ -429,6 +709,7 @@ fn make_home(p: &mut Planet, rules: &Rules) {
     p.star = StarType::Yellow;
     p.special = Special::Normal;
     p.growth = Growth::Normal;
+    p.size = rules.home_max_pop;
     p.base_max_pop = rules.home_max_pop;
     p.max_pop = rules.home_max_pop;
     p.pop = rules.home_pop;
@@ -500,6 +781,7 @@ fn ensure_neighbours(st: &mut State, home: PlanetId, reserved: &mut Vec<PlanetId
             p.growth = Growth::Normal;
             p.base_max_pop = 40 + 5 * st.rng.below(5) as i32;
             p.max_pop = p.base_max_pop;
+            p.size = p.base_max_pop;
             p.image = PLANET_IMAGES[p.kind.index()][0] - 1;
         }
     }
@@ -511,12 +793,18 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         return Err("players must be between 2 and 6".into());
     }
     let rules = opts.rules.clone().unwrap_or_default();
-    if rules.designs.len() != rules.start_ships.len() || rules.designs.is_empty() {
-        return Err("rules: designs and start_ships must have the same length".into());
+    if rules.start_designs.len() != rules.start_ships.len()
+        || rules.start_designs.is_empty()
+        || rules.start_designs.len() > MAX_DESIGNS
+    {
+        return Err(
+            "rules: start_designs and start_ships must have the same length (1 to 6)".into(),
+        );
     }
     let mut rng = Rng::new(opts.seed);
     let (w, h) = opts.galaxy_size.grid();
-    let mut planets = generate_planets(&mut rng, w, h);
+    let nebulae = generate_nebulae(&mut rng, opts.galaxy_size, rules.nebulae);
+    let mut planets = generate_planets(&mut rng, w, h, &nebulae);
     let width = planets.iter().map(|p| p.x).max().unwrap_or(0) + 27;
     let height = planets.iter().map(|p| p.y).max().unwrap_or(0) + 25;
 
@@ -561,11 +849,12 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         width,
         height,
         planets,
+        nebulae,
         empires: Vec::new(),
         fleets: Vec::new(),
         transports: Vec::new(),
         orion,
-        guardian_hp: rules.guardian_hp,
+        guardian: true,
         winner: None,
         next_id: 0,
         events: Vec::new(),
@@ -595,10 +884,34 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
 
     let homes = pick_homes(&mut st, players);
     let stars = st.planets.len();
-    let ndesigns = st.rules.designs.len();
+    let ndesigns = MAX_DESIGNS;
     for (i, (&race, &home)) in races.iter().zip(&homes).enumerate() {
         let mut orbit = vec![vec![0u32; ndesigns]; stars];
-        orbit[home] = st.rules.start_ships.clone();
+        for (d, &n) in st.rules.start_ships.iter().enumerate() {
+            orbit[home][d] = n;
+        }
+        let mut designs = st.rules.start_designs.clone();
+        for (d, name) in designs.iter_mut().zip(&opts.start_design_names) {
+            if !name.trim().is_empty() {
+                d.name = name.clone();
+            }
+        }
+        for d in designs.iter_mut() {
+            d.update();
+        }
+        let ship_names = opts
+            .ship_names
+            .get(race.index())
+            .filter(|n| n.len() >= 12)
+            .cloned()
+            .unwrap_or_else(|| {
+                SHIP_NAMES[race.index()]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect()
+            });
+        let mut tech = Tech::new();
+        tech.list = crate::tech::generate_list(&mut st.rng, race);
         let leader = match (i, &opts.leader) {
             (0, Some(l)) if !opts.all_ai => l.clone(),
             _ => opts
@@ -613,11 +926,10 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
             banner: banners[i],
             ai: opts.all_ai || i > 0,
             alive: true,
-            tech: Tech {
-                level: [1; NUM_FIELDS],
-                invested: [0; NUM_FIELDS],
-                alloc: st.rules.research_weights_ai,
-            },
+            tech,
+            designs,
+            bombard: true,
+            ship_names,
             reserve: 0,
             total_prod: 0,
             research: 0,
@@ -639,6 +951,24 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
     let mut reserved = Vec::new();
     for &home in &homes {
         ensure_neighbours(&mut st, home, &mut reserved);
+    }
+    // First research projects (1oom `game_ai_classic_new_game_tech`; humans get the first
+    // tech of each list and can change it at no cost before any investment).
+    for i in 0..st.empires.len() {
+        for f in 0..NUM_FIELDS {
+            let row = st.empires[i].tech.list[f][0];
+            let tech = if st.empires[i].ai {
+                loop {
+                    let t = row[st.rng.below(3) as usize];
+                    if t != 0 {
+                        break t;
+                    }
+                }
+            } else {
+                row[0]
+            };
+            crate::tech::start_project(&mut st, i as u8, f, tech);
+        }
     }
     crate::turn::update_exploration(&mut st);
     crate::turn::update_production(&mut st);

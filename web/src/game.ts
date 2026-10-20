@@ -1,9 +1,12 @@
 // The in-game screen: top bar, map, side panel and dialogs.
+import type { Ctx } from "./ctx";
+import { designDialog } from "./designer";
 import type { Game } from "./engine";
 import { MapView } from "./map";
+import { needsChoice, researchDialog, techName } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
-import { FIELDS, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type View } from "./types";
+import { BUILD_STARGATE, FIELDS, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type View } from "./types";
 import { append, clear, download, h, modal, pickFiles, toast } from "./ui";
 
 export const AUTOSAVE = "autosave";
@@ -48,6 +51,10 @@ export class GameScreen {
   private empireName(e: EmpireView | number): string {
     const em = typeof e === "number" ? this.view.empires[e] : e;
     return this.t(`race.${em.race}.plural`);
+  }
+
+  private get ctx(): Ctx {
+    return { game: this.game, theme: this.theme, view: () => this.view, command: (c) => this.command(c) };
   }
 
   private refresh(): void {
@@ -99,7 +106,8 @@ export class GameScreen {
       h(
         "nav",
         {},
-        h("button", { onclick: () => this.researchDialog() }, this.t("game.btn.research")),
+        h("button", { onclick: () => this.openResearch() }, this.t("game.btn.research")),
+        h("button", { onclick: () => this.openDesigner() }, this.t("game.btn.design")),
         h("button", { onclick: () => this.empireDialog() }, this.t("game.btn.empire")),
         h("button", { onclick: () => this.rivalsDialog() }, this.t("game.btn.rivals")),
         h("button", { onclick: () => this.menuDialog() }, this.t("game.btn.menu")),
@@ -116,7 +124,7 @@ export class GameScreen {
     if (this.map.targeting) {
       this.panel.scrollTop = 0;
       append(this.panel, 
-        h("div", { class: "targeting" }, h("p", {}, this.t("game.choose_destination")), h("button", { onclick: () => ((this.map.targeting = null), this.renderPanel()) }, this.t("btn.cancel"))),
+        h("div", { class: "targeting" }, h("p", {}, this.map.targeting.prompt ?? this.t("game.choose_destination")), h("button", { onclick: () => ((this.map.targeting = null), this.renderPanel()) }, this.t("btn.cancel"))),
       );
     }
     if (s?.kind === "planet") this.planetPanel(this.view.planets[s.id]);
@@ -165,6 +173,8 @@ export class GameScreen {
       rows.push([this.t("planet.bases"), p.bases ?? 0]);
       if (mine && p.shield) rows.push([this.t("planet.shield"), p.shield]);
     }
+    if (p.nebula) rows.push([this.t("planet.nebula"), this.t("planet.nebula_effect")]);
+    if (p.stargate) rows.push([this.t("planet.stargate"), this.t("planet.stargate_yes")]);
     if (!mine) rows.push([this.t("planet.distance"), p.range > 900 ? "-" : this.t("planet.parsecs", { n: p.range })]);
     append(this.panel, 
       h("div", { class: "planet-head" }, this.planetPicture(p), h("div", {}, h("h2", {}, p.name), p.orion ? h("div", { class: "muted" }, this.t("planet.orion")) : null)),
@@ -203,13 +213,17 @@ export class GameScreen {
       input.addEventListener("change", () => this.command({ type: "set_sliders", planet: p.id, sliders }));
       return h("div", { class: "slider-row" }, h("label", {}, this.t(`slider.${name}`)), input, val);
     });
-    const d = v.designs[c.build];
-    const turns = d ? Math.ceil(Math.max(0, d.cost - c.bc_to_ship) / Math.max(1, c.spending[0])) : 0;
+    const turns = Math.ceil(Math.max(0, c.build_cost - c.bc_to_ship) / Math.max(1, c.spending[0]));
+    const gate = v.abilities.stargates && !p.stargate;
     const select = h(
       "select",
       { onchange: (e: Event) => this.command({ type: "set_build", planet: p.id, design: Number((e.target as HTMLSelectElement).value) }) },
-      ...v.designs.map((d, i) => h("option", { value: i, selected: i === c.build }, `${this.t(`design.${d.key}`)} (${d.cost} ${this.t("unit.bc")})`)),
+      ...v.designs.map((d, i) => h("option", { value: i, selected: i === c.build }, `${d.name} (${d.stats.cost} ${this.t("unit.bc")})`)),
+      gate || c.build === BUILD_STARGATE
+        ? h("option", { value: BUILD_STARGATE, selected: c.build === BUILD_STARGATE }, `${this.t("colony.stargate")} (${v.stargate_cost} ${this.t("unit.bc")})`)
+        : null,
     );
+    const rally = c.rally !== null ? v.planets[c.rally] : null;
     append(this.panel, 
       h("h3", {}, this.t("colony.spending", { bc: p.prod ?? 0 })),
       ...rows,
@@ -225,6 +239,14 @@ export class GameScreen {
       h("h3", {}, this.t("colony.build")),
       select,
       h("p", { class: "muted" }, c.spending[0] > 0 ? this.t("colony.build_eta", { turns }) : this.t("colony.build_none")),
+      h(
+        "p",
+        { class: "muted small" },
+        rally ? this.t("colony.rally_to", { planet: rally.name }) : this.t("colony.rally_none"),
+        " ",
+        h("button", { class: "mini", onclick: () => this.chooseRally(p) }, this.t("colony.rally_set")),
+        rally ? h("button", { class: "mini", onclick: () => this.command({ type: "set_rally", planet: p.id, to: null }) }, this.t("colony.rally_clear")) : null,
+      ),
       h("button", { onclick: () => this.transportDialog(p), disabled: (p.pop ?? 0) < 2 }, this.t("colony.send_transport")),
     );
   }
@@ -239,11 +261,43 @@ export class GameScreen {
     this.command({ type: "set_sliders", planet: p.id, sliders });
   }
 
-  private shipsLine(ships: number[]): string {
-    return ships
-      .map((n, i) => (n > 0 ? `${n} ${this.t(`design.${this.view.designs[i].key}`)}` : ""))
+  private chooseRally(p: PlanetView): void {
+    const v = this.view;
+    this.map.targeting = {
+      from: p,
+      range: 99,
+      speed: 1,
+      prompt: this.t("colony.rally_choose", { planet: p.name }),
+      ranges: false,
+      label: () => this.t("colony.rally_label"),
+      ok: (id) => id !== p.id && v.planets[id].owner === v.player,
+      pick: (to) => {
+        this.map.targeting = null;
+        this.command({ type: "set_rally", planet: p.id, to });
+      },
+    };
+    this.renderPanel();
+  }
+
+  private designName(f: FleetView | null, i: number): string {
+    const own = !f || f.owner === this.view.player;
+    return (own ? this.view.designs[i]?.name : f?.names[i]) ?? "?";
+  }
+
+  private shipsLine(f: FleetView): string {
+    return f.ships
+      .map((n, i) => (n > 0 ? `${n} ${this.designName(f, i)}` : ""))
       .filter(Boolean)
       .join(", ");
+  }
+
+  private fleetLimits(ships: number[]): { range: number; speed: number } {
+    const v = this.view;
+    const used = ships.map((n, i) => (n > 0 ? v.designs[i] : null)).filter((d) => d !== null);
+    return {
+      range: Math.min(...used.map((d) => d!.range)),
+      speed: Math.min(...used.map((d) => d!.stats.speed)),
+    };
   }
 
   private orbitControls(p: PlanetView): void {
@@ -253,23 +307,31 @@ export class GameScreen {
     append(this.panel, h("h3", {}, this.t("orbit.title")));
     for (const f of here) {
       if (f.owner !== v.player) {
-        append(this.panel, h("p", { class: "enemy" }, `${this.empireName(f.owner)}: ${this.shipsLine(f.ships)}`));
+        append(this.panel, h("p", { class: "enemy" }, `${this.empireName(f.owner)}: ${this.shipsLine(f)}`));
         continue;
       }
       const inputs = f.ships.map((n) => h("input", { type: "number", min: 0, max: n, value: n }));
       const rows = f.ships
         .map((n, i) =>
-          n > 0 ? h("div", { class: "ship-row" }, h("label", {}, this.t(`design.${v.designs[i].key}`)), inputs[i], h("span", { class: "muted" }, `/ ${n}`)) : null,
+          n > 0 ? h("div", { class: "ship-row" }, h("label", {}, this.designName(f, i)), inputs[i], h("span", { class: "muted" }, `/ ${n}`)) : null,
         )
         .filter(Boolean) as HTMLElement[];
+      const chosen = () => inputs.map((inp, i) => Math.max(0, Math.min(f.ships[i], Math.floor(Number(inp.value) || 0))));
+      const scrap = () => {
+        const ships = chosen();
+        if (ships.some((n) => n > 0) && window.confirm(this.t("orbit.scrap_confirm", { ships: this.shipsLine({ ...f, ships }) }))) {
+          this.command({ type: "scrap_ships", planet: p.id, ships });
+        }
+      };
       const send = () => {
-        const ships = inputs.map((inp, i) => Math.max(0, Math.min(f.ships[i], Math.floor(Number(inp.value) || 0))));
+        const ships = chosen();
         if (!ships.some((n) => n > 0)) return;
-        const range = Math.min(...ships.map((n, i) => (n > 0 ? v.designs[i].range : Infinity)));
+        const { range, speed } = this.fleetLimits(ships);
         this.map.targeting = {
           from: p,
           range,
-          speed: v.abilities.speed,
+          speed,
+          label: (id) => (p.stargate && v.planets[id].stargate && v.planets[id].owner === v.player ? this.t("map.via_stargate") : null),
           ok: (id) => id !== p.id && v.planets[id].range <= range,
           pick: (to) => {
             this.map.targeting = null;
@@ -278,17 +340,25 @@ export class GameScreen {
         };
         this.renderPanel();
       };
-      append(this.panel, h("div", { class: "fleet-box" }, ...rows, h("button", { class: "primary", onclick: send }, this.t("orbit.send"))));
+      append(
+        this.panel,
+        h(
+          "div",
+          { class: "fleet-box" },
+          ...rows,
+          h("div", { class: "row" }, h("button", { class: "primary", onclick: send }, this.t("orbit.send")), h("button", { onclick: scrap }, this.t("orbit.scrap"))),
+        ),
+      );
     }
   }
 
   private fleetPanel(f: FleetView): void {
     const v = this.view;
     const dest = f.dest !== null ? v.planets[f.dest] : null;
-    const range = Math.min(...f.ships.map((n, i) => (n > 0 ? v.designs[i].range : Infinity)));
+    const { range, speed } = this.fleetLimits(f.ships);
     append(this.panel, 
       h("h2", {}, this.t("fleet.title")),
-      h("p", {}, this.shipsLine(f.ships)),
+      h("p", {}, this.shipsLine(f)),
       dest ? h("p", {}, this.t("fleet.heading", { planet: dest.name, turns: f.eta ?? 0 })) : null,
       h(
         "button",
@@ -297,7 +367,7 @@ export class GameScreen {
             this.map.targeting = {
               from: f,
               range,
-              speed: v.abilities.speed,
+              speed,
               ok: (id) => v.planets[id].range <= range,
               pick: (to) => {
                 this.map.targeting = null;
@@ -323,7 +393,7 @@ export class GameScreen {
     this.map.targeting = {
       from: p,
       range,
-      speed: v.abilities.speed,
+      speed: v.abilities.engine_warp,
       ok: (id) => id !== p.id && v.planets[id].range <= range && v.planets[id].explored && v.planets[id].kind !== "not_habitable",
       pick: (to) => {
         this.map.targeting = null;
@@ -335,8 +405,19 @@ export class GameScreen {
 
   // ------------------------------------------------------------- turn
 
+  private busy = false;
+
   private async endTurn(): Promise<void> {
-    if (document.querySelector(".overlay")) return;
+    if (this.busy || document.querySelector(".overlay")) return;
+    this.busy = true;
+    try {
+      await this.processTurn();
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async processTurn(): Promise<void> {
     this.map.targeting = null;
     this.game.endTurn();
     await store.put("kv", AUTOSAVE, this.game.save());
@@ -356,6 +437,7 @@ export class GameScreen {
       const list = h("ul", { class: "events" }, ...events.map((e) => h("li", { class: `ev-${e.type}`, onclick: () => this.focusEvent(e) }, this.eventText(e))));
       await modal(this.t("report.title", { year: v.year }), list, [this.t("btn.ok")], "report");
     }
+    if (needsChoice(this.ctx)) await this.openResearch();
   }
 
   private focusEvent(e: GameEvent): void {
@@ -373,7 +455,7 @@ export class GameScreen {
     for (const [k, val] of Object.entries(e)) {
       if (k === "planet" && typeof val === "number") params.planet = v.planets[val].name;
       else if (["empire", "attacker", "defender", "from", "to", "by", "owner"].includes(k) && typeof val === "number") params[k] = this.empireName(val);
-      else if (k === "design" && typeof val === "number") params.design = this.t(`design.${v.designs[val].key}`);
+      else if (k === "design" && typeof val === "number") params.design = v.designs[val]?.name ?? "?";
       else if (k === "field" && typeof val === "string") params.field = this.t(`field.${val}`);
       else if (typeof val === "number" || typeof val === "string") params[k] = val;
     }
@@ -385,43 +467,26 @@ export class GameScreen {
       params.losses = sides.map((s, i) => `${nm(s)} -${losses[i]}`).join(", ");
       params.result = e.winner === null ? this.t("event.battle.draw") : this.t("event.battle.won", { winner: nm(e.winner as number) });
     }
+    if (e.type === "tech_discovered") {
+      const f = v.tech[FIELDS.indexOf(e.field as never)];
+      const c = f?.completed.find((c) => c.tech === e.tech);
+      params.tech = c ? techName(this.ctx, f, c.key, c.tech) : String(e.tech);
+      return this.t(`event.tech_discovered.${e.source}`, params);
+    }
     if (e.type === "ground_battle") return this.t(e.won ? "event.ground_battle.won" : "event.ground_battle.lost", params);
     return this.t(`event.${e.type}`, params);
   }
 
   // ------------------------------------------------------------- dialogs
 
-  private researchDialog(): void {
-    const v = this.view;
-    const alloc = [...v.tech.alloc];
-    const rows = FIELDS.map((f, i) => {
-      const pct = Math.min(100, Math.floor((v.tech.invested[i] * 100) / Math.max(1, v.tech.next_cost[i])));
-      const input = h("input", { type: "range", min: 0, max: 100, value: alloc[i] });
-      const val = h("span", { class: "bc" }, `${alloc[i]}%`);
-      input.addEventListener("input", () => {
-        alloc[i] = Number(input.value);
-        val.textContent = `${alloc[i]}%`;
-      });
-      input.addEventListener("change", () => this.command({ type: "set_research", alloc }));
-      return h(
-        "div",
-        { class: "research-row" },
-        h("label", {}, this.t(`field.${f}`), h("small", {}, this.t("research.level", { n: v.tech.level[i] }))),
-        h("div", { class: "progress", title: `${v.tech.invested[i]} / ${v.tech.next_cost[i]}` }, h("div", { style: `width:${pct}%` })),
-        input,
-        val,
-      );
-    });
-    const a = v.abilities;
-    const facts = h(
-      "ul",
-      { class: "muted abilities" },
-      h("li", {}, this.t("research.range", { n: a.fuel_range })),
-      h("li", {}, this.t("research.speed", { n: a.speed })),
-      h("li", {}, this.t("research.workers", { n: a.colonist_oper_factories })),
-      h("li", {}, this.t("research.colonize", { kind: this.t(`planet.${a.colony_for}`) })),
-    );
-    void modal(this.t("research.title", { rp: v.research }), [...rows, facts], [this.t("btn.close")], "wide");
+  private async openResearch(): Promise<void> {
+    await researchDialog(this.ctx);
+    this.refresh();
+  }
+
+  private async openDesigner(): Promise<void> {
+    await designDialog(this.ctx);
+    this.refresh();
   }
 
   private empireDialog(): void {
@@ -448,11 +513,26 @@ export class GameScreen {
           h("td", {}, p.factories ?? 0),
           h("td", {}, p.bases ?? 0),
           h("td", {}, p.prod ?? 0),
-          h("td", {}, p.colony && p.colony.spending[0] > 0 ? this.t(`design.${v.designs[p.colony.build].key}`) : "-"),
+          h(
+            "td",
+            {},
+            p.colony && p.colony.spending[0] > 0
+              ? p.colony.build === BUILD_STARGATE
+                ? this.t("colony.stargate")
+                : (v.designs[p.colony.build]?.name ?? "-")
+              : "-",
+          ),
         ),
       ),
     );
-    void modal(this.t("empire.title", { n: mine.length }), table, [this.t("btn.close")], "wide");
+    const bombard = h("input", { type: "checkbox", checked: v.bombard });
+    bombard.addEventListener("change", () => this.command({ type: "set_bombard", enabled: bombard.checked }));
+    void modal(
+      this.t("empire.title", { n: mine.length }),
+      [table, h("label", { class: "checkbox" }, bombard, " ", this.t("empire.bombard"))],
+      [this.t("btn.close")],
+      "wide",
+    );
   }
 
   private rivalsDialog(): void {

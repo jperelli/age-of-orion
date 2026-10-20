@@ -179,7 +179,8 @@ fn text_table(name: &str, archive: &Archive) -> Option<Vec<String>> {
 }
 
 /// Semantic names for the images the game UI knows how to use (indices from 1oom
-/// `ui/classic/uiclassic.c`): PLANETS.LBX 0..=34 planet globes, 35..=44 race portraits.
+/// `ui/classic/uiclassic.c`): PLANETS.LBX 0..=34 planet globes, 35..=44 race portraits,
+/// STARMAP.LBX nebulae and the stargate.
 fn aliases(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, String> {
     let mut a = BTreeMap::new();
     let png = |file: &str, i: usize| {
@@ -197,6 +198,15 @@ fn aliases(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, String>
         if let Some(p) = png("PLANETS", 35 + r) {
             a.insert(format!("race/{r}"), p);
         }
+    }
+    // STARMAP.LBX (1oom `uigame.c`, `uiclassic.c`): nebulae 0x0f.., the stargate 0x2d.
+    for t in 0..10 {
+        if let Some(p) = png("STARMAP", 0x0f + t) {
+            a.insert(format!("nebula/{t}"), p);
+        }
+    }
+    if let Some(p) = png("STARMAP", 0x2d) {
+        a.insert("stargate".into(), p);
     }
     a
 }

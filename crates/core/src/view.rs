@@ -2,9 +2,11 @@
 
 use serde::Serialize;
 
+use crate::design::{self, DesignStats, KnownParts, ShipDesign};
 use crate::rules::Abilities;
 use crate::state::*;
-use crate::turn::{clean_eco_percent, factory_cost, tech_prod};
+use crate::tech;
+use crate::turn::{clean_eco_percent, factory_cost, ship_totals, tech_prod};
 use crate::types::*;
 
 #[derive(Debug, Clone, Serialize)]
@@ -12,8 +14,11 @@ pub struct Colony {
     pub sliders: [i32; NUM_SLIDERS],
     /// BC per turn going to each slider.
     pub spending: [i32; NUM_SLIDERS],
+    /// Design index, or 6 for a stargate.
     pub build: usize,
+    pub build_cost: i32,
     pub bc_to_ship: i32,
+    pub rally: Option<PlanetId>,
     pub factory_cost: i32,
     pub max_factories: i32,
     pub research: i32,
@@ -31,6 +36,7 @@ pub struct PlanetView {
     pub y: i32,
     pub star: StarType,
     pub explored: bool,
+    pub nebula: bool,
     /// Parsecs to the nearest own colony.
     pub range: i32,
     pub orion: bool,
@@ -45,6 +51,7 @@ pub struct PlanetView {
     pub factories: Option<i32>,
     pub bases: Option<i32>,
     pub shield: Option<i32>,
+    pub stargate: bool,
     pub prod: Option<i32>,
     pub colonizable: bool,
     pub colony: Option<Colony>,
@@ -62,6 +69,10 @@ pub struct FleetView {
     pub dest: Option<PlanetId>,
     pub eta: Option<u32>,
     pub ships: Vec<u32>,
+    /// Design names of the owner, for enemy fleets.
+    pub names: Vec<String>,
+    pub speed: i32,
+    pub range: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,21 +100,33 @@ pub struct EmpireView {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DesignView {
-    pub key: String,
-    pub cost: i32,
-    pub attack: i32,
-    pub hp: i32,
-    pub bombs: i32,
-    pub colony: bool,
+    #[serde(flatten)]
+    pub design: ShipDesign,
+    pub stats: DesignStats,
+    /// Ships of this design in service.
+    pub count: u32,
     pub range: i32,
+    pub colony: Option<PlanetType>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TechView {
-    pub level: [u32; NUM_FIELDS],
-    pub invested: [u32; NUM_FIELDS],
-    pub next_cost: [u32; NUM_FIELDS],
-    pub alloc: [u32; NUM_FIELDS],
+pub struct TechChoice {
+    pub tech: u8,
+    pub key: String,
+    pub cost: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FieldView {
+    pub field: TechField,
+    pub level: u32,
+    pub project: u8,
+    pub project_key: String,
+    pub cost: u32,
+    pub invested: u32,
+    pub alloc: u32,
+    pub choices: Vec<TechChoice>,
+    pub completed: Vec<TechChoice>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -119,14 +142,18 @@ pub struct View {
     pub total_prod: i32,
     pub maintenance: i32,
     pub research: i32,
-    pub tech: TechView,
+    pub bombard: bool,
+    pub tech: Vec<FieldView>,
     pub abilities: Abilities,
     pub base_cost: i32,
+    pub stargate_cost: i32,
     pub planets: Vec<PlanetView>,
+    pub nebulae: Vec<Nebula>,
     pub empires: Vec<EmpireView>,
     pub fleets: Vec<FleetView>,
     pub transports: Vec<TransportView>,
     pub designs: Vec<DesignView>,
+    pub parts: KnownParts,
     pub events: Vec<Event>,
 }
 
@@ -140,6 +167,26 @@ fn sees(st: &State, me: EmpireId, x: f64, y: f64) -> bool {
         || st.fleets.iter().any(|f| {
             f.owner == me && ((f.x - x).powi(2) + (f.y - y).powi(2)).sqrt() <= st.rules.parsec * 2.0
         })
+}
+
+fn field_view(st: &State, me: EmpireId, f: usize) -> FieldView {
+    let t = &st.empires[me as usize].tech;
+    let choice = |n: u8| TechChoice {
+        tech: n,
+        key: tech::key(f, n),
+        cost: tech::cost_of(st, me, f, n),
+    };
+    FieldView {
+        field: TechField::ALL[f],
+        level: t.level[f],
+        project: t.project[f],
+        project_key: tech::key(f, t.project[f]),
+        cost: t.cost[f],
+        invested: t.invested[f],
+        alloc: t.alloc[f],
+        choices: tech::next_techs(t, f).into_iter().map(choice).collect(),
+        completed: t.completed[f].iter().map(|&n| choice(n)).collect(),
+    }
 }
 
 pub fn view(st: &State, me: EmpireId) -> View {
@@ -156,7 +203,13 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 sliders: p.sliders,
                 spending: std::array::from_fn(|s| p.sliders[s] * p.prod / 100),
                 build: p.build,
+                build_cost: if p.build == design::BUILD_STARGATE {
+                    st.rules.stargate_cost
+                } else {
+                    st.ship_cost(me, p.build)
+                },
                 bc_to_ship: p.bc_to_ship,
+                rally: p.rally,
                 factory_cost: factory_cost(p, e),
                 max_factories: p.max_pop * a.colonist_oper_factories,
                 research: tech_prod(p, e.race),
@@ -164,6 +217,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 clean_eco: clean_eco_percent(p, e),
                 pop_oper_fact: p.pop_oper_fact,
             });
+            let known_owner = ex && p.owner.is_some();
             PlanetView {
                 id: i,
                 name: p.name.clone(),
@@ -171,31 +225,21 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 y: p.y,
                 star: p.star,
                 explored: ex,
+                nebula: p.nebula,
                 range: st.range_to(me, i),
                 orion: i == st.orion,
-                guardian: i == st.orion && st.guardian_alive(),
+                guardian: i == st.orion && st.guardian,
                 image: ex.then_some(p.image),
                 kind: ex.then_some(p.kind),
                 special: ex.then_some(p.special),
                 growth: ex.then_some(p.growth),
                 max_pop: ex.then_some(p.max_pop),
                 owner: if ex { p.owner } else { None },
-                pop: if ex && p.owner.is_some() {
-                    Some(p.pop)
-                } else {
-                    None
-                },
-                factories: if ex && p.owner.is_some() {
-                    Some(p.factories)
-                } else {
-                    None
-                },
-                bases: if ex && p.owner.is_some() {
-                    Some(p.bases)
-                } else {
-                    None
-                },
-                shield: if mine { Some(p.shield) } else { None },
+                pop: known_owner.then_some(p.pop),
+                factories: known_owner.then_some(p.factories),
+                bases: known_owner.then_some(p.bases),
+                shield: mine.then_some(p.shield),
+                stargate: ex && p.stargate,
                 prod: mine.then_some(p.prod),
                 colonizable: ex && crate::turn::can_colonize(st, me, i),
                 colony,
@@ -203,6 +247,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
         })
         .collect();
 
+    let names = |o: &Empire| o.designs.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
     let mut fleets = Vec::new();
     for (ei, other) in st.empires.iter().enumerate() {
         for (pi, o) in other.orbit.iter().enumerate() {
@@ -220,13 +265,15 @@ pub fn view(st: &State, me: EmpireId) -> View {
                     dest: None,
                     eta: None,
                     ships: o.clone(),
+                    names: names(other),
+                    speed: st.fleet_speed(ei as u8, o),
+                    range: crate::commands::fleet_range(st, ei as u8, o),
                 });
             }
         }
     }
     for f in &st.fleets {
-        let mine = f.owner == me;
-        if mine || sees(st, me, f.x, f.y) {
+        if f.owner == me || sees(st, me, f.x, f.y) {
             fleets.push(FleetView {
                 id: Some(f.id),
                 owner: f.owner,
@@ -234,8 +281,15 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 x: f.x,
                 y: f.y,
                 dest: Some(f.dest),
-                eta: Some(st.eta(f.x, f.y, f.dest, f.speed)),
+                eta: Some(if f.gate {
+                    1
+                } else {
+                    st.eta(f.x, f.y, f.dest, f.speed)
+                }),
                 ships: f.ships.clone(),
+                names: names(&st.empires[f.owner as usize]),
+                speed: f.speed,
+                range: crate::commands::fleet_range(st, f.owner, &f.ships),
             });
         }
     }
@@ -272,25 +326,19 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 .count(),
         })
         .collect();
-    let designs = st
-        .rules
+    let totals = ship_totals(st, me);
+    let designs = e
         .designs
         .iter()
         .enumerate()
-        .map(|(d, des)| DesignView {
-            key: des.key.clone(),
-            cost: st.ship_cost(me, d),
-            attack: des.attack * a.attack_pct / 100,
-            hp: des.hp * a.hp_pct / 100,
-            bombs: des.bombs * a.attack_pct / 100,
-            colony: des.colony,
-            range: a.fuel_range + des.extra_range,
+        .map(|(d, sd)| DesignView {
+            design: sd.clone(),
+            stats: design::stats(sd, &e.tech),
+            count: totals[d],
+            range: a.fuel_range + sd.extra_range(),
+            colony: sd.colony_type(),
         })
         .collect();
-    let next_cost = std::array::from_fn(|f| {
-        st.rules
-            .research_cost(e.race, f, e.tech.level[f] + 1, e.ai, st.difficulty)
-    });
     View {
         turn: st.turn,
         year: st.year,
@@ -303,19 +351,18 @@ pub fn view(st: &State, me: EmpireId) -> View {
         total_prod: e.total_prod,
         maintenance: e.maintenance,
         research: st.colonies(me).map(|(_, p)| tech_prod(p, e.race)).sum(),
-        tech: TechView {
-            level: e.tech.level,
-            invested: e.tech.invested,
-            next_cost,
-            alloc: e.tech.alloc,
-        },
+        bombard: e.bombard,
+        tech: (0..NUM_FIELDS).map(|f| field_view(st, me, f)).collect(),
         abilities: a,
         base_cost: st.base_cost(me),
+        stargate_cost: st.rules.stargate_cost,
         planets,
+        nebulae: st.nebulae.clone(),
         empires,
         fleets,
         transports,
         designs,
+        parts: design::known_parts(&e.tech),
         events: st
             .events
             .iter()
