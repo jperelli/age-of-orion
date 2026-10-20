@@ -5,7 +5,7 @@ Empires look: cities, armies and kingdoms on a hand-drawn world map. The rules a
 Rust port of [1oom](https://github.com/1oom-fork/1oom), the open-source engine of MOO1, compiled
 to **WebAssembly** so the same game runs in the browser and as a desktop app.
 
-- **Play in the browser:** https://jperelli.github.io/age-of-orion/
+- **Play in the browser:** https://jperelli.com/age-of-orion/
 - **Download** (Windows, macOS, Linux, plus the web build and the CLI):
   [latest release](https://github.com/jperelli/age-of-orion/releases/latest)
 
