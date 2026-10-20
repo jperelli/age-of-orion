@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Cities and planets on the battle grid no longer cover the neighbouring squares.
+
 ## [0.4.0] - 2026-10-21
 
 Battles and presentation: tactical battles on the MOO1 grid, the soundtrack, and more of

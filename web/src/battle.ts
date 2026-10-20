@@ -762,37 +762,38 @@ class BattleScreen {
     const cy = s.y + CH / 2;
     const img = p.image !== null ? this.ctx.theme.img(`planet/${p.image}`) : null;
     if (img && !this.world) {
-      c.drawImage(img, cx - 24, cy - 18, 48, 36);
+      c.drawImage(img, cx - 15, cy - 11, 30, 22);
     } else if (this.world) {
+      // A walled town that fits its square.
       c.fillStyle = "#b9a37a";
       c.strokeStyle = "#4a3b26";
-      c.lineWidth = 1;
-      c.fillRect(cx - 20, cy - 12, 40, 26);
-      c.strokeRect(cx - 20, cy - 12, 40, 26);
-      for (const tx of [-20, 14]) {
-        c.fillRect(cx + tx, cy - 18, 6, 32);
-        c.strokeRect(cx + tx, cy - 18, 6, 32);
+      c.lineWidth = 0.8;
+      c.fillRect(cx - 11, cy - 6, 22, 15);
+      c.strokeRect(cx - 11, cy - 6, 22, 15);
+      for (const tx of [-14, 10]) {
+        c.fillRect(cx + tx, cy - 9, 4, 18);
+        c.strokeRect(cx + tx, cy - 9, 4, 18);
       }
-      c.fillStyle = color;
-      c.fillRect(cx - 2, cy - 22, 8, 5);
       c.strokeStyle = "#2b2219";
       c.beginPath();
-      c.moveTo(cx - 2, cy - 22);
-      c.lineTo(cx - 2, cy - 10);
+      c.moveTo(cx, cy - 6);
+      c.lineTo(cx, cy - 12);
       c.stroke();
+      c.fillStyle = color;
+      c.fillRect(cx, cy - 12, 6, 3.5);
     } else {
-      const g = c.createRadialGradient(cx - 6, cy - 6, 2, cx, cy, 20);
+      const g = c.createRadialGradient(cx - 4, cy - 4, 1, cx, cy, 12);
       g.addColorStop(0, "#9fc4ff");
       g.addColorStop(1, "#1d3a7a");
       c.fillStyle = g;
       c.beginPath();
-      c.arc(cx, cy, 18, 0, Math.PI * 2);
+      c.arc(cx, cy, 11, 0, Math.PI * 2);
       c.fill();
       c.strokeStyle = color;
-      c.lineWidth = 1.5;
+      c.lineWidth = 1.2;
       c.stroke();
     }
-    this.label(c, s.x + CW + 4, s.y + CH + 6, s.item.num > 0 ? `${s.item.num}` : "", color);
+    this.label(c, s.x + CW - 1, s.y + CH - 1, s.item.num > 0 ? `${s.item.num}` : "", color);
   }
 
   private drawItem(c: CanvasRenderingContext2D, s: Shown, current: boolean, now: number): void {
