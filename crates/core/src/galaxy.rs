@@ -458,11 +458,14 @@ fn pick_homes(st: &mut State, n: usize) -> Vec<PlanetId> {
             })
             .collect();
         cand.sort_by(|a, b| b.cmp(a));
-        let pick = if homes.is_empty() {
-            cand[st.rng.below(cand.len() as u16) as usize].1
+        // The first home is any star in the far half from Orion, the others are among the
+        // stars farthest from every home picked so far.
+        let top = if homes.is_empty() {
+            cand.len().div_ceil(2)
         } else {
-            cand[st.rng.below(cand.len().min(3) as u16) as usize].1
+            cand.len().min(3)
         };
+        let pick = cand[st.rng.below(top as u16) as usize].1;
         homes.push(pick);
     }
     homes

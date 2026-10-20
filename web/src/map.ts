@@ -281,7 +281,7 @@ export class MapView {
       const x = r() * W, y = r() * H;
       const val = at(x, y);
       if (nearSite(x, y)) continue;
-      if (val > 0.55) {
+      if (val > 0.6 && r() < 0.6) {
         // mountains
         g.fillStyle = "#7d7563";
         g.beginPath();
