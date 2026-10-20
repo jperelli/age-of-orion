@@ -114,6 +114,7 @@ export class GameScreen {
     const s = this.map.selection;
     clear(this.panel);
     if (this.map.targeting) {
+      this.panel.scrollTop = 0;
       append(this.panel, 
         h("div", { class: "targeting" }, h("p", {}, this.t("game.choose_destination")), h("button", { onclick: () => ((this.map.targeting = null), this.renderPanel()) }, this.t("btn.cancel"))),
       );

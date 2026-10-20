@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The side panel scrolls back to the destination prompt when choosing where to send a fleet.
+- Race names in the Races dialog are readable with light banner colours.
+- The release workflow uploads the CLI archives and can be re-run for an existing tag.
+
 ## [0.1.0] - 2026-10-20
 
 First playable version.
