@@ -1,0 +1,141 @@
+name: Release
+
+# Push a tag like v0.2.0 (matching the version in Cargo.toml and CHANGELOG.md) to publish:
+# the web build (zip), desktop installers for Linux, Windows and macOS, and the CLI.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/build-web
+      - name: Package
+        run: cd web/dist && zip -r "../../age-of-orion-web-${GITHUB_REF_NAME}.zip" .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: web/dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-web
+          path: age-of-orion-web-*.zip
+
+  desktop:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Install WebKitGTK
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Build installers
+        shell: bash
+        run: |
+          cd desktop
+          npm ci
+          npx tauri build
+      - name: Collect
+        shell: bash
+        run: |
+          mkdir -p out
+          b=desktop/src-tauri/target/release/bundle
+          for f in $b/deb/*.deb $b/rpm/*.rpm $b/appimage/*.AppImage $b/msi/*.msi $b/nsis/*.exe $b/dmg/*.dmg; do
+            [ -f "$f" ] && cp "$f" out/
+          done
+          ls -l out
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-desktop-${{ matrix.name }}
+          path: out/*
+
+  cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p aoo-cli
+      - name: Package
+        shell: bash
+        run: |
+          name="aoo-cli-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir "$name"
+          cp README.md LICENSE "$name"/
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/release/aoo.exe "$name"/
+            7z a "$name.zip" "$name" > /dev/null
+          else
+            cp target/release/aoo "$name"/
+            tar czf "$name.tar.gz" "$name"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-cli-${{ matrix.target }}
+          path: aoo-cli-*.*
+
+  publish:
+    needs: [web, desktop, cli]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $GITHUB_REF_NAME" > notes.md
+          cat notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l dist
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Age of Orion $GITHUB_REF_NAME" --notes-file notes.md --verify-tag

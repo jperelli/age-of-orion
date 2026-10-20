@@ -1,0 +1,17 @@
+[package]
+name = "aoo-cli"
+description = "Age of Orion command line tools: LBX import and headless simulation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "aoo"
+path = "src/main.rs"
+
+[dependencies]
+aoo-lbx.workspace = true
+aoo-core.workspace = true
+serde_json.workspace = true

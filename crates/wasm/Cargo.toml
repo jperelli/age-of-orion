@@ -1,0 +1,19 @@
+[package]
+name = "aoo-wasm"
+description = "WebAssembly bindings of Age of Orion (game core + LBX importer) for the web and desktop UI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+aoo-lbx.workspace = true
+aoo-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true

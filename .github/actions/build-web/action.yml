@@ -1,0 +1,31 @@
+name: Build web
+description: Compiles the Rust core to WebAssembly and builds the web UI into web/dist.
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: wasm
+    - name: Install wasm-bindgen-cli (version from Cargo.lock)
+      shell: bash
+      run: |
+        v=$(awk '/^name = "wasm-bindgen"$/{getline; gsub(/version = |"/, ""); print; exit}' Cargo.lock)
+        echo "WASM_BINDGEN_VERSION=$v" >> "$GITHUB_ENV"
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-bindgen-cli@${{ env.WASM_BINDGEN_VERSION }}
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+    - name: Build
+      shell: bash
+      run: |
+        ./scripts/build-wasm.sh
+        cd web
+        npm ci
+        npm run build

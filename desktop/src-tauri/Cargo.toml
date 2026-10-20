@@ -1,0 +1,23 @@
+[package]
+name = "age-of-orion"
+description = "Age of Orion desktop app: the web build (Rust core compiled to WebAssembly) in a native window"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-only"
+repository = "https://github.com/jperelli/age-of-orion"
+rust-version = "1.85"
+publish = false
+
+# Separate from the root workspace so `cargo test` there does not need WebKit/GTK.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.2", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.3", features = [] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

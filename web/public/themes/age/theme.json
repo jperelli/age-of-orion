@@ -1,0 +1,15 @@
+{
+ "id": "age",
+ "name": "Age",
+ "description": "Cities, armies and kingdoms on a world map",
+ "map": "world",
+ "use_lbx": false,
+ "banners": [
+  "#2f5fd0",
+  "#2e9b3a",
+  "#8a3fb8",
+  "#c8322a",
+  "#f2f2f2",
+  "#e6b823"
+ ]
+}

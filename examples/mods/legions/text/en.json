@@ -1,0 +1,14 @@
+{
+  "app.subtitle": "Found colonies, march the legions, rule the provinces",
+  "design.scout": "Exploratores",
+  "design.fighter": "Velites",
+  "design.destroyer": "Legionaries",
+  "design.bomber": "Onagers",
+  "design.colony_ship": "Coloni",
+  "slider.ship": "Legions",
+  "slider.def": "Forts",
+  "game.btn.rivals": "Provinces",
+  "event.colony_founded": "The coloni founded {planet}. Ave!",
+  "guardian.name": "Hydra",
+  "planet.guardian": "Guarded by the Hydra. Defeat it to settle Orion."
+}

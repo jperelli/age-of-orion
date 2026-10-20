@@ -1,0 +1,5 @@
+{
+  "colony_ship_pop": 3,
+  "research_cost_percent": 35,
+  "start_ships": [2, 4, 0, 0, 1]
+}

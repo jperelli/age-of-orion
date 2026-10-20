@@ -1,0 +1,15 @@
+{
+ "id": "classic",
+ "name": "Classic",
+ "description": "Stars and planets, with your original Master of Orion art",
+ "map": "space",
+ "use_lbx": true,
+ "banners": [
+  "#4f7dff",
+  "#3fd25a",
+  "#b46cff",
+  "#ff4a3d",
+  "#f4f4f4",
+  "#ffd23f"
+ ]
+}
