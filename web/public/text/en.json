@@ -1045,5 +1045,6 @@
  "error.no_message": "That message is gone.",
  "error.invalid_empire": "Unknown empire.",
  "error.no_election": "There is no vote now.",
- "error.already_voted": "You already voted."
+ "error.already_voted": "You already voted.",
+ "audience.from": "Message from the {race}"
 }

@@ -332,7 +332,7 @@ async function showMessage(ctx: Ctx, m: Incoming): Promise<{ accept: boolean; pi
   const t = tr(ctx);
   const head = h("div", { class: "audience-head" }, portrait(ctx, m.from), h("div", {}, h("b", {}, ctx.view().empires[m.from].leader), h("div", { class: "muted" }, empireName(ctx, m.from))));
   const text = h("p", { class: "say-them" }, msgText(ctx, m.kind, m.from, m.params));
-  const title = t("audience.title", { race: empireName(ctx, m.from) });
+  const title = t("audience.from", { race: empireName(ctx, m.from) });
   if (!m.needs_answer) {
     await modal(title, [head, text], [t("btn.ok")], "audience");
     return { accept: false, pick: null };

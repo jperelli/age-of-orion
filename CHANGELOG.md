@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Messages from other rulers are titled "Envoy from" instead of "Envoy to".
+
 ## [0.3.0] - 2026-10-20
 
 Diplomacy and events: the other empires talk, trade, spy, plot and vote.

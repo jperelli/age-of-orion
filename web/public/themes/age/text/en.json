@@ -1082,5 +1082,6 @@
  "error.treaty": "You are bound by an oath to them. Break it first.",
  "error.no_contact": "Out of reach.",
  "error.no_money": "Not enough gold in the treasury.",
- "error.invalid_empire": "Unknown kingdom."
+ "error.invalid_empire": "Unknown kingdom.",
+ "audience.from": "Envoy from the {race}"
 }
