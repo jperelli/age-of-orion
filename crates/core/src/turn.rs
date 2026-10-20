@@ -6,6 +6,7 @@ use crate::design::{BUILD_STARGATE, MAX_DESIGNS};
 use crate::state::*;
 use crate::tech;
 use crate::types::*;
+use crate::{ai_diplo, audience, council, diplo, events, spy};
 
 fn adjust_by_special(prod: i32, special: Special) -> i32 {
     match special {
@@ -105,6 +106,10 @@ pub fn update_production(st: &mut State) {
                 Difficulty::Simple => v,
             };
         }
+        v += p.reserve.min(v);
+        if p.unrest == Unrest::Rebellion {
+            v = 0;
+        }
         raw[i] = v.max(0);
         raw_total[o as usize] += raw[i];
     }
@@ -119,10 +124,41 @@ pub fn update_production(st: &mut State) {
         let gates = st.colonies(e).filter(|(_, p)| p.stargate).count() as i32;
         let ship_maint =
             ((ships / 50) as i32 + gates * st.rules.stargate_maint).min(st.rules.max_ship_maint);
-        let maint = ship_maint + bases * st.base_cost(e) / 50;
+        let bases_maint = bases * st.base_cost(e) / 50;
+        // 1oom game_update_production: spies, security and taxes take their share,
+        // trade adds income.
+        let total = raw_total[ei];
+        let em = &st.empires[ei];
+        let spysum: i32 = em
+            .rel
+            .iter()
+            .enumerate()
+            .filter(|(j, r)| *j != ei && r.contact)
+            .map(|(_, r)| r.spying)
+            .sum();
+        let spy_maint: i32 = em
+            .rel
+            .iter()
+            .enumerate()
+            .filter(|(j, r)| *j != ei && r.contact)
+            .map(|(_, r)| total * r.spying / 1000)
+            .sum();
+        let bonus = if em.race == Race::Human { 25 } else { 0 };
+        let trade: i32 = em
+            .rel
+            .iter()
+            .map(|r| r.trade_bc * (r.trade_percent + bonus) / 100)
+            .sum();
+        let actual = (total as i64 * (1000 - em.security - spysum) as i64 / 1000) as i32 + trade
+            - ship_maint
+            - bases_maint
+            - total * em.tax / 1000;
+        let actual = actual.max(1);
         let em = &mut st.empires[ei];
-        em.maintenance = maint.min(raw_total[ei]);
-        em.total_prod = raw_total[ei];
+        em.spying_maint = spy_maint;
+        em.total_trade = trade;
+        em.maintenance = total - actual;
+        em.total_prod = total;
     }
     for (i, p) in st.planets.iter_mut().enumerate() {
         let Some(o) = p.owner else {
@@ -135,6 +171,16 @@ pub fn update_production(st: &mut State) {
         } else {
             0
         };
+    }
+}
+
+/// 1oom `game_turn_reserve`: planets use up their reserve, taxes fill the empire's.
+fn reserve(st: &mut State) {
+    for p in st.planets.iter_mut().filter(|p| p.owner.is_some()) {
+        p.reserve = (p.reserve - p.prod / 2).max(0);
+    }
+    for e in st.empires.iter_mut() {
+        e.reserve += e.total_prod * e.tax / 2000;
     }
 }
 
@@ -192,7 +238,7 @@ fn atmos_terraform(p: &mut Planet) {
 }
 
 /// 1oom `game_turn_soil_enrich` (with the rounding fix).
-fn soil_enrich(p: &mut Planet, best_tform: i32, advanced: bool, max_pop: i32) {
+pub fn soil_enrich(p: &mut Planet, best_tform: i32, advanced: bool, max_pop: i32) {
     p.growth = if advanced {
         Growth::Gaia
     } else {
@@ -312,14 +358,17 @@ fn build_eco(st: &mut State) {
     }
 }
 
-/// Research points per empire, then 1oom `game_tech_research`.
+/// Research points per empire (1oom `game_update_total_research`).
 fn research(st: &mut State) {
     for ei in 0..st.empires.len() {
         let race = st.empires[ei].race;
-        let total: i32 = st.colonies(ei as u8).map(|(_, p)| tech_prod(p, race)).sum();
+        let total: i32 = st
+            .colonies(ei as u8)
+            .filter(|(i, _)| !events::blocked_research(st, *i))
+            .map(|(_, p)| tech_prod(p, race))
+            .sum();
         st.empires[ei].research = total;
     }
-    tech::research(st);
 }
 
 /// 1oom `game_turn_build_def`: planetary shield first, then missile bases.
@@ -594,7 +643,6 @@ pub fn found_colony(st: &mut State, planet: PlanetId, owner: EmpireId, pop: i32)
     st.push_event(vec![owner], EventKind::ColonyFounded { planet });
     if planet == st.orion {
         st.push_event(vec![], EventKind::OrionColonized { planet, by: owner });
-        tech::orion_loot(st, owner);
     }
 }
 
@@ -670,6 +718,23 @@ pub fn update_exploration(st: &mut State) {
 fn check_end(st: &mut State) {
     for ei in 0..st.empires.len() {
         if st.empires[ei].alive && st.colonies(ei as u8).next().is_none() {
+            // 1oom game_event_run "genocide": whoever finished them off is feared.
+            let killer = (0..st.planets.len())
+                .filter(|&p| st.planets[p].claim == Some(ei as u8))
+                .find_map(|p| {
+                    (0..st.empires.len()).find(|&j| {
+                        j != ei
+                            && (st.planets[p].owner == Some(j as u8)
+                                || st.empires[j].orbit[p].iter().any(|&c| c > 0))
+                    })
+                });
+            if let Some(k) = killer {
+                for j in 0..st.empires.len() {
+                    if j != ei && j != k {
+                        diplo::act(st, -36, k as u8, j as u8, 0, 0, 0);
+                    }
+                }
+            }
             let e = &mut st.empires[ei];
             e.alive = false;
             for o in e.orbit.iter_mut() {
@@ -685,6 +750,7 @@ fn check_end(st: &mut State) {
         .collect();
     if alive.len() == 1 && st.winner.is_none() {
         st.winner = Some(alive[0] as u8);
+        st.victory = Some(Victory::Conquest);
         st.push_event(
             vec![],
             EventKind::Victory {
@@ -694,23 +760,73 @@ fn check_end(st: &mut State) {
     }
 }
 
-/// Processes one turn for every empire. AI orders must have been given before.
+/// 1oom `game_turn_claim`: owner, or an empire with ships at an empty planet.
+fn claim(st: &mut State) {
+    for pli in 0..st.planets.len() {
+        let mut c = st.planets[pli].owner;
+        if c.is_none() {
+            c = (0..st.empires.len())
+                .find(|&e| st.empires[e].orbit[pli].iter().any(|&n| n > 0))
+                .map(|e| e as u8);
+        }
+        st.planets[pli].claim = c;
+    }
+}
+
+/// Processes one turn for every empire, in the order of 1oom `game_turn_process`.
+/// AI orders must have been given before (`ai::play`).
 pub fn process(st: &mut State) {
     st.events.clear();
+    audience::expire(st);
+    council::expire(st);
+    st.pending.spy.clear();
+    diplo::countdown_ceasefire(st);
+    diplo::update_mood_blunder(st);
     update_production(st);
     build_eco(st);
     research(st);
+    diplo::update_trade(st);
+    spy::build(st);
+    diplo::diplo_adjust(st);
     build_def(st);
     build_ships(st);
+    reserve(st);
     build_ind(st);
     let arrived = move_ships(st);
+    events::move_monsters(st);
+    spy::report(st);
     combat::battles(st);
+    spy::turn(st);
+    tech::research(st);
+    colonize(st);
     combat::bomb(st);
     combat::land_transports(st, arrived);
-    colonize(st);
-    update_exploration(st);
+    events::coup(st);
     check_end(st);
+    if st.winner.is_none() {
+        events::new_event(st);
+        events::run(st);
+        check_end(st);
+    }
+    let before: Vec<Vec<bool>> = st
+        .empires
+        .iter()
+        .map(|e| e.rel.iter().map(|r| r.contact).collect())
+        .collect();
+    update_exploration(st);
+    diplo::update_contact(st);
+    ai_diplo::turn_p1(st);
+    if council::due(st) {
+        council::convene(st);
+    }
+    check_end(st);
+    ai_diplo::turn_p2(st);
+    audience::collect(st);
+    diplo::contact_broken(st, &before);
     update_production(st);
+    diplo::mood_relax(st);
     st.turn += 1;
     st.year += 1;
+    diplo::update_final_war(st);
+    claim(st);
 }

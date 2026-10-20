@@ -2,15 +2,37 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::audience::{Deal, Incoming};
+use crate::council::Council;
 use crate::data::*;
 use crate::data_types::REDUCE_50;
 use crate::design::{ShipDesign, HULL_LARGE};
+use crate::diplo::{Relation, Treaty};
+use crate::events::EventState;
 use crate::rng::Rng;
 use crate::rules::{Abilities, Rules};
+use crate::spy::{SabotageKind, SpyChance};
 use crate::tech::{Source, TIERS};
 use crate::types::*;
 
-pub const SAVE_VERSION: u32 = 2;
+pub const SAVE_VERSION: u32 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Unrest {
+    #[default]
+    Normal,
+    Rebellion,
+    /// The rebellion was put down this turn.
+    Resolved,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Victory {
+    Conquest,
+    Council,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Planet {
@@ -55,6 +77,18 @@ pub struct Planet {
     pub bc_to_shield: i32,
     pub bc_to_refit: i32,
     pub bc_to_ecoproj: i32,
+    /// BC sent from the empire's reserve, added to production (1oom `reserve`).
+    #[serde(default)]
+    pub reserve: i32,
+    #[serde(default)]
+    pub rebels: i32,
+    #[serde(default)]
+    pub unrest: Unrest,
+    #[serde(default)]
+    pub unrest_reported: bool,
+    /// Empire with ships here or owning it, for diplomacy after battles (1oom `claim`).
+    #[serde(default)]
+    pub claim: Option<EmpireId>,
 }
 
 impl Planet {
@@ -132,6 +166,23 @@ pub struct Empire {
     pub orbit: Vec<Vec<u32>>,
     pub explored: Vec<bool>,
     pub home: PlanetId,
+    /// Relations with every empire (index = other empire).
+    #[serde(default)]
+    pub rel: Vec<Relation>,
+    /// Personality and objective (`diplo::XENOPHOBIC`.. and `diplo::DIPLOMAT`..).
+    #[serde(default)]
+    pub trait1: u8,
+    #[serde(default)]
+    pub trait2: u8,
+    /// Spending on internal security and taxes, tenths of a percent of production.
+    #[serde(default)]
+    pub security: i32,
+    #[serde(default)]
+    pub tax: i32,
+    #[serde(default)]
+    pub total_trade: i32,
+    #[serde(default)]
+    pub spying_maint: i32,
 }
 
 impl Empire {
@@ -200,6 +251,49 @@ pub enum EventKind {
         field: TechField,
         tech: u8,
         source: Source,
+        #[serde(default)]
+        from: Option<EmpireId>,
+    },
+    TechStolen {
+        field: TechField,
+        tech: u8,
+        by: Option<EmpireId>,
+    },
+    SpiesCaught {
+        spy: EmpireId,
+        target: EmpireId,
+        count: i32,
+    },
+    Sabotaged {
+        planet: PlanetId,
+        kind: SabotageKind,
+        count: i32,
+        by: Option<EmpireId>,
+    },
+    /// A random event (`news.<news>.<stage>`).
+    News {
+        news: String,
+        stage: u8,
+        planet: Option<PlanetId>,
+        empire: Option<EmpireId>,
+        other: Option<EmpireId>,
+        n1: i32,
+        n2: i32,
+    },
+    Council {
+        candidates: Vec<EmpireId>,
+    },
+    CouncilResult {
+        candidates: Vec<EmpireId>,
+        votes: Vec<i32>,
+        total: i32,
+        elected: Option<EmpireId>,
+    },
+    FinalWar {
+        against: EmpireId,
+    },
+    RebelsDefeated {
+        planet: PlanetId,
     },
     Battle {
         planet: PlanetId,
@@ -285,6 +379,24 @@ pub struct State {
     /// Events of the last processed turn.
     pub events: Vec<Event>,
     pub rules: Rules,
+    #[serde(default)]
+    pub victory: Option<Victory>,
+    #[serde(default)]
+    pub council: Council,
+    /// Random events and monsters.
+    #[serde(default)]
+    pub evn: EventState,
+    /// Decisions waiting for human players.
+    #[serde(default)]
+    pub pending: Pending,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Pending {
+    pub messages: Vec<Incoming>,
+    pub deals: Vec<Deal>,
+    pub spy: Vec<(EmpireId, SpyChance)>,
 }
 
 /// 1oom `get_tech_reduce_50` (by tech level 1..).
@@ -308,12 +420,21 @@ impl State {
         (self.dist(a, b) / self.rules.parsec).ceil() as i32
     }
 
-    /// Parsecs from `planet` to the nearest colony of `empire`.
+    /// Parsecs from `planet` to the nearest colony of `empire` or of its allies
+    /// (1oom `game_update_within_range`).
     pub fn range_to(&self, empire: EmpireId, planet: PlanetId) -> i32 {
+        let e = &self.empires[empire as usize];
         self.planets
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.owner == Some(empire))
+            .filter(|(_, p)| {
+                p.owner.is_some_and(|o| {
+                    o == empire
+                        || e.rel
+                            .get(o as usize)
+                            .is_some_and(|r| r.treaty == Treaty::Alliance)
+                })
+            })
             .map(|(i, _)| self.parsecs(i, planet))
             .min()
             .unwrap_or(i32::MAX)

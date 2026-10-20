@@ -33,8 +33,16 @@ device, and the **Classic** theme then shows the original planet pictures and ra
 - Fleets with fuel range and speed, colonization with colony bases for hostile planets,
   rally points, stargates, scrapping, missile bases, space battles on the MOO1 to-hit and
   damage formulas, orbital bombing, transports and ground invasions, the Guardian of
-  Orion, victory by conquest.
-- Computer opponents that expand, research, design new ships, build fleets and invade.
+  Orion.
+- MOO1 diplomacy (`game_diplo.c`, `game_audience.c`): contact, relations and moods,
+  non-aggression pacts, alliances, wars, trade agreements, tribute, technology exchange,
+  threats, and computer rulers who make their own proposals, demands and declarations.
+- Espionage and sabotage (`game_spy.c`), security and taxes.
+- Random events (`game_event.c`): plagues, novas, comets, pirates, rebellions, coups, and
+  the Space Crystal and Space Amoeba roaming the map.
+- The Galactic Council (`game_election.c`): win by conquest or by being elected High Master.
+- Computer opponents that expand, research, design new ships, build fleets, invade, make
+  treaties, spy and vote with the diplomacy of 1oom's classic AI.
 - Two themes: **Age** (medieval world map, the default) and **Classic** (starfield, with
   your original MOO1 art when imported). Every text and picture can be replaced by a mod.
 - Autosave every turn, save/load to a file, keyboard shortcuts (Enter ends the turn).
@@ -75,7 +83,7 @@ The CLI converts LBX files and runs AI-only games:
 
 ```sh
 aoo import ~/games/MOO1 assets/     # LBX -> manifest.json, gfx/**.png, text/**.json
-aoo sim --seed 7 --size medium --players 4 --turns 300
+aoo sim --seed 7 --size medium --players 4 --turns 300 --save end.json
 ```
 
 ## Project layout

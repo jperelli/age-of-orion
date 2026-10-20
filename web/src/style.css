@@ -201,6 +201,24 @@ tr.clickable:hover { background: rgba(0, 0, 0, 0.08); }
 .toast { position: fixed; bottom: 1.5em; left: 50%; transform: translate(-50%, 20px); background: var(--accent); color: #fff; padding: 0.6em 1.2em; border-radius: 6px; opacity: 0; transition: all 0.3s; z-index: 20; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* diplomacy */
+.diplo-top { border-bottom: 1px solid var(--parchment-dark); padding-bottom: 0.4em; }
+.diplomacy .rival { align-items: flex-start; border-bottom: 1px solid var(--parchment-dark); padding-bottom: 0.6em; }
+.rival-info { flex: 1; }
+.rival-actions { width: 15em; display: flex; flex-direction: column; gap: 0.3em; }
+.spy-box { font-size: 0.9em; }
+.spy-box .slider-row { grid-template-columns: 6em 1fr 3.2em; }
+.spy-box select { width: 100%; }
+.treaty-war, .treaty-final_war { color: var(--warn); font-weight: bold; }
+.treaty-alliance, .treaty-non_aggression { color: var(--good); }
+.audience-head { display: flex; gap: 0.8em; align-items: center; margin-bottom: 0.6em; }
+.audience-log { max-height: 16em; overflow-y: auto; border: 1px solid var(--parchment-dark); border-radius: 4px; padding: 0.4em 0.6em; background: rgba(0, 0, 0, 0.06); }
+.audience-log p { margin: 0.35em 0; }
+.say-them { font-style: italic; }
+.say-me { text-align: right; color: var(--muted); }
+.audience-menu { display: flex; flex-wrap: wrap; gap: 0.4em; margin-top: 0.6em; }
+button.attention { outline: 3px solid var(--gold); }
+
 /* research */
 .research-field { border-bottom: 1px solid var(--parchment-dark); padding: 0.35em 0; }
 .research-field .research-row { grid-template-columns: 11em 1fr 8em 3em; margin: 0.2em 0; }

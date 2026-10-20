@@ -13,20 +13,27 @@
 #![allow(clippy::needless_range_loop)]
 
 mod ai;
+mod ai_diplo;
+pub mod audience;
 mod combat;
 mod commands;
+pub mod council;
 pub mod data;
 pub mod data_types;
 pub mod design;
+pub mod diplo;
+pub mod events;
 mod galaxy;
 mod rng;
 mod rules;
+pub mod spy;
 mod state;
 pub mod tech;
 mod turn;
 mod types;
 mod view;
 
+pub use audience::{Reply, Talk};
 pub use commands::{Command, CommandError};
 pub use design::{DesignStats, ShipDesign};
 pub use galaxy::{NewGameOptions, HOME_NAMES, SHIP_NAMES, STAR_NAMES};
@@ -68,6 +75,24 @@ impl Game {
         &self.st
     }
 
+    #[cfg(test)]
+    pub fn state_mut(&mut self) -> &mut State {
+        &mut self.st
+    }
+
+    /// The human `empire` says something in an audience with the computer empire `with`.
+    pub fn talk(
+        &mut self,
+        empire: EmpireId,
+        with: EmpireId,
+        talk: &Talk,
+    ) -> Result<Reply, CommandError> {
+        if self.st.winner.is_some() {
+            return Err(CommandError { code: "game_over" });
+        }
+        audience::talk(&mut self.st, empire, with, talk).map_err(|code| CommandError { code })
+    }
+
     /// The human player, if any.
     pub fn human(&self) -> Option<EmpireId> {
         self.st.empires.iter().position(|e| !e.ai).map(|i| i as u8)
@@ -106,6 +131,8 @@ impl Game {
             shields: &'static [data_types::Shield],
             specials: &'static [data_types::Special],
             hulls: &'static [data_types::Hull],
+            /// Tech keys per field and number ("" = no such tech).
+            techs: Vec<Vec<&'static str>>,
         }
         serde_json::to_string(&Parts {
             weapons: &data::WEAPONS,
@@ -116,6 +143,7 @@ impl Game {
             shields: &data::SHIELDS,
             specials: &data::SPECIALS,
             hulls: &data::HULLS,
+            techs: data::TECHS.iter().map(|f| f.to_vec()).collect(),
         })
         .expect("parts serialize")
     }
@@ -526,5 +554,243 @@ mod tests {
             .err()
             .unwrap();
         assert!(err.contains("format 1"), "{err}");
+    }
+
+    #[test]
+    fn computers_talk_to_the_human() {
+        let mut g = Game::new(&NewGameOptions {
+            seed: 31,
+            players: 5,
+            galaxy_size: GalaxySize::Small,
+            ..Default::default()
+        })
+        .unwrap();
+        let mut kinds = std::collections::BTreeSet::new();
+        for _ in 0..150 {
+            g.end_turn();
+            for (_, m) in g.view(0).messages {
+                kinds.insert(m.kind);
+            }
+            if g.state().winner.is_some() {
+                break;
+            }
+        }
+        assert!(
+            kinds.iter().any(|&k| (14..=19).contains(&k)),
+            "first contact greeting: {kinds:?}"
+        );
+    }
+
+    #[test]
+    fn treaties_stop_battles() {
+        let mut g = Game::new(&opts(41)).unwrap();
+        let target = g.st.empires[1].home;
+        g.st.empires[0].orbit[target][1] = 10;
+        diplo::set_treaty(&mut g.st, 0, 1, diplo::Treaty::Alliance);
+        let bases = g.st.planets[target].bases;
+        combat::battles(&mut g.st);
+        assert_eq!(g.st.empires[0].orbit[target][1], 10, "allies do not fight");
+        assert_eq!(g.st.planets[target].bases, bases);
+        diplo::set_treaty(&mut g.st, 0, 1, diplo::Treaty::War);
+        g.st.planets[target].bases = 3;
+        combat::battles(&mut g.st);
+        assert!(g
+            .st
+            .events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::Battle { .. })));
+    }
+
+    #[test]
+    fn council_elects_with_two_thirds() {
+        let mut g = Game::new(&NewGameOptions {
+            seed: 9,
+            players: 4,
+            all_ai: true,
+            ..Default::default()
+        })
+        .unwrap();
+        for p in 0..g.st.planets.len() {
+            if g.st.planets[p].owner.is_none() && g.st.planets[p].habitable() {
+                turn::found_colony(&mut g.st, p, (p % 4) as u8, 10);
+            }
+        }
+        council::convene(&mut g.st);
+        assert!(g.st.council.held);
+        assert!(
+            g.st.council.pending.is_none(),
+            "all-AI councils resolve at once"
+        );
+        assert!(g
+            .st
+            .events
+            .iter()
+            .any(|e| matches!(e.kind, EventKind::CouncilResult { .. })));
+    }
+
+    #[test]
+    fn spies_steal_for_humans() {
+        let mut g = Game::new(&opts(42)).unwrap();
+        for n in [2u8, 3, 4, 5] {
+            g.st.empires[1].tech.add(FIELD_WEAPON, n);
+            g.st.empires[1].tech.add(FIELD_COMPUTER, n);
+        }
+        g.st.empires[1].tech.level = [1, 1, 1, 1, 1, 40];
+        let r = diplo::rel_mut(&mut g.st, 0, 1);
+        r.spies = 10;
+        r.spymode = diplo::SpyMode::Espionage;
+        let mut stolen = false;
+        for _ in 0..60 {
+            spy::turn(&mut g.st);
+            if let Some(i) = g.st.pending.spy.iter().position(|(o, _)| *o == 0) {
+                let spy::SpyChance::Steal { techs, .. } = g.st.pending.spy[i].1.clone() else {
+                    continue;
+                };
+                let (f, t) = techs[0];
+                g.command(
+                    0,
+                    &Command::StealTech {
+                        index: i,
+                        field: f as usize,
+                    },
+                )
+                .unwrap();
+                assert!(g.st.empires[0].tech.has(f as usize, t));
+                stolen = true;
+                break;
+            }
+            diplo::rel_mut(&mut g.st, 0, 1).spies = 10;
+        }
+        assert!(stolen);
+    }
+
+    #[test]
+    fn council_waits_for_the_human_vote() {
+        let mut g = Game::new(&NewGameOptions {
+            seed: 9,
+            players: 4,
+            ..Default::default()
+        })
+        .unwrap();
+        for p in 0..g.st.planets.len() {
+            if g.st.planets[p].owner.is_none() && g.st.planets[p].habitable() {
+                turn::found_colony(&mut g.st, p, (p % 4) as u8, 30);
+            }
+        }
+        assert!(council::due(&g.st));
+        council::convene(&mut g.st);
+        let el = g.st.council.pending.clone().expect("waiting for the human");
+        assert!(!el.has_voted[0]);
+        let c = el.candidates[0];
+        g.command(0, &Command::Vote { candidate: Some(c) }).unwrap();
+        let el = g.st.council.pending.clone();
+        assert!(el.as_ref().is_none_or(|e| e.awaiting_acceptance));
+        assert_eq!(g.st.council.voted[0], Some(c));
+        if el.is_some() {
+            g.command(0, &Command::AcceptCouncil { accept: false })
+                .unwrap();
+            assert!(g.st.council.final_war);
+            assert!(g.st.empires[0]
+                .rel
+                .iter()
+                .skip(1)
+                .all(|r| r.treaty == diplo::Treaty::FinalWar));
+        }
+    }
+
+    /// A human who answers everything at random and talks to everyone: no panics, and the
+    /// state survives a save round trip.
+    #[test]
+    fn random_diplomacy_does_not_break() {
+        let mut g = Game::new(&NewGameOptions {
+            seed: 77,
+            players: 6,
+            galaxy_size: GalaxySize::Small,
+            ..Default::default()
+        })
+        .unwrap();
+        let mut r = rng::Rng::new(5);
+        for turn in 0..160 {
+            for n in 1..6u8 {
+                diplo::rel_mut(&mut g.st, 0, n).contact |= turn > 20;
+                let talks = [
+                    Talk::ProposeNap,
+                    Talk::ProposeAlliance,
+                    Talk::ProposePeace,
+                    Talk::Threaten,
+                    Talk::TributeBc { bc: 25 },
+                    Talk::TechOffers,
+                    Talk::TributeTechs,
+                    Talk::AcceptSweetener,
+                    Talk::DeclareWarOn {
+                        target: (n % 5) + 1,
+                    },
+                ];
+                let t = &talks[r.below(talks.len() as u16) as usize];
+                if let Ok(reply) = g.talk(0, n, t) {
+                    if let Some(d) = reply.tech_deals.first() {
+                        let _ = g.talk(
+                            0,
+                            n,
+                            &Talk::ExchangeTech {
+                                want: d.want,
+                                give: d.give[0],
+                            },
+                        );
+                    }
+                }
+            }
+            g.command(
+                0,
+                &Command::SetSpying {
+                    target: 1,
+                    tenths: 50,
+                },
+            )
+            .unwrap();
+            g.command(
+                0,
+                &Command::SetSpyMode {
+                    target: 1,
+                    mode: diplo::SpyMode::Sabotage,
+                },
+            )
+            .ok();
+            while let Some((i, _)) = g.view(0).messages.first().cloned() {
+                let accept = r.below(2) == 0;
+                if g.command(
+                    0,
+                    &Command::AnswerMessage {
+                        index: i,
+                        accept,
+                        pick: None,
+                    },
+                )
+                .is_err()
+                {
+                    g.command(
+                        0,
+                        &Command::AnswerMessage {
+                            index: i,
+                            accept: false,
+                            pick: None,
+                        },
+                    )
+                    .unwrap();
+                }
+            }
+            if g.view(0).election.is_some() {
+                let _ = g.command(0, &Command::Vote { candidate: None });
+                let _ = g.command(0, &Command::AcceptCouncil { accept: false });
+            }
+            g.end_turn();
+            if g.state().winner.is_some() || !g.state().empires[0].alive {
+                break;
+            }
+        }
+        assert!(g.state().turn > 50, "turn {}", g.state().turn);
+        let save = g.save();
+        let again = Game::load(&save).unwrap();
+        assert_eq!(again.save(), save);
     }
 }

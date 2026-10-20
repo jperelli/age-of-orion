@@ -10,11 +10,22 @@
 use crate::data::*;
 use crate::data_types::Weapon;
 use crate::design::*;
+use crate::diplo::{self, Treaty};
+use crate::events::{self, MonsterKind};
 use crate::rng::Rng;
 use crate::state::*;
 use crate::types::*;
 
 const GUARDIAN: i32 = -1;
+/// Side ids of the monsters: -2 the crystal, -3 the amoeba (at most one of each exists).
+const MONSTER0: i32 = -2;
+
+fn monster_id(kind: MonsterKind) -> i32 {
+    match kind {
+        MonsterKind::Crystal => MONSTER0,
+        MonsterKind::Amoeba => MONSTER0 - 1,
+    }
+}
 
 /// 1oom `tbl_monster[MONSTER_GUARDIAN]`, per difficulty:
 /// hit points, defense (= missile defense), shield absorb, weapon counts.
@@ -89,18 +100,29 @@ impl Side {
     }
 }
 
-/// Whether another empire (or the guardian) has armed forces at `planet`.
+/// Whether a hostile empire, the guardian or a monster has armed forces at `planet`.
 pub fn hostile_armed_at(st: &State, planet: PlanetId, empire: EmpireId) -> bool {
-    if planet == st.orion && st.guardian {
+    if (planet == st.orion && st.guardian) || events::monster_at(st, planet).is_some() {
         return true;
     }
-    st.empires
-        .iter()
-        .enumerate()
-        .any(|(i, e)| i as u8 != empire && armed_ships(e, planet))
-        || st.planets[planet]
-            .owner
-            .is_some_and(|o| o != empire && st.planets[planet].bases > 0)
+    st.empires.iter().enumerate().any(|(i, e)| {
+        i as u8 != empire
+            && diplo::hostile_at(st, empire, i as u8, planet)
+            && armed_ships(e, planet)
+    }) || st.planets[planet].owner.is_some_and(|o| {
+        o != empire && diplo::hostile_at(st, empire, o, planet) && st.planets[planet].bases > 0
+    })
+}
+
+/// Whether two battle sides fight each other.
+fn sides_hostile(st: &State, a: i32, b: i32, planet: PlanetId) -> bool {
+    if a == b {
+        return false;
+    }
+    if a < 0 || b < 0 {
+        return true;
+    }
+    diplo::hostile_at(st, a as u8, b as u8, planet)
 }
 
 fn armed_ships(e: &Empire, planet: PlanetId) -> bool {
@@ -268,7 +290,42 @@ fn build_sides(st: &State, planet: PlanetId) -> Vec<Side> {
             start_ships: 0,
         });
     }
+    if let Some(mi) = events::monster_at(st, planet) {
+        sides.push(Side {
+            id: monster_id(st.evn.monsters[mi].kind),
+            stacks: vec![monster_stack(st, mi)],
+            start_ships: 0,
+        });
+    }
     sides
+}
+
+/// 1oom `tbl_monster`: the crystal (crystal ray) and the amoeba (amoeba stream).
+fn monster_stack(st: &State, mi: usize) -> Stack {
+    let m = &st.evn.monsters[mi];
+    let (_, def, absorb) = events::monster_stats(m.kind, st.difficulty);
+    let (kind, count, missile_shield) = match m.kind {
+        MonsterKind::Crystal => (61, 10, 100),
+        MonsterKind::Amoeba => (63, 1, 0),
+    };
+    Stack {
+        design: None,
+        count: 1,
+        hp: m.hp.max(1),
+        hp_loss: 0,
+        comp_level: COMPS[10].level as i32,
+        defense: def,
+        missile_defense: def,
+        absorb,
+        missile_shield,
+        flags: 0,
+        arms: vec![Arm {
+            kind,
+            count,
+            shots: -1,
+        }],
+        planet: false,
+    }
 }
 
 /// One weapon of a stack firing at a target stack (1oom `game_battle_attack`).
@@ -337,7 +394,7 @@ fn fire(rng: &mut Rng, w: &Weapon, volleys: u32, attacker: &Stack, target: &mut 
     }
 }
 
-fn round(rng: &mut Rng, sides: &mut [Side]) {
+fn round(rng: &mut Rng, sides: &mut [Side], hostile: &[Vec<bool>]) {
     let mut shots: Vec<(usize, usize, usize, u32)> = Vec::new();
     for (si, side) in sides.iter_mut().enumerate() {
         for (ki, stack) in side.stacks.iter_mut().enumerate() {
@@ -358,7 +415,7 @@ fn round(rng: &mut Rng, sides: &mut [Side]) {
     }
     for (si, ki, ai, volleys) in shots {
         let targets: Vec<(usize, usize)> = (0..sides.len())
-            .filter(|&t| t != si)
+            .filter(|&t| t != si && hostile[si][t])
             .flat_map(|t| {
                 sides[t]
                     .stacks
@@ -389,21 +446,84 @@ fn participants(st: &State, planet: PlanetId, ids: &[i32]) -> Vec<EmpireId> {
     v
 }
 
+/// Ships of a side that lost a battle retreat to the nearest own colony
+/// (1oom `game_battle_post`), or are lost if there is none.
+fn retreat(st: &mut State, empire: EmpireId, from: PlanetId) {
+    let ships = st.empires[empire as usize].orbit[from].clone();
+    st.empires[empire as usize].orbit[from]
+        .iter_mut()
+        .for_each(|c| *c = 0);
+    if ships.iter().all(|&c| c == 0) {
+        return;
+    }
+    let dest = st
+        .colonies(empire)
+        .map(|(i, _)| i)
+        .filter(|&i| i != from)
+        .min_by_key(|&i| (st.dist(from, i) as i64, i));
+    if let Some(to) = dest {
+        let speed = st.fleet_speed(empire, &ships);
+        let id = st.alloc_id();
+        st.fleets.push(Fleet {
+            id,
+            owner: empire,
+            x: st.planets[from].x as f64,
+            y: st.planets[from].y as f64,
+            dest: to,
+            ships,
+            speed,
+            gate: false,
+        });
+    }
+}
+
+/// "Apparent force" lost per side (1oom: hull size + 1 per ship).
+fn force_lost(st: &State, side: &Side, before: &[u32]) -> i32 {
+    if side.id < 0 {
+        return 0;
+    }
+    let e = &st.empires[side.id as usize];
+    side.stacks
+        .iter()
+        .zip(before)
+        .filter_map(|(s, &b)| s.design.map(|d| (d, b.saturating_sub(s.count))))
+        .map(|(d, lost)| (e.designs[d].hull as i32 + 1) * lost as i32)
+        .sum()
+}
+
 fn fight(st: &mut State, planet: PlanetId, sides: &mut [Side]) {
     let bases_before = st.planets[planet].bases;
+    let counts_before: Vec<Vec<u32>> = sides
+        .iter()
+        .map(|s| s.stacks.iter().map(|k| k.count).collect())
+        .collect();
+    let n = sides.len();
+    let hostile: Vec<Vec<bool>> = (0..n)
+        .map(|a| {
+            (0..n)
+                .map(|b| sides_hostile(st, sides[a].id, sides[b].id, planet))
+                .collect()
+        })
+        .collect();
+    let active = |sides: &[Side]| {
+        (0..n).any(|a| sides[a].armed() && (0..n).any(|b| hostile[a][b] && sides[b].alive()))
+    };
     for _ in 0..st.rules.combat_rounds {
-        if sides.iter().filter(|s| s.armed()).count() == 0
-            || sides.iter().filter(|s| s.alive()).count() < 2
-            || !sides
-                .iter()
-                .any(|s| s.armed() && sides.iter().any(|o| o.id != s.id && o.alive()))
-        {
+        if !active(sides) {
             break;
         }
-        round(&mut st.rng, sides);
+        round(&mut st.rng, sides, &hostile);
     }
-    let armed_left: Vec<i32> = sides.iter().filter(|s| s.armed()).map(|s| s.id).collect();
-    let winner = (armed_left.len() == 1).then(|| armed_left[0]);
+    // Sides still facing an armed enemy: a draw keeps everyone, otherwise the beaten retreat.
+    let armed: Vec<bool> = sides.iter().map(Side::armed).collect();
+    let contested =
+        (0..n).any(|a| armed[a] && (0..n).any(|b| armed[b] && hostile[a][b] && sides[b].alive()));
+    let winner_ids: Vec<i32> = (0..n).filter(|&a| armed[a]).map(|a| sides[a].id).collect();
+    let winner = if contested || winner_ids.is_empty() {
+        None
+    } else {
+        winner_ids.first().copied()
+    };
     let mut losses = Vec::new();
     for s in sides.iter() {
         losses.push(s.start_ships - s.ships());
@@ -418,6 +538,26 @@ fn fight(st: &mut State, planet: PlanetId, sides: &mut [Side]) {
                             by: w as u8,
                         },
                     );
+                    crate::tech::orion_loot(st, w as u8);
+                }
+            }
+            continue;
+        }
+        if s.id <= MONSTER0 {
+            let killer = winner
+                .filter(|&w| w >= 0)
+                .or(sides.iter().map(|o| o.id).find(|&id| id >= 0))
+                .map(|w| w as u8);
+            if let Some(m) = st
+                .evn
+                .monsters
+                .iter_mut()
+                .find(|m| monster_id(m.kind) == s.id)
+            {
+                if s.stacks[0].count == 0 {
+                    m.killer = killer;
+                } else {
+                    m.hp = s.stacks[0].hp;
                 }
             }
             continue;
@@ -428,6 +568,40 @@ fn fight(st: &mut State, planet: PlanetId, sides: &mut [Side]) {
             match stack.design {
                 Some(d) => st.empires[e].orbit[planet][d] = stack.count,
                 None => st.planets[planet].bases = stack.count as i32,
+            }
+        }
+    }
+    if !contested {
+        for a in 0..n {
+            let id = sides[a].id;
+            if id >= 0 && !armed[a] && (0..n).any(|b| armed[b] && hostile[a][b]) {
+                retreat(st, id as u8, planet);
+            }
+        }
+    }
+    // Relations (1oom game_diplo_battle_finish) between the owner, or the first side, and the others.
+    let empire_sides: Vec<usize> = (0..n).filter(|&a| sides[a].id >= 0).collect();
+    let owner = st.planets[planet].owner.map(|o| o as i32);
+    let def_i = empire_sides
+        .iter()
+        .copied()
+        .find(|&a| Some(sides[a].id) == owner)
+        .or(empire_sides.first().copied());
+    if let Some(d) = def_i {
+        for &a in &empire_sides {
+            if a != d && hostile[a][d] {
+                let app_def = force_lost(st, &sides[d], &counts_before[d]);
+                let app_att = force_lost(st, &sides[a], &counts_before[a]);
+                diplo::battle_finish(
+                    st,
+                    sides[d].id as u8,
+                    sides[a].id as u8,
+                    0,
+                    app_def,
+                    0,
+                    app_att,
+                    planet,
+                );
             }
         }
     }
@@ -444,36 +618,16 @@ fn fight(st: &mut State, planet: PlanetId, sides: &mut [Side]) {
     );
 }
 
-/// Resolves every planet where two or more sides meet and one of them is armed.
+/// Resolves every planet where hostile sides meet and one of them is armed.
 pub fn battles(st: &mut State) {
     for planet in 0..st.planets.len() {
         let mut sides = build_sides(st, planet);
-        if sides.len() >= 2 && sides.iter().any(Side::armed) {
+        let n = sides.len();
+        let any = (0..n).any(|a| {
+            sides[a].armed() && (0..n).any(|b| sides_hostile(st, sides[a].id, sides[b].id, planet))
+        });
+        if n >= 2 && any {
             fight(st, planet, &mut sides);
-        }
-        // Unarmed ships cannot stay where a single hostile armed side holds the orbit.
-        let armed: Vec<i32> = build_sides(st, planet)
-            .iter()
-            .filter(|s| s.armed())
-            .map(|s| s.id)
-            .collect();
-        if armed.len() == 1 {
-            for ei in 0..st.empires.len() {
-                if ei as i32 != armed[0] && st.empires[ei].orbit[planet].iter().any(|&c| c > 0) {
-                    let lost: u32 = st.empires[ei].orbit[planet].iter().sum();
-                    st.empires[ei].orbit[planet].iter_mut().for_each(|c| *c = 0);
-                    st.push_event(
-                        participants(st, planet, &[armed[0], ei as i32]),
-                        EventKind::Battle {
-                            planet,
-                            sides: vec![armed[0], ei as i32],
-                            winner: Some(armed[0]),
-                            losses: vec![0, lost],
-                            bases_lost: 0,
-                        },
-                    );
-                }
-            }
         }
     }
 }
@@ -580,6 +734,11 @@ pub fn bomb(st: &mut State) {
             if ei == owner as usize || st.empires[ei].orbit[planet].iter().all(|&c| c == 0) {
                 continue;
             }
+            // 1oom game_turn_bomb: allies never bomb, computers respect pacts.
+            let t = diplo::treaty(st, ei as u8, owner);
+            if t == Treaty::Alliance || (t == Treaty::NonAggression && st.empires[ei].ai) {
+                continue;
+            }
             let (pop_dmg, fact_dmg, bio) = bomb_damage(st, planet, ei as u8);
             if pop_dmg == 0 && fact_dmg == 0 {
                 continue;
@@ -619,8 +778,21 @@ pub fn bomb(st: &mut State) {
                     factories_destroyed: fact_dmg,
                 },
             );
-            if st.planets[planet].pop <= 0 {
+            let destroyed = st.planets[planet].pop <= 0;
+            if destroyed {
                 destroy_colony(st, planet);
+            }
+            if destroyed && !st.empires[ei].ai {
+                let dv = if diplo::treaty(st, ei as u8, owner) < Treaty::War {
+                    diplo::start_war(st, owner, ei as u8);
+                    13
+                } else {
+                    10
+                };
+                let v = -50 - st.rng.one_to(50) as i32;
+                diplo::act(st, v, ei as u8, owner, dv, planet, 0);
+            } else {
+                diplo::battle_finish(st, owner, ei as u8, pop_dmg, 0, bio, 0, planet);
             }
         }
     }
@@ -742,6 +914,10 @@ pub fn land_transports(st: &mut State, arrived: Vec<Transport>) {
             if j == t.owner {
                 continue;
             }
+            let tr = diplo::treaty(st, t.owner, j);
+            if st.planets[planet].owner != Some(j) && tr != Treaty::None && tr < Treaty::War {
+                continue;
+            }
             if st.planets[planet].owner == Some(j) {
                 let bases = st.planets[planet].bases;
                 pop -= transport_shoot(st, planet, t.owner, pop, t.speed, j, bases);
@@ -749,7 +925,7 @@ pub fn land_transports(st: &mut State, arrived: Vec<Transport>) {
                 pop -= transport_shoot(st, planet, t.owner, pop, t.speed, j, 0);
             }
         }
-        if planet == st.orion && st.guardian {
+        if (planet == st.orion && st.guardian) || events::monster_at(st, planet).is_some() {
             pop = 0;
         }
         pop = pop.max(0);
@@ -781,6 +957,21 @@ pub fn land_transports(st: &mut State, arrived: Vec<Transport>) {
             continue;
         }
         match st.planets[planet].owner {
+            Some(o) if o == t.owner && st.planets[planet].unrest == Unrest::Rebellion => {
+                // 1oom game_ground: troops landing on a rebel planet fight the rebels.
+                let abonus = st.empires[o as usize].abilities().ground_bonus;
+                let rebels = st.planets[planet].rebels;
+                let (a, d) = ground_battle(&mut st.rng, pop, abonus, rebels, 5);
+                let p = &mut st.planets[planet];
+                if d == 0 {
+                    p.unrest = Unrest::Resolved;
+                    p.pop = (p.pop - p.rebels + a).clamp(1, p.max_pop.max(1));
+                    p.rebels = 0;
+                    st.push_event(vec![o], EventKind::RebelsDefeated { planet });
+                } else {
+                    p.rebels = d;
+                }
+            }
             Some(o) if o == t.owner => {
                 let p = &mut st.planets[planet];
                 p.pop = (p.pop + pop).min(p.max_pop);
@@ -835,6 +1026,9 @@ fn invade(st: &mut State, planet: PlanetId, att_e: EmpireId, def: EmpireId, att:
     p.sliders = crate::turn::new_colony_sliders();
     p.build = 0;
     p.rally = None;
+    p.rebels = 0;
+    p.unrest = Unrest::Normal;
+    p.reserve = 0;
     st.empires[att_e as usize].explored[planet] = true;
     st.push_event(
         vec![],

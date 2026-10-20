@@ -5,7 +5,7 @@ Usage: tools/gen_1oom_tables.py <path to a 1oom checkout>
 
 Writes:
   crates/core/src/data.rs     ship parts (game_shiptech.c), techs (game_techtypes.h),
-                              research flags (game_num.c)
+                              tech groups (derived from the names), research flags (game_num.c)
   web/public/text/en.json     English names of techs and ship parts (merged into the file)
 
 The data was ported from 1oom commit 42e9c0b. Rerun after changing the generator.
@@ -42,6 +42,34 @@ def tech_name(ident):
     if m:
         return "Reduced Industrial Waste " + m.group(2) + "%"
     return title(ident.split("_"))
+
+
+GROUP_RULES = [
+    (r"^ecm_jammer_", 1), (r"^battle_computer_", 2), (r"^improved_robotic_controls_", 3),
+    (r"_space_scanner$", 4), (r"^reduced_industrial_waste_|^industrial_waste_elimination$", 5),
+    (r"^improved_industrial_tech_", 6),
+    (r"^(duralloy|zortium|andrium|tritanium|adamantium|neutronium)_armor$", 7),
+    (r"^automated_repair_system$|^advanced_damage_control$", 8), (r"_deflector_shields$", 9),
+    (r"_planetary_shield$", 10), (r"^zyro_shield$|^lightning_shield$|^anti_missile_rockets$", 11),
+    (r"^improved_terraforming_|^complete_terraforming$", 12), (r"^controlled_.*_environment$", 13),
+    (r"eco_restoration$|^ecological_restoration$", 14),
+    (r"^battle_suits$|^armored_exoskeleton$|^powered_armor$", 15), (r"^personal_.*_shield$", 16),
+    (r"_engines$|_drives$", 17), (r"_fuel_cells$|_crystals$|^thorium_cells$", 18),
+    (r"^(hand_lasers|ion_rifle|fusion_rifle|hand_phasor|plasma_rifle)$", 21),
+    (r"_bomb$", 22), (r"^(death_spores|doom_virus|bio_terminator)$", 23), (r"_pulsar$", 24),
+    (r"_stream_projector$", 25), (r"_rockets$|_missiles$|_torpedoes$", 20),
+    (r"^(lasers|gatling_laser|neutron_pellet_gun|ion_cannon|mass_driver|neutron_blaster|"
+     r"graviton_beam|hard_beam|fusion_beam|megabolt_cannon|phasor|auto_blaster|tachyon_beam|"
+     r"gauss_autocannon|particle_beam|plasma_cannon|disruptor|pulse_phasor|"
+     r"tri_focus_plasma_cannon|mauler_device|stellar_converter)$", 19),
+]
+
+
+def tech_group(key):
+    for pat, g in GROUP_RULES:
+        if re.search(pat, key):
+            return g
+    return 0
 
 
 def parse_enums(src):
@@ -166,6 +194,24 @@ def main(root):
             names[v] = key
             text["tech.%s.%s" % (fname, key)] = tech_name(short)
         rs.append("    [%s]," % ", ".join('"%s"' % n for n in names))
+    rs.append("];")
+    rs.append("")
+
+    # Tech groups and tiers (1oom tech_group_t). MOO1 keeps them in RESEARCH.LBX; here they
+    # are derived from the tech names: techs of one series form a group, ranked by number.
+    rs.append("/// Group (1oom `tech_group_t`) and tier of each tech, per field and tech number.")
+    rs.append("pub const TECH_GROUPS: [[[u8; 2]; 51]; 6] = [")
+    for enum, prefix, fname in fields:
+        groups = [[0, 0] for _ in range(51)]
+        counter = {}
+        for ident, v in sorted(enums[enum].items(), key=lambda kv: kv[1]):
+            short = ident[len(prefix):]
+            if v == 0 or short.startswith("UNUSED"):
+                continue
+            g = tech_group(short.lower())
+            counter[g] = counter.get(g, 0) + 1
+            groups[v] = [g, counter[g] if g else 1]
+        rs.append("    [%s]," % ", ".join("[%d, %d]" % tuple(x) for x in groups))
     rs.append("];")
     rs.append("")
 

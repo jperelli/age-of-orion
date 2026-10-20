@@ -380,6 +380,11 @@ fn empty_planet(x: i32, y: i32) -> Planet {
         bc_to_shield: 0,
         bc_to_refit: 0,
         bc_to_ecoproj: 0,
+        reserve: 0,
+        rebels: 0,
+        unrest: Unrest::Normal,
+        unrest_reported: false,
+        claim: None,
     }
 }
 
@@ -859,6 +864,10 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         next_id: 0,
         events: Vec::new(),
         rules,
+        victory: None,
+        council: Default::default(),
+        evn: crate::events::EventState::new(),
+        pending: Default::default(),
     };
 
     let mut races: Vec<Race> = Vec::new();
@@ -937,6 +946,13 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
             orbit,
             explored: vec![false; stars],
             home,
+            rel: Vec::new(),
+            trait1: 0,
+            trait2: 0,
+            security: 0,
+            tax: 0,
+            total_trade: 0,
+            spying_maint: 0,
         });
         let rules = st.rules.clone();
         let p = &mut st.planets[home];
@@ -948,6 +964,9 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
             .cloned()
             .unwrap_or_else(|| HOME_NAMES[race.index()].to_string());
     }
+    crate::diplo::init(&mut st);
+    st.council.voted = vec![None; st.empires.len()];
+    st.council.refuse = vec![false; st.empires.len()];
     let mut reserved = Vec::new();
     for &home in &homes {
         ensure_neighbours(&mut st, home, &mut reserved);

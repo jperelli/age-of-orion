@@ -403,7 +403,7 @@ fn move_scouts(st: &mut State, me: EmpireId, r: &Roles) {
     }
 }
 
-fn military(st: &mut State, me: EmpireId) {
+fn military(st: &mut State, me: EmpireId, need_conquer: bool) {
     let mi = me as usize;
     let home = st.empires[mi].home;
     let staging = if st.planets[home].owner == Some(me) {
@@ -438,7 +438,14 @@ fn military(st: &mut State, me: EmpireId) {
     let target = (0..st.planets.len())
         .filter(|&p| {
             let pl = &st.planets[p];
-            let enemy = pl.owner.is_some_and(|o| o != me);
+            // 1oom turn_p1_planet_w: attack empires at war, or anyone without a treaty once
+            // there is nothing left to colonize.
+            let enemy = pl.owner.is_some_and(|o| {
+                let t = crate::diplo::treaty(st, me, o);
+                o != me
+                    && (t >= crate::diplo::Treaty::War
+                        || (need_conquer && t == crate::diplo::Treaty::None))
+            });
             let orion = p == st.orion && st.guardian;
             st.empires[mi].explored[p]
                 && (enemy || orion)
@@ -464,6 +471,12 @@ fn invade(st: &mut State, me: EmpireId) {
             .iter()
             .any(|&c| c > 0);
         if owner == me || !holding || st.planets[target].bases > 0 {
+            continue;
+        }
+        if matches!(
+            crate::diplo::treaty(st, me, owner),
+            crate::diplo::Treaty::NonAggression | crate::diplo::Treaty::Alliance
+        ) {
             continue;
         }
         if st
@@ -508,6 +521,26 @@ fn invade(st: &mut State, me: EmpireId) {
     }
 }
 
+/// 1oom `game_ai_classic_turn_p1_tax` and `_fund_developing`.
+fn taxes(st: &mut State, me: EmpireId) {
+    let tax = if st.turn >= 20 {
+        st.rng.one_to(10) as i32 + st.difficulty as i32 + 2
+    } else {
+        0
+    };
+    st.empires[me as usize].tax = tax;
+    let small: Vec<PlanetId> = st
+        .colonies(me)
+        .filter(|(_, p)| p.pop < 20)
+        .map(|(i, _)| i)
+        .collect();
+    for i in small {
+        let v = st.empires[me as usize].reserve / 5;
+        st.empires[me as usize].reserve -= v;
+        st.planets[i].reserve += v;
+    }
+}
+
 /// Gives this turn's orders for an AI empire.
 pub fn play(st: &mut State, me: EmpireId) {
     if !st.empires[me as usize].alive {
@@ -515,6 +548,8 @@ pub fn play(st: &mut State, me: EmpireId) {
     }
     research_focus(st, me);
     redesign(st, me);
+    taxes(st, me);
+    crate::ai_diplo::spying(st, me);
     let r = roles(st, me);
     let targets = colony_targets(st, me, &r);
     let have = r
@@ -523,7 +558,7 @@ pub fn play(st: &mut State, me: EmpireId) {
     let want = (targets.len() as i32 - have).clamp(0, 2);
     move_colony_ships(st, me, &r, &targets);
     move_scouts(st, me, &r);
-    military(st, me);
+    military(st, me, targets.is_empty());
     invade(st, me);
     set_economy(st, me, &r, want);
 }

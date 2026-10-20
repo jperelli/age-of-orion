@@ -9,4 +9,6 @@ export interface Ctx {
   view: () => View;
   /** Applies a command, shows its error if rejected, refreshes the screen. */
   command: (cmd: Command) => boolean;
+  /** Reloads the view after changes made outside `command` (audiences). */
+  refresh: () => void;
 }

@@ -1,6 +1,6 @@
 // Typed wrapper around the WebAssembly build of the Rust core (crates/wasm).
 import init, { LbxImporter, WasmGame, parts, version } from "./wasm/aoo.js";
-import type { Command, DesignStats, NewGameOptions, Parts, ShipDesign, View } from "./types";
+import type { Command, DesignStats, NewGameOptions, Parts, Reply, ShipDesign, Talk, View } from "./types";
 
 let ready: Promise<unknown> | null = null;
 
@@ -45,6 +45,15 @@ export class Game {
     try {
       this.g.command(JSON.stringify(cmd));
       return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  /** An audience move; returns the reply or the error code. */
+  talk(withEmpire: number, t: Talk): Reply | string {
+    try {
+      return JSON.parse(this.g.talk(withEmpire, JSON.stringify(t))) as Reply;
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }

@@ -3,9 +3,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::design::{self, ShipDesign, BUILD_STARGATE, MAX_DESIGNS};
+use crate::diplo::{self, SpyMode, TechRef, Treaty};
+use crate::spy::SabotageKind;
 use crate::state::*;
 use crate::tech;
 use crate::types::*;
+use crate::{audience, council, spy};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -16,7 +19,10 @@ pub enum Command {
         sliders: [i32; NUM_SLIDERS],
     },
     /// Design built with the ship slider, or `BUILD_STARGATE` (6).
-    SetBuild { planet: PlanetId, design: usize },
+    SetBuild {
+        planet: PlanetId,
+        design: usize,
+    },
     /// Where a colony sends its new ships; `None` keeps them in orbit.
     SetRally {
         planet: PlanetId,
@@ -29,9 +35,15 @@ pub enum Command {
         ships: Vec<u32>,
     },
     /// Changes the destination of a fleet in flight.
-    RedirectFleet { fleet: u32, to: PlanetId },
+    RedirectFleet {
+        fleet: u32,
+        to: PlanetId,
+    },
     /// Scraps ships in orbit; a quarter of their cost goes to the reserve.
-    ScrapShips { planet: PlanetId, ships: Vec<u32> },
+    ScrapShips {
+        planet: PlanetId,
+        ships: Vec<u32>,
+    },
     /// Moves colonists to another planet (own: reinforce, enemy: invade).
     SendTransport {
         from: PlanetId,
@@ -39,18 +51,75 @@ pub enum Command {
         pop: i32,
     },
     /// Research share per field in percent (normalized to a total of 100).
-    SetResearch { alloc: [u32; NUM_FIELDS] },
+    SetResearch {
+        alloc: [u32; NUM_FIELDS],
+    },
     /// Chooses the tech researched in a field (an ongoing project loses its investment).
-    SetResearchProject { field: usize, tech: u8 },
+    SetResearchProject {
+        field: usize,
+        tech: u8,
+    },
     /// Adds a design, or replaces design `slot` (scrapping its ships).
     SaveDesign {
         slot: Option<usize>,
         design: ShipDesign,
     },
     /// Removes a design and scraps all its ships.
-    ScrapDesign { design: usize },
+    ScrapDesign {
+        design: usize,
+    },
     /// Whether ships holding the orbit of enemy colonies bomb them.
-    SetBombard { enabled: bool },
+    SetBombard {
+        enabled: bool,
+    },
+    /// Spending on spies against `target`, tenths of a percent of production (0..=100).
+    SetSpying {
+        target: EmpireId,
+        tenths: i32,
+    },
+    SetSpyMode {
+        target: EmpireId,
+        mode: SpyMode,
+    },
+    /// Internal security, tenths of a percent (0..=200).
+    SetSecurity {
+        tenths: i32,
+    },
+    /// Taxes for the reserve, tenths of a percent (0..=200); half the tax reaches the reserve.
+    SetTax {
+        tenths: i32,
+    },
+    /// Sends BC from the reserve to boost a colony's production.
+    TransferReserve {
+        planet: PlanetId,
+        bc: i32,
+    },
+    /// Answers message `index` of the pending messages.
+    AnswerMessage {
+        index: usize,
+        accept: bool,
+        #[serde(default)]
+        pick: Option<TechRef>,
+    },
+    /// Steals the tech of `field` offered by spy success `index`.
+    StealTech {
+        index: usize,
+        field: usize,
+    },
+    /// Uses saboteur success `index` on a planet.
+    Sabotage {
+        index: usize,
+        planet: PlanetId,
+        kind: SabotageKind,
+    },
+    /// Votes in the Galactic Council (`None` abstains).
+    Vote {
+        candidate: Option<EmpireId>,
+    },
+    /// Accepts or refuses the High Master elected by the council.
+    AcceptCouncil {
+        accept: bool,
+    },
 }
 
 /// Why a command was rejected; the UI shows the text `error.<code>`.
@@ -138,7 +207,10 @@ fn scrap_all(st: &mut State, empire: EmpireId, design: usize) {
 }
 
 pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), CommandError> {
-    if st.winner.is_some() || !st.empires.get(empire as usize).is_some_and(|e| e.alive) {
+    let accepting = matches!(cmd, Command::AcceptCouncil { .. });
+    if (st.winner.is_some() && !accepting)
+        || !st.empires.get(empire as usize).is_some_and(|e| e.alive)
+    {
         return err("game_over");
     }
     match *cmd {
@@ -258,6 +330,16 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             if !st.planets[to].habitable() {
                 return err("not_habitable");
             }
+            if let Some(o) = st.planets[to].owner {
+                if o != empire
+                    && matches!(
+                        diplo::treaty(st, empire, o),
+                        Treaty::NonAggression | Treaty::Alliance
+                    )
+                {
+                    return err("treaty");
+                }
+            }
             let a = st.empires[empire as usize].abilities();
             if st.range_to(empire, to) > a.fuel_range {
                 return err("out_of_range");
@@ -337,6 +419,77 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             }
         }
         Command::SetBombard { enabled } => st.empires[empire as usize].bombard = enabled,
+        Command::SetSpying { target, tenths } => {
+            if target as usize >= st.empires.len()
+                || target == empire
+                || !(0..=100).contains(&tenths)
+            {
+                return err("invalid_empire");
+            }
+            diplo::rel_mut(st, empire, target).spying = tenths;
+        }
+        Command::SetSpyMode { target, mode } => {
+            if target as usize >= st.empires.len() || target == empire {
+                return err("invalid_empire");
+            }
+            let r = diplo::rel_mut(st, empire, target);
+            r.spymode = mode;
+            r.spymode_next = mode;
+        }
+        Command::SetSecurity { tenths } => {
+            if !(0..=200).contains(&tenths) {
+                return err("invalid_sliders");
+            }
+            st.empires[empire as usize].security = tenths;
+        }
+        Command::SetTax { tenths } => {
+            if !(0..=200).contains(&tenths) {
+                return err("invalid_sliders");
+            }
+            st.empires[empire as usize].tax = tenths;
+        }
+        Command::TransferReserve { planet, bc } => {
+            own(st, empire, planet)?;
+            if bc <= 0 || bc > st.empires[empire as usize].reserve {
+                return err("no_money");
+            }
+            st.empires[empire as usize].reserve -= bc;
+            st.planets[planet].reserve += bc;
+        }
+        Command::AnswerMessage {
+            index,
+            accept,
+            pick,
+        } => {
+            let reply = audience::answer(st, empire, index, accept, pick)
+                .map_err(|code| CommandError { code })?;
+            if let Some(r) = reply {
+                st.pending.messages.insert(0, r);
+            }
+        }
+        Command::StealTech { index, field } => {
+            let ok = st.pending.spy.get(index).is_some_and(|(o, _)| *o == empire)
+                && spy::steal(st, empire, index, field);
+            if !ok {
+                return err("invalid_tech");
+            }
+        }
+        Command::Sabotage {
+            index,
+            planet,
+            kind,
+        } => {
+            let ok = st.pending.spy.get(index).is_some_and(|(o, _)| *o == empire);
+            if !ok || spy::do_sabotage(st, empire, index, planet, kind).is_none() {
+                return err("invalid_planet");
+            }
+        }
+        Command::Vote { candidate } => {
+            council::vote(st, empire, candidate).map_err(|code| CommandError { code })?
+        }
+        Command::AcceptCouncil { accept } => {
+            council::accept(st, empire, accept).map_err(|code| CommandError { code })?
+        }
     }
     Ok(())
 }

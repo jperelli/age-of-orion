@@ -52,8 +52,13 @@ flowchart LR
 | `game_bomb.c`, `game_turn_transport_shoot` | `combat.rs` | Ported |
 | `game_ground.c` | `combat.rs` | Ported (d100 + bonus rounds) |
 | `game_shiptech.c`, `game_shipdesign.c`, `game_design.c` | `data.rs` (generated), `design.rs` | Ported: part tables, cost, space, engines, hit points, starting designs |
-| `game_ai_classic.c` | `ai.rs` | Research choice and focus ported; the rest is a compact strategy with an automatic ship designer |
-| `game_diplo.c`, `game_audience.c`, `game_spy.c`, `game_election.c`, `game_event.c`, `game_news.c` | - | Not yet: every empire is at war with every other |
+| `game_ai_classic.c` | `ai.rs`, `ai_diplo.rs`, `audience.rs` | Diplomacy (`turn_diplo_p1/p2`, `diplo_wage_war`, audience answers), votes, spying, security, taxes, research choice and focus ported; fleets, production and ship design use a compact strategy of their own |
+| `game_diplo.c`, diplomacy steps of `game_turn.c` | `diplo.rs` | Ported (relations, moods, treaties, trade, contact, battle consequences) with the Classic+ fixes |
+| `game_audience.c` | `audience.rs` | Ported as request/answer steps instead of a blocking dialogue |
+| `game_spy.c` | `spy.rs` | Ported; tech groups and tiers (in RESEARCH.LBX in MOO1) are derived from the tech names |
+| `game_event.c`, `game_turn_coup` | `events.rs` | Ported: all 16 events, monsters, rebellions, coups; texts are our own, or MOO1's from an imported EVENTMSG.LBX |
+| `game_election.c` | `council.rs` | Ported, with the vote and the acceptance as player commands |
+| `game_news.c` | `web/src/game.ts` | Event reports in the turn summary; the GNN newscast and its statistics are not shown |
 | `game_save.c` | `serde` JSON | New format; MOO1 save import not yet |
 
 ## Milestones
@@ -71,11 +76,13 @@ import, mods, CI/CD, releases, website.
 - Still open from this list: tech descriptions (MOO1 keeps them in RESEARCH.LBX, to be
   imported), the effects of combat specials that need the tactical grid.
 
-### 0.3.0: diplomacy and events
+### 0.3.0: diplomacy and events (done)
 - Contact, treaties, trade and audiences (`game_diplo.c`, `game_audience.c`).
 - Espionage and sabotage (`game_spy.c`), random events with EVENTMSG texts (`game_event.c`),
   the Galactic Council and diplomatic victory (`game_election.c`).
-- Port of the classic AI.
+- The diplomacy, voting and spying of the classic AI.
+- Still open: the classic AI's fleet, production and design routines (`turn_p1`, `turn_p3`
+  sliders, `design_ship`), the GNN newscast screen.
 
 ### 0.4.0: battles and presentation
 - Tactical combat on a grid (`game_battle_human.c`) with sprites from imported SHIPS.LBX or
@@ -85,6 +92,7 @@ import, mods, CI/CD, releases, website.
 - LBX import in a Web Worker, more aliases (ships, screens), tech descriptions from RESEARCH.LBX, fonts.
 
 ### Later
+- The rest of the classic AI (fleets, production sliders, ship design).
 - Comparison harness against C 1oom (same seed, turn-by-turn state diff) to pin the rules.
 - Translations, accessibility, touch controls, multiplayer by save exchange.
 

@@ -45,6 +45,11 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `field.<field>` | Research fields: `computer`, `construction`, `force_field`, `planetology`, `propulsion`, `weapon` |
 | `slider.<slider>` | Colony sliders: `ship`, `def`, `ind`, `eco`, `tech` |
 | `event.<type>` | Turn report lines; placeholders like `{planet}`, `{count}`, `{design}`, `{empire}` |
+| `news.<kind>.<stage>` | Random events (`plague`, `quake`, `nova`, `accident`, `assassin`, `virus`, `comet`, `pirates`, `derelict`, `rebellion`, `crystal`, `amoeba`, `enviro`, `rich`, `support`, `poor`, `stars`, `coup`). Stages follow MOO1's EVENTMSG.LBX: 0-3 about you, 4-6 about others. Placeholders `{planet}`, `{empire}`, `{other}`, `{n1}`, `{n2}`, `{field}`, `{personality}` |
+| `diplo.<n>` | Messages of the computer rulers, numbered as in 1oom (`diplo_type`): 14-19 first contact per personality, 24-30 proposals, 31-41 refusals, 42-57 warnings and broken treaties, 62-68 acceptances... Placeholders `{leader}`, `{race}` (theirs), `{me}`, `{empire}` (a third empire), `{planet}`, `{field}`, `{bc}`, `{tech}`, `{gift}` |
+| `treaty.*`, `attitude.*`, `trait1.<n>`, `trait2.<n>` | Treaties, attitudes, personalities and objectives |
+| `audience.*`, `diplomacy.*`, `spy.*`, `council.*` | Audience, races, spy and council screens |
+| `monster.crystal`, `monster.amoeba` | Names of the two space monsters |
 | `error.<code>` | Rejected orders |
 | `names.sites` | List of star/city names (at least 108 for huge maps, otherwise MOO1 names are used) |
 | `names.homes` | Home world name per race (10, in race order) |
@@ -63,6 +68,7 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `army` | Fleets on the map |
 | `caravan` | Transports on the map |
 | `guardian` | The Guardian of Orion |
+| `monster/crystal`, `monster/amoeba` | The two space monsters on the map |
 | `nebula/<n>` | Nebula of type `n` (0 to 9), drawn at half its size in map units (STARMAP.LBX 0x0f..) |
 | `stargate` | Stargate next to a planet (STARMAP.LBX 0x2d) |
 | `map/background` | Whole map background (stretched to the map size) |

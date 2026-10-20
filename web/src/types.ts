@@ -65,6 +65,9 @@ export interface PlanetView {
   prod: number | null;
   colonizable: boolean;
   colony: Colony | null;
+  rebels: number | null;
+  rebellion: boolean;
+  reserve: number | null;
 }
 
 export interface FleetView {
@@ -185,6 +188,8 @@ export interface Parts {
   shields: { key: string; absorb: number }[];
   specials: { key: string; kind: number }[];
   hulls: { key: string; hits: number; space: number; defense: number }[];
+  /** Tech keys per field and tech number ("" = none). */
+  techs: string[][];
 }
 
 export interface Abilities {
@@ -205,6 +210,118 @@ export interface GameEvent {
   to: number[];
   type: string;
   [k: string]: unknown;
+}
+
+export type Treaty = "none" | "non_aggression" | "alliance" | "war" | "final_war";
+export type SpyMode = "hide" | "espionage" | "sabotage";
+export type TechRef = [number, number];
+
+export interface AudienceOptions {
+  greeting: number;
+  talks: boolean;
+  later: boolean;
+  nap: boolean;
+  alliance: boolean;
+  peace: boolean;
+  war_on: number[];
+  break_alliance_with: number[];
+  trade: number[];
+  tribute: number[];
+  break_treaty: boolean;
+  break_trade: boolean;
+  threaten: boolean;
+  exchange: boolean;
+}
+
+export interface RelationView {
+  empire: number;
+  contact: boolean;
+  met: boolean;
+  treaty: Treaty;
+  relation: number;
+  trade_bc: number;
+  trade_percent: number;
+  ceasefire: number;
+  spies: number;
+  spying: number;
+  spy_mode: SpyMode;
+  personality: number | null;
+  objective: number | null;
+  spy_levels: number[] | null;
+  spy_report: TechRef[] | null;
+  spy_report_year: number | null;
+  audience: AudienceOptions | null;
+}
+
+export interface MsgParams {
+  planet: number | null;
+  field: number | null;
+  empire: number | null;
+  bc: number;
+  tech: TechRef | null;
+  offer_bc: number;
+  offer_tech: TechRef | null;
+  techs: TechRef[];
+}
+
+export interface Incoming {
+  to: number;
+  from: number;
+  kind: number;
+  params: MsgParams;
+  then: number | null;
+  needs_answer: boolean;
+}
+
+export type SpyChance =
+  | { type: "steal"; target: number; techs: TechRef[]; framed: boolean; penalty: number }
+  | { type: "sabotage"; target: number; strength: number; framed: boolean; penalty: number };
+
+export type SabotageKind = "factories" | "bases" | "revolt";
+
+export interface Election {
+  candidates: [number, number];
+  votes: number[];
+  total: number;
+  has_voted: boolean[];
+  ballots: (number | null)[];
+  got: [number, number];
+  elected: number | null;
+  awaiting_acceptance: boolean;
+}
+
+export interface MonsterView {
+  kind: "crystal" | "amoeba";
+  x: number;
+  y: number;
+  dest: number;
+}
+
+export type Talk =
+  | { type: "propose_nap" }
+  | { type: "propose_alliance" }
+  | { type: "propose_peace" }
+  | { type: "declare_war_on"; target: number }
+  | { type: "break_alliance_with"; target: number }
+  | { type: "propose_trade"; bc: number }
+  | { type: "break_treaty" }
+  | { type: "break_trade" }
+  | { type: "threaten" }
+  | { type: "tribute_bc"; bc: number }
+  | { type: "tribute_techs" }
+  | { type: "tribute_tech"; field: number; tech: number }
+  | { type: "tech_offers" }
+  | { type: "exchange_tech"; want: TechRef; give: TechRef }
+  | { type: "accept_sweetener" }
+  | { type: "decline_sweetener" };
+
+export interface Reply {
+  kind: number;
+  params: MsgParams;
+  accepted: boolean;
+  sweetener: { bc: number; tech: TechRef | null } | null;
+  tech_deals: { want: TechRef; give: TechRef[] }[];
+  techs: TechRef[];
 }
 
 export interface View {
@@ -232,6 +349,18 @@ export interface View {
   designs: DesignView[];
   parts: KnownParts;
   events: GameEvent[];
+  security: number;
+  tax: number;
+  total_trade: number;
+  spying_maint: number;
+  relations: RelationView[];
+  messages: [number, Incoming][];
+  spy_chances: [number, SpyChance][];
+  election: Election | null;
+  final_war: boolean;
+  high_master: number | null;
+  victory: "conquest" | "council" | null;
+  monsters: MonsterView[];
 }
 
 export type Command =
@@ -246,7 +375,17 @@ export type Command =
   | { type: "scrap_ships"; planet: number; ships: number[] }
   | { type: "save_design"; slot: number | null; design: ShipDesign }
   | { type: "scrap_design"; design: number }
-  | { type: "set_bombard"; enabled: boolean };
+  | { type: "set_bombard"; enabled: boolean }
+  | { type: "set_spying"; target: number; tenths: number }
+  | { type: "set_spy_mode"; target: number; mode: SpyMode }
+  | { type: "set_security"; tenths: number }
+  | { type: "set_tax"; tenths: number }
+  | { type: "transfer_reserve"; planet: number; bc: number }
+  | { type: "answer_message"; index: number; accept: boolean; pick?: TechRef | null }
+  | { type: "steal_tech"; index: number; field: number }
+  | { type: "sabotage"; index: number; planet: number; kind: SabotageKind }
+  | { type: "vote"; candidate: number | null }
+  | { type: "accept_council"; accept: boolean };
 
 export interface NewGameOptions {
   seed: number;

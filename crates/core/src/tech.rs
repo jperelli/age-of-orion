@@ -161,10 +161,24 @@ pub enum Source {
     Research,
     Orion,
     Artifacts,
+    Trade,
+    Espionage,
 }
 
 /// 1oom `game_tech_get_new`.
 pub fn grant(st: &mut State, empire: EmpireId, field: usize, tech: u8, source: Source) {
+    grant_from(st, empire, field, tech, source, None);
+}
+
+/// `grant` with the empire the tech came from (trade, espionage).
+pub fn grant_from(
+    st: &mut State,
+    empire: EmpireId,
+    field: usize,
+    tech: u8,
+    source: Source,
+    from: Option<EmpireId>,
+) {
     let ai = st.empires[empire as usize].ai;
     let t = &mut st.empires[empire as usize].tech;
     if tech == 0 || t.has(field, tech) {
@@ -190,6 +204,7 @@ pub fn grant(st: &mut State, empire: EmpireId, field: usize, tech: u8, source: S
             field: TechField::ALL[field],
             tech,
             source,
+            from,
         },
     );
     if idle && ai {
@@ -221,6 +236,40 @@ pub fn research(st: &mut State) {
                 }
             } else {
                 t.invested[f] = invest * 9 / 10;
+            }
+        }
+    }
+}
+
+/// 1oom `game_tech_final_war_share`: the sides of the final war pool their techs.
+pub fn final_war_share(st: &mut State) {
+    let n = st.empires.len();
+    let refusers = st.council.refuse.iter().filter(|&&r| r).count();
+    for f in 0..NUM_FIELDS {
+        for side in [false, true] {
+            if side && refusers < 2 {
+                continue;
+            }
+            let members: Vec<usize> = (0..n)
+                .filter(|&i| st.council.refuse.get(i).copied().unwrap_or(false) == side)
+                .collect();
+            let mut pool: Vec<(u8, usize)> = Vec::new();
+            for &i in &members {
+                for &t in &st.empires[i].tech.completed[f] {
+                    pool.push((t, i));
+                }
+            }
+            let alive: Vec<usize> = members
+                .iter()
+                .copied()
+                .filter(|&i| st.empires[i].alive)
+                .collect();
+            for i in alive {
+                for &(t, src) in &pool {
+                    if !st.empires[i].tech.has(f, t) {
+                        grant_from(st, i as u8, f, t, Source::Trade, Some(src as u8));
+                    }
+                }
             }
         }
     }

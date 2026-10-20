@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! aoo import <dir with LBX files> <output dir>   convert LBX files to the open asset tree
-//! aoo sim [--seed N] [--turns N] [--size S] [--players N]
+//! aoo sim [--seed N] [--turns N] [--size S] [--players N] [--save FILE]
 //!                                               play a game with AI only and print a summary
 //! ```
 
@@ -14,7 +14,7 @@ use aoo_core::{GalaxySize, Game, NewGameOptions};
 
 const USAGE: &str = "usage:
   aoo import <lbx-dir> <out-dir>
-  aoo sim [--seed N] [--turns N] [--size small|medium|large|huge] [--players N]";
+  aoo sim [--seed N] [--turns N] [--size small|medium|large|huge] [--players N] [--save FILE]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -111,6 +111,24 @@ fn sim(args: &[String]) -> Result<(), String> {
             break;
         }
         game.end_turn();
+        for e in &game.state().events {
+            if let aoo_core::EventKind::CouncilResult {
+                candidates,
+                votes,
+                total,
+                elected,
+            } = &e.kind
+            {
+                println!(
+                    "council {}: {} votes for {}, {} for {} of {total}, elected {elected:?}",
+                    game.state().year,
+                    votes[0],
+                    candidates[0],
+                    votes[1],
+                    candidates[1]
+                );
+            }
+        }
     }
     let s = game.state();
     println!("year {} ({} turns)", s.year, s.turn);
@@ -131,8 +149,30 @@ fn sim(args: &[String]) -> Result<(), String> {
             e.race, colonies, e.tech.level, e.alive
         );
     }
+    for (i, e) in s.empires.iter().enumerate() {
+        let deals: Vec<String> = e
+            .rel
+            .iter()
+            .enumerate()
+            .filter(|(j, _)| *j > i)
+            .map(|(j, r)| {
+                format!(
+                    "{j}:{:?}{}",
+                    r.treaty,
+                    if r.trade_bc > 0 { "+trade" } else { "" }
+                )
+            })
+            .collect();
+        if !deals.is_empty() {
+            println!("relations of {i}: {}", deals.join(" "));
+        }
+    }
     if let Some(w) = s.winner {
-        println!("winner: empire {w}");
+        println!("winner: empire {w} ({:?})", s.victory);
+    }
+    if let Some(path) = opt("--save") {
+        fs::write(&path, game.save()).map_err(|e| format!("{path}: {e}"))?;
+        println!("saved to {path}");
     }
     Ok(())
 }

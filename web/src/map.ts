@@ -1,7 +1,7 @@
 // Canvas renderer of the game map: a terrain world with cities (theme map "world") or the
 // classic starfield (theme map "space"). Pan with drag, zoom with the wheel.
 import type { Theme } from "./theme";
-import type { FleetView, PlanetType, StarType, TransportView, View } from "./types";
+import type { FleetView, MonsterView, PlanetType, StarType, TransportView, View } from "./types";
 
 export type Selection = { kind: "planet"; id: number } | { kind: "fleet"; id: number } | null;
 
@@ -368,6 +368,7 @@ export class MapView {
     for (const p of v.planets) this.drawOrbit(v, p.id);
     for (const f of v.fleets) if (f.at === null) this.drawFleet(v, f, f.x, f.y);
     for (const t of v.transports) this.drawCaravan(v, t);
+    for (const m of v.monsters ?? []) this.drawMonster(m);
     this.drawSelection(v);
     this.drawLabels(v);
     if (this.targeting && this.hover !== null) this.drawTargetLine(v, this.hover);
@@ -609,6 +610,44 @@ export class MapView {
     ctx.lineTo(x - u * 0.5, y + u * 0.5);
     ctx.closePath();
     ctx.fill();
+  }
+
+  /** Space monsters (1oom crystal and amoeba): a blue crystal and a green blob. */
+  private drawMonster(m: MonsterView): void {
+    const ctx = this.ctx;
+    const u = Math.max(1.6, Math.min(4, 12 / this.zoom + 1.2));
+    const img = this.theme.img(`monster/${m.kind}`);
+    if (img) {
+      ctx.drawImage(img, m.x - u * 2, m.y - u * 2, u * 4, u * 4);
+      return;
+    }
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    if (m.kind === "crystal") {
+      ctx.fillStyle = "#7fd3ff";
+      ctx.strokeStyle = "#e8f8ff";
+      ctx.lineWidth = this.px(1);
+      ctx.beginPath();
+      ctx.moveTo(0, -u * 1.8);
+      ctx.lineTo(u * 1.1, 0);
+      ctx.lineTo(0, u * 1.8);
+      ctx.lineTo(-u * 1.1, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "rgba(90, 210, 90, 0.85)";
+      ctx.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const r = u * (1.3 + 0.35 * Math.sin(i * 2.7));
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   private drawStar(v: View, id: number): void {

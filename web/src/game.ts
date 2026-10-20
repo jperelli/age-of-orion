@@ -1,12 +1,13 @@
 // The in-game screen: top bar, map, side panel and dialogs.
 import type { Ctx } from "./ctx";
 import { designDialog } from "./designer";
+import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefName } from "./diplomacy";
 import type { Game } from "./engine";
 import { MapView } from "./map";
-import { needsChoice, researchDialog, techName } from "./research";
+import { needsChoice, researchDialog } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
-import { BUILD_STARGATE, FIELDS, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type View } from "./types";
+import { BUILD_STARGATE, FIELDS, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type View } from "./types";
 import { append, clear, download, h, modal, pickFiles, toast } from "./ui";
 
 export const AUTOSAVE = "autosave";
@@ -37,6 +38,13 @@ export class GameScreen {
     const home = this.view.planets.find((p) => p.owner === this.view.player);
     if (home) this.map.selection = { kind: "planet", id: home.id };
     this.render();
+    // A loaded game may have decisions waiting.
+    setTimeout(() => {
+      if (this.view.alive && this.view.winner === null && !this.busy) {
+        this.busy = true;
+        void this.decisions().finally(() => (this.busy = false));
+      }
+    }, 0);
   }
 
   destroy(): void {
@@ -54,7 +62,7 @@ export class GameScreen {
   }
 
   private get ctx(): Ctx {
-    return { game: this.game, theme: this.theme, view: () => this.view, command: (c) => this.command(c) };
+    return { game: this.game, theme: this.theme, view: () => this.view, command: (c) => this.command(c), refresh: () => this.refresh() };
   }
 
   private refresh(): void {
@@ -109,7 +117,7 @@ export class GameScreen {
         h("button", { onclick: () => this.openResearch() }, this.t("game.btn.research")),
         h("button", { onclick: () => this.openDesigner() }, this.t("game.btn.design")),
         h("button", { onclick: () => this.empireDialog() }, this.t("game.btn.empire")),
-        h("button", { onclick: () => this.rivalsDialog() }, this.t("game.btn.rivals")),
+        h("button", { class: this.view.messages.length ? "attention" : "", onclick: () => this.rivalsDialog() }, this.t("game.btn.rivals")),
         h("button", { onclick: () => this.menuDialog() }, this.t("game.btn.menu")),
         h("button", { class: "primary end-turn", onclick: () => this.endTurn() }, this.t("game.btn.end_turn")),
       ),
@@ -172,6 +180,9 @@ export class GameScreen {
       rows.push([this.t("planet.factories"), `${p.factories}${mine && p.colony ? ` / ${p.colony.max_factories}` : ""}`]);
       rows.push([this.t("planet.bases"), p.bases ?? 0]);
       if (mine && p.shield) rows.push([this.t("planet.shield"), p.shield]);
+      if (p.rebellion) rows.push([this.t("planet.unrest"), this.t("planet.rebellion", { n: p.rebels ?? 0 })]);
+      else if (mine && p.rebels) rows.push([this.t("planet.unrest"), this.t("planet.rebels", { n: p.rebels })]);
+      if (mine && p.reserve) rows.push([this.t("planet.reserve"), `${p.reserve} ${this.t("unit.bc")}`]);
     }
     if (p.nebula) rows.push([this.t("planet.nebula"), this.t("planet.nebula_effect")]);
     if (p.stargate) rows.push([this.t("planet.stargate"), this.t("planet.stargate_yes")]);
@@ -247,8 +258,23 @@ export class GameScreen {
         h("button", { class: "mini", onclick: () => this.chooseRally(p) }, this.t("colony.rally_set")),
         rally ? h("button", { class: "mini", onclick: () => this.command({ type: "set_rally", planet: p.id, to: null }) }, this.t("colony.rally_clear")) : null,
       ),
-      h("button", { onclick: () => this.transportDialog(p), disabled: (p.pop ?? 0) < 2 }, this.t("colony.send_transport")),
+      p.rebellion ? h("p", { class: "warn small" }, this.t("colony.rebellion_hint")) : null,
+      h(
+        "div",
+        { class: "row" },
+        h("button", { onclick: () => this.transportDialog(p), disabled: (p.pop ?? 0) < 2 }, this.t("colony.send_transport")),
+        h("button", { onclick: () => this.reserveDialog(p), disabled: v.reserve <= 0 }, this.t("colony.transfer_reserve")),
+      ),
     );
+  }
+
+  private async reserveDialog(p: PlanetView): Promise<void> {
+    const v = this.view;
+    const input = h("input", { type: "number", min: 1, max: v.reserve, value: Math.min(v.reserve, Math.max(1, p.prod ?? 1)) });
+    const ok = await modal(this.t("reserve.title"), [h("p", {}, this.t("reserve.text", { reserve: v.reserve, planet: p.name })), input], [this.t("reserve.send"), this.t("btn.cancel")]);
+    if (ok !== 0) return;
+    const bc = Math.max(1, Math.min(v.reserve, Math.floor(Number(input.value) || 0)));
+    this.command({ type: "transfer_reserve", planet: p.id, bc });
   }
 
   /** Sets ecology to the clean level and rescales the other sliders. */
@@ -424,21 +450,44 @@ export class GameScreen {
     this.refresh();
     const v = this.view;
     const events = v.events.filter((e) => !["ships_built", "factories_complete"].includes(e.type) || e.to.includes(v.player));
-    if (v.winner === v.player) {
-      await modal(this.t("end.victory_title"), h("p", {}, this.t("end.victory")), [this.t("btn.ok")]);
-    } else if (!v.alive) {
-      await modal(this.t("end.defeat_title"), h("p", {}, this.t("end.defeat")), [this.t("btn.ok")]);
-      return this.onQuit();
-    } else if (v.winner !== null) {
-      await modal(this.t("end.defeat_title"), h("p", {}, this.t("end.lost_to", { empire: this.empireName(v.winner) })), [this.t("btn.ok")]);
-      return this.onQuit();
-    }
     if (events.length) {
       const list = h("ul", { class: "events" }, ...events.map((e) => h("li", { class: `ev-${e.type}`, onclick: () => this.focusEvent(e) }, this.eventText(e))));
       await modal(this.t("report.title", { year: v.year }), list, [this.t("btn.ok")], "report");
     }
+    if (await this.checkEnd()) return;
+    await this.decisions();
+  }
+
+  /** Votes, messages, spy successes and research choices waiting for the player. */
+  private async decisions(): Promise<void> {
+    await councilDialog(this.ctx);
+    if (await this.checkEnd()) return;
+    await deliverMessages(this.ctx);
+    await spyChances(this.ctx);
     if (needsChoice(this.ctx)) await this.openResearch();
   }
+
+  /** Shows the end of the game; true when the player has to leave. */
+  private async checkEnd(): Promise<boolean> {
+    const v = this.view;
+    if (v.winner === v.player) {
+      if (this.shownVictory) return false;
+      this.shownVictory = true;
+      await modal(this.t("end.victory_title"), h("p", {}, this.t(v.victory === "council" ? "end.victory_council" : "end.victory")), [this.t("btn.ok")]);
+    } else if (!v.alive) {
+      await modal(this.t("end.defeat_title"), h("p", {}, this.t("end.defeat")), [this.t("btn.ok")]);
+      this.onQuit();
+      return true;
+    } else if (v.winner !== null) {
+      const key = v.victory === "council" ? "end.lost_council" : "end.lost_to";
+      await modal(this.t("end.defeat_title"), h("p", {}, this.t(key, { empire: this.empireName(v.winner) })), [this.t("btn.ok")]);
+      this.onQuit();
+      return true;
+    }
+    return false;
+  }
+
+  private shownVictory = false;
 
   private focusEvent(e: GameEvent): void {
     if (typeof e.planet === "number") {
@@ -454,7 +503,7 @@ export class GameScreen {
     const params: Record<string, string | number> = {};
     for (const [k, val] of Object.entries(e)) {
       if (k === "planet" && typeof val === "number") params.planet = v.planets[val].name;
-      else if (["empire", "attacker", "defender", "from", "to", "by", "owner"].includes(k) && typeof val === "number") params[k] = this.empireName(val);
+      else if (["empire", "attacker", "defender", "from", "to", "by", "owner", "other", "spy", "target", "against", "elected"].includes(k) && typeof val === "number") params[k] = this.empireName(val);
       else if (k === "design" && typeof val === "number") params.design = v.designs[val]?.name ?? "?";
       else if (k === "field" && typeof val === "string") params.field = this.t(`field.${val}`);
       else if (typeof val === "number" || typeof val === "string") params[k] = val;
@@ -462,16 +511,50 @@ export class GameScreen {
     if (e.type === "battle") {
       const sides = e.sides as number[];
       const losses = e.losses as number[];
-      const nm = (s: number) => (s < 0 ? this.t("guardian.name") : this.empireName(s));
+      const nm = (s: number) => (s === -1 ? this.t("guardian.name") : s === -2 ? this.t("monster.crystal") : s === -3 ? this.t("monster.amoeba") : this.empireName(s));
       params.sides = sides.map(nm).join(" / ");
       params.losses = sides.map((s, i) => `${nm(s)} -${losses[i]}`).join(", ");
       params.result = e.winner === null ? this.t("event.battle.draw") : this.t("event.battle.won", { winner: nm(e.winner as number) });
     }
-    if (e.type === "tech_discovered") {
-      const f = v.tech[FIELDS.indexOf(e.field as never)];
-      const c = f?.completed.find((c) => c.tech === e.tech);
-      params.tech = c ? techName(this.ctx, f, c.key, c.tech) : String(e.tech);
+    if (e.type === "tech_discovered" || e.type === "tech_stolen") {
+      params.tech = techRefName(this.ctx, [FIELDS.indexOf(e.field as never), e.tech as number]);
+      if (e.type === "tech_stolen") return this.t(e.by === null ? "event.tech_stolen_unknown" : "event.tech_stolen", params);
       return this.t(`event.tech_discovered.${e.source}`, params);
+    }
+    if (e.type === "news") {
+      // Also fills the placeholders of imported MOO1 news texts (1oom game_news_get_msg).
+      const n1 = e.n1 as number;
+      if (e.news === "virus") params.field = this.t(`field.${FIELDS[n1]}`);
+      if (e.news === "coup") {
+        params.personality = this.t(`trait1.${n1}`).toLowerCase();
+        params.objective = this.t(`trait2.${e.n2}`).toLowerCase();
+        params.an = n1 === 2 || n1 === 3 ? "n " : " ";
+      }
+      if (typeof e.empire === "number") {
+        params.race = this.t(`race.${v.empires[e.empire].race}`);
+        params.leader = v.empires[e.empire].leader;
+      }
+      if (typeof e.other === "number") params.other_race = this.t(`race.${v.empires[e.other].race}`);
+      params.s = n1 === 1 ? "" : "s";
+      params.s1 = n1 === 1 ? "s" : "";
+      return this.t(`news.${e.news}.${e.stage}`, params);
+    }
+    if (e.type === "sabotaged") return this.t(e.by === null ? `event.sabotaged_unknown.${e.kind}` : `event.sabotaged.${e.kind}`, params);
+    if (e.type === "spies_caught") return this.t(e.spy === v.player ? "event.spies_caught.ours" : "event.spies_caught.theirs", params);
+    if (e.type === "council") {
+      const c = e.candidates as number[];
+      return this.t("event.council", { a: this.empireName(c[0]), b: this.empireName(c[1]) });
+    }
+    if (e.type === "council_result") {
+      const c = e.candidates as number[];
+      const votes = e.votes as number[];
+      return this.t(e.elected === null ? "event.council_result.none" : "event.council_result.elected", {
+        ...params,
+        a: this.empireName(c[0]),
+        b: this.empireName(c[1]),
+        va: votes[0],
+        vb: votes[1],
+      });
     }
     if (e.type === "ground_battle") return this.t(e.won ? "event.ground_battle.won" : "event.ground_battle.lost", params);
     return this.t(`event.${e.type}`, params);
@@ -527,33 +610,29 @@ export class GameScreen {
     );
     const bombard = h("input", { type: "checkbox", checked: v.bombard });
     bombard.addEventListener("change", () => this.command({ type: "set_bombard", enabled: bombard.checked }));
+    const tax = h("input", { type: "range", min: 0, max: 200, step: 5, value: v.tax });
+    const taxVal = h("span", { class: "bc" });
+    const showTax = () => (taxVal.textContent = this.t("empire.tax_value", { pct: (Number(tax.value) / 10).toFixed(1), bc: Math.floor((v.total_prod * Number(tax.value)) / 2000) }));
+    showTax();
+    tax.addEventListener("input", showTax);
+    tax.addEventListener("change", () => this.command({ type: "set_tax", tenths: Number(tax.value) }));
     void modal(
       this.t("empire.title", { n: mine.length }),
-      [table, h("label", { class: "checkbox" }, bombard, " ", this.t("empire.bombard"))],
+      [
+        table,
+        h("div", { class: "slider-row" }, h("label", { title: this.t("empire.tax_hint") }, this.t("empire.tax")), tax, taxVal),
+        h("p", { class: "muted small" }, this.t("empire.income", { trade: v.total_trade, spies: v.spying_maint, reserve: v.reserve })),
+        h("label", { class: "checkbox" }, bombard, " ", this.t("empire.bombard")),
+      ],
       [this.t("btn.close")],
       "wide",
     );
   }
 
-  private rivalsDialog(): void {
-    const v = this.view;
-    const cards = v.empires.map((e) => {
-      const url = this.theme.url(`race/${RACES.indexOf(e.race)}`);
-      return h(
-        "div",
-        { class: `rival ${e.alive ? "" : "dead"}` },
-        url ? h("img", { class: "portrait pixel", src: url, alt: "" }) : h("div", { class: "crest big", style: `--banner:${this.theme.banner(e.banner)}` }),
-        h(
-          "div",
-          {},
-          h("b", { style: `color:${this.theme.banner(e.banner)}` }, this.empireName(e), e.id === v.player ? ` ${this.t("rivals.you")}` : ""),
-          h("div", {}, this.t("rivals.leader", { name: e.leader })),
-          h("div", { class: "muted" }, this.t(`race.${e.race}.trait`)),
-          h("div", {}, e.alive ? this.t("rivals.colonies", { n: e.known_colonies }) : this.t("rivals.eliminated")),
-        ),
-      );
-    });
-    void modal(this.t("rivals.title"), cards, [this.t("btn.close")], "wide");
+  private async rivalsDialog(): Promise<void> {
+    await deliverMessages(this.ctx);
+    await diplomacyDialog(this.ctx);
+    this.refresh();
   }
 
   private async menuDialog(): Promise<void> {

@@ -52,12 +52,22 @@ pub struct ImportResult {
     pub manifest: Manifest,
 }
 
-/// Placeholders used by EVENTMSG.LBX (high CP437 characters) -> named tokens.
-const EVENT_TOKENS: [(char, &str); 4] = [
+/// Placeholders used by EVENTMSG.LBX (high CP437 characters, 1oom `game_news_get_msg`)
+/// -> named tokens.
+const EVENT_TOKENS: [(char, &str); 13] = [
     ('Ç', "{planet}"),
-    ('ä', "{race}"),
     ('ü', "{n1}"),
     ('é', "{n2}"),
+    ('â', "{s}"),
+    ('ä', "{race}"),
+    ('à', "{other_race}"),
+    ('å', "{field}"),
+    ('ç', "{tech}"),
+    ('ê', "{personality}"),
+    ('ë', "{objective}"),
+    ('î', "{leader}"),
+    ('ì', "{s1}"),
+    ('Ä', "{an}"),
 ];
 
 fn stem(name: &str) -> String {

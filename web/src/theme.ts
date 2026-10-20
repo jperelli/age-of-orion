@@ -132,6 +132,18 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
       const blob = await store.get<Blob>("assets", path);
       if (blob) await theme.addImage(alias, blob);
     }
+    // EVENTMSG.LBX: entry (type - 1) * 7 + stage is the news of 1oom `game_news_get_msg`.
+    const events = await store.get<Blob>("assets", "text/lbx/eventmsg.json");
+    if (events) {
+      const all = JSON.parse(await events.text()) as string[];
+      const raw: [string, string][] = [["â", "{s}"], ["à", "{other_race}"], ["å", "{field}"], ["ç", "{tech}"], ["ê", "{personality}"], ["ë", "{objective}"], ["î", "{leader}"], ["ì", "{s1}"], ["Ä", "{an}"]];
+      all.forEach((msg, i) => {
+        const kind = NEWS_KINDS[Math.floor(i / 7)];
+        const key = `news.${kind}.${i % 7}`;
+        if (!msg || !kind || mod?.text[key]) return;
+        text[key] = raw.reduce((m, [c, tok]) => m.split(c).join(tok), msg).replace(/\s+/g, " ").trim();
+      });
+    }
     const names = await store.get<Blob>("assets", "text/lbx/names.json");
     if (names && !mod?.text["names.leaders"]) {
       const all = JSON.parse(await names.text()) as string[];
@@ -141,6 +153,9 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
   for (const [alias, blob] of Object.entries(mod?.images ?? {})) await theme.addImage(alias, blob);
   return theme;
 }
+
+/** News kinds in the order of MOO1's EVENTMSG.LBX (1oom `GAME_NEWS_*` minus one). */
+const NEWS_KINDS = ["plague", "quake", "nova", "accident", "assassin", "virus", "comet", "pirates", "derelict", "rebellion", "crystal", "amoeba", "enviro", "rich", "support", "poor", "", "coup", "stars"];
 
 /** Reads a mod folder chosen with `<input webkitdirectory>`. */
 export async function readModFolder(files: File[]): Promise<ModData> {

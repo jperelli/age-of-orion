@@ -2,8 +2,13 @@
 
 use serde::Serialize;
 
+use crate::audience::{self, AudienceOptions, Incoming};
+use crate::council::Election;
 use crate::design::{self, DesignStats, KnownParts, ShipDesign};
+use crate::diplo::{self, SpyMode, TechRef, Treaty};
+use crate::events::MonsterKind;
 use crate::rules::Abilities;
+use crate::spy::SpyChance;
 use crate::state::*;
 use crate::tech;
 use crate::turn::{clean_eco_percent, factory_cost, ship_totals, tech_prod};
@@ -55,6 +60,10 @@ pub struct PlanetView {
     pub prod: Option<i32>,
     pub colonizable: bool,
     pub colony: Option<Colony>,
+    /// Own planets: rebels and the reserve sent to it.
+    pub rebels: Option<i32>,
+    pub rebellion: bool,
+    pub reserve: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -96,6 +105,39 @@ pub struct EmpireView {
     pub alive: bool,
     pub ai: bool,
     pub known_colonies: usize,
+}
+
+/// This empire's dealings with another one.
+#[derive(Debug, Clone, Serialize)]
+pub struct RelationView {
+    pub empire: EmpireId,
+    pub contact: bool,
+    pub met: bool,
+    pub treaty: Treaty,
+    /// How the other (computer) empire feels about us, -100..100.
+    pub relation: i32,
+    pub trade_bc: i32,
+    pub trade_percent: i32,
+    pub ceasefire: i32,
+    pub spies: i32,
+    pub spying: i32,
+    pub spy_mode: SpyMode,
+    /// Their spies we know of (caught this turn are in the events).
+    pub personality: Option<u8>,
+    pub objective: Option<u8>,
+    /// Tech levels and newest techs, known while we have spies there.
+    pub spy_levels: Option<Vec<u32>>,
+    pub spy_report: Option<Vec<TechRef>>,
+    pub spy_report_year: Option<u32>,
+    pub audience: Option<AudienceOptions>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MonsterView {
+    pub kind: MonsterKind,
+    pub x: f64,
+    pub y: f64,
+    pub dest: PlanetId,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -155,6 +197,20 @@ pub struct View {
     pub designs: Vec<DesignView>,
     pub parts: KnownParts,
     pub events: Vec<Event>,
+    pub security: i32,
+    pub tax: i32,
+    pub total_trade: i32,
+    pub spying_maint: i32,
+    pub relations: Vec<RelationView>,
+    /// Messages from computer empires, with their index for `AnswerMessage`.
+    pub messages: Vec<(usize, Incoming)>,
+    /// Spy successes waiting for a choice, with their index.
+    pub spy_chances: Vec<(usize, SpyChance)>,
+    pub election: Option<Election>,
+    pub final_war: bool,
+    pub high_master: Option<EmpireId>,
+    pub victory: Option<Victory>,
+    pub monsters: Vec<MonsterView>,
 }
 
 fn sees(st: &State, me: EmpireId, x: f64, y: f64) -> bool {
@@ -243,6 +299,9 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 prod: mine.then_some(p.prod),
                 colonizable: ex && crate::turn::can_colonize(st, me, i),
                 colony,
+                rebels: mine.then_some(p.rebels),
+                rebellion: (mine || known_owner) && p.unrest == Unrest::Rebellion,
+                reserve: mine.then_some(p.reserve),
             }
         })
         .collect();
@@ -339,6 +398,38 @@ pub fn view(st: &State, me: EmpireId) -> View {
             colony: sd.colony_type(),
         })
         .collect();
+    let relations = (0..st.empires.len() as u8)
+        .filter(|&o| o != me)
+        .map(|o| {
+            let r = diplo::rel(st, me, o);
+            let other = &st.empires[o as usize];
+            let spied = r.spies > 0;
+            RelationView {
+                empire: o,
+                contact: r.contact,
+                met: r.have_met > 0 || r.contact,
+                treaty: r.treaty,
+                relation: r.relation,
+                trade_bc: r.trade_bc,
+                trade_percent: r.trade_percent,
+                ceasefire: r.ceasefire,
+                spies: r.spies,
+                spying: r.spying,
+                spy_mode: r.spymode,
+                personality: r.contact.then_some(other.trait1),
+                objective: (r.contact && other.ai).then_some(other.trait2),
+                spy_levels: spied.then(|| other.tech.level.to_vec()),
+                spy_report: (r.spy_report_year > 0).then(|| {
+                    (0..NUM_FIELDS)
+                        .map(|f| (f as u8, r.spy_report[f]))
+                        .collect()
+                }),
+                spy_report_year: (r.spy_report_year > 0).then_some(r.spy_report_year),
+                audience: (r.contact && other.ai && other.alive && e.alive)
+                    .then(|| audience::options(st, me, o)),
+            }
+        })
+        .collect();
     View {
         turn: st.turn,
         year: st.year,
@@ -368,6 +459,43 @@ pub fn view(st: &State, me: EmpireId) -> View {
             .iter()
             .filter(|ev| ev.to.is_empty() || ev.to.contains(&me))
             .cloned()
+            .collect(),
+        security: e.security,
+        tax: e.tax,
+        total_trade: e.total_trade,
+        spying_maint: e.spying_maint,
+        relations,
+        messages: st
+            .pending
+            .messages
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.to == me)
+            .map(|(i, m)| (i, m.clone()))
+            .collect(),
+        spy_chances: st
+            .pending
+            .spy
+            .iter()
+            .enumerate()
+            .filter(|(_, (o, _))| *o == me)
+            .map(|(i, (_, c))| (i, c.clone()))
+            .collect(),
+        election: st.council.pending.clone(),
+        final_war: st.council.final_war,
+        high_master: st.council.winner,
+        victory: st.victory,
+        monsters: st
+            .evn
+            .monsters
+            .iter()
+            .filter(|m| sees(st, me, m.x, m.y))
+            .map(|m| MonsterView {
+                kind: m.kind,
+                x: m.x,
+                y: m.y,
+                dest: m.dest,
+            })
             .collect(),
     }
 }

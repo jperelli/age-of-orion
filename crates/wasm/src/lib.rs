@@ -1,7 +1,7 @@
 //! WebAssembly API used by the web and desktop UI. Data crosses the boundary as JSON
 //! strings (game state, views, commands) and byte arrays (LBX files, PNG assets).
 
-use aoo_core::{Command, Game, NewGameOptions, Rules, ShipDesign};
+use aoo_core::{Command, Game, NewGameOptions, Rules, ShipDesign, Talk};
 use wasm_bindgen::prelude::*;
 
 fn js_err(e: impl std::fmt::Display) -> JsError {
@@ -66,6 +66,13 @@ impl WasmGame {
     pub fn command(&mut self, command_json: &str) -> Result<(), JsError> {
         let cmd: Command = serde_json::from_str(command_json).map_err(js_err)?;
         self.game.command(self.player, &cmd).map_err(js_err)
+    }
+
+    /// Says something (`Talk`, JSON) in an audience with empire `with`; returns the `Reply`.
+    pub fn talk(&mut self, with: u8, talk_json: &str) -> Result<String, JsError> {
+        let t: Talk = serde_json::from_str(talk_json).map_err(js_err)?;
+        let r = self.game.talk(self.player, with, &t).map_err(js_err)?;
+        Ok(serde_json::to_string(&r).expect("reply serializes"))
     }
 
     /// Cost, space and combat figures of a `ShipDesign` (JSON) with the player's tech.

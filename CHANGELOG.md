@@ -6,6 +6,49 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
+Diplomacy and events: the other empires talk, trade, spy, plot and vote.
+
+### Added
+
+- Diplomacy (1oom `game_diplo.c`): contact when colonies come within fuel range, relations
+  from the MOO1 race table, personalities and objectives, moods, trust, non-aggression
+  pacts, alliances, wars, ceasefires and trade agreements whose income grows over the years.
+  Allies share fuel range; treaty partners do not fight, bomb or invade each other; losers
+  of a battle retreat to their nearest colony.
+- Audiences (1oom `game_audience.c` and the classic AI's answers): propose a pact, an
+  alliance, peace or trade, ask an empire to declare war or to leave an alliance, break
+  treaties, threaten, offer tribute in BC or technology, exchange technology. The computer
+  may ask for a gift before agreeing.
+- Computer rulers greet you, propose pacts, alliances, trade, technology exchanges and
+  peace, offer bounties for attacking their enemies, ask allies to join their wars, warn you
+  about spies or attacks and declare war (1oom `turn_diplo_p2`). Computer empires make
+  treaties, trade technology and go to war among themselves (`turn_diplo_p1`).
+- Espionage and sabotage (1oom `game_spy.c`): a spy budget and mission per empire,
+  security, spies caught or framing others, stealing a technology or destroying factories,
+  missile bases or stirring up revolt, with the choice left to the player.
+- Random events (1oom `game_event.c`): plague, earthquake, nova, industrial accident,
+  assassination, computer virus, comet, pirates, derelict ship, rebellion, the Space Crystal
+  and the Space Amoeba roaming the map, climate shift, rich and poor minerals, donations.
+  Rebellions stop a colony's production until troops land; half the planets in rebellion
+  topple a government (1oom `game_turn_coup`).
+- The Galactic Council (1oom `game_election.c`): every 25 years once two thirds of the planets
+  are settled, the two largest empires stand for High Master. Two thirds of the votes win the
+  game; refusing the verdict starts the final war against everyone else.
+- Taxes that fill the reserve and sending reserve BC to a colony (1oom `game_turn_reserve`).
+- Screens for all of the above: races with relations, spies and security; audiences;
+  incoming messages and proposals; spy successes; the council vote. Every message has its
+  own text in both themes (kingdoms, envoys, frost giants and wyrms in the Age theme).
+- The Classic theme shows the original MOO1 news texts when EVENTMSG.LBX was imported; the
+  importer now converts all its placeholders.
+- `aoo sim --save FILE` writes the final position as a save file.
+
+### Changed
+
+- Defeating the Guardian, not colonizing Orion, reveals its technologies (as in 1oom).
+- Saves have version 3; saves of 0.2 cannot be loaded.
+
 ### Fixed
 
 - The Age theme says Disband instead of Scrap in the army roster.
@@ -98,6 +141,7 @@ First playable version.
 - CI (fmt, clippy, tests, web and desktop builds), tag-driven releases and GitHub Pages
   deployment.
 
-[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jperelli/age-of-orion/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jperelli/age-of-orion/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jperelli/age-of-orion/releases/tag/v0.1.0
