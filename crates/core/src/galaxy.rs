@@ -471,13 +471,27 @@ fn pick_homes(st: &mut State, n: usize) -> Vec<PlanetId> {
     homes
 }
 
-/// Every home gets two habitable neighbours within reach, so early expansion is possible.
-fn ensure_neighbours(st: &mut State, home: PlanetId) {
-    let mut near: Vec<PlanetId> = (0..st.planets.len()).filter(|&i| i != home).collect();
-    near.sort_by_key(|&i| st.dist(home, i) as i64);
+/// Every home gets two habitable neighbours, the nearest inside the starting fuel range, so
+/// early expansion is possible. `reserved` holds stars already given to other homes.
+fn ensure_neighbours(st: &mut State, home: PlanetId, reserved: &mut Vec<PlanetId>) {
+    let mut near: Vec<PlanetId> = (0..st.planets.len())
+        .filter(|&i| i != st.orion && st.planets[i].owner.is_none() && !reserved.contains(&i))
+        .collect();
+    near.sort_by_key(|&i| (st.dist(home, i) as i64, i));
+    if let Some(&i) = near.first() {
+        let d = st.dist(home, i);
+        let max = st.rules.parsec * 3.0 - 3.0;
+        if d > max {
+            let (hx, hy) = (st.planets[home].x as f64, st.planets[home].y as f64);
+            let p = &mut st.planets[i];
+            p.x = (hx + (p.x as f64 - hx) * max / d).round() as i32;
+            p.y = (hy + (p.y as f64 - hy) * max / d).round() as i32;
+        }
+    }
     for &i in near.iter().take(2) {
+        reserved.push(i);
         let p = &mut st.planets[i];
-        if p.owner.is_none() && i != st.orion && p.kind < PlanetType::Minimal {
+        if p.kind < PlanetType::Minimal {
             p.kind = if st.rng.below(2) == 0 {
                 PlanetType::Steppe
             } else {
@@ -622,8 +636,9 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
             .cloned()
             .unwrap_or_else(|| HOME_NAMES[race.index()].to_string());
     }
+    let mut reserved = Vec::new();
     for &home in &homes {
-        ensure_neighbours(&mut st, home);
+        ensure_neighbours(&mut st, home, &mut reserved);
     }
     crate::turn::update_exploration(&mut st);
     crate::turn::update_production(&mut st);
@@ -640,16 +655,20 @@ mod tests {
 
     #[test]
     fn generates_a_playable_galaxy() {
-        for size in [
+        let sizes = [
             GalaxySize::Small,
             GalaxySize::Medium,
             GalaxySize::Large,
             GalaxySize::Huge,
-        ] {
+        ];
+        for (size, seed) in sizes
+            .iter()
+            .flat_map(|&s| (1..=25).map(move |seed| (s, seed)))
+        {
             let st = new_game(&NewGameOptions {
                 galaxy_size: size,
                 players: 6,
-                seed: 99,
+                seed,
                 ..Default::default()
             })
             .unwrap();
@@ -668,6 +687,15 @@ mod tests {
             names.dedup();
             assert_eq!(names.len(), st.planets.len());
             assert!(st.empires[0].ai && st.empires[1].ai || !st.empires[0].ai);
+            for (i, e) in st.empires.iter().enumerate() {
+                assert!(
+                    (0..st.planets.len()).any(|p| st.planets[p].owner.is_none()
+                        && p != st.orion
+                        && st.planets[p].kind >= PlanetType::Minimal
+                        && st.parsecs(e.home, p) <= 3),
+                    "empire {i} has no planet to expand to"
+                );
+            }
         }
     }
 
