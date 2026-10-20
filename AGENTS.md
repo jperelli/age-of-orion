@@ -11,6 +11,7 @@
 ## Conventions
 
 - The core is pure: no I/O, deterministic for a given state (all randomness through `State.rng`).
+- A battle with a human player interrupts the turn (`State.battle`, `State.progress`); tests that end turns with a human use `Game::end_turn_auto`, which lets the computer fight those battles.
 - Everything crossing to the UI is JSON (`View`, `Command`, `Event` with `type` tags in snake_case).
 - Every user-visible string is a text key (`web/public/text/en.json`); themes override in `web/public/themes/<id>/text/en.json`.
 - When porting from 1oom, name the source function in a doc comment (for example "1oom `game_turn_build_eco`").
