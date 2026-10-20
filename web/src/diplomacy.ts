@@ -1,3 +1,4 @@
+import { TUNE, audienceTune, audio } from "./audio";
 // Diplomacy: the empires screen (relations, spies, security), audiences with computer
 // rulers, their messages and proposals, spy successes and the Galactic Council.
 import type { Ctx } from "./ctx";
@@ -170,7 +171,16 @@ function spyBox(ctx: Ctx, r: RelationView, render: () => void): HTMLElement {
 // ------------------------------------------------------------- audience
 
 /** An audience with a computer ruler (1oom `game_audience`). */
-export function audienceDialog(ctx: Ctx, ai: number): Promise<number> {
+export async function audienceDialog(ctx: Ctx, ai: number): Promise<number> {
+  audio.play(audienceTune(ctx.view().empires[ai].race));
+  try {
+    return await audience(ctx, ai);
+  } finally {
+    audio.stopMusic();
+  }
+}
+
+function audience(ctx: Ctx, ai: number): Promise<number> {
   const t = tr(ctx);
   const log = h("div", { class: "audience-log" });
   const menu = h("div", { class: "audience-menu" });
@@ -316,6 +326,17 @@ export function audienceDialog(ctx: Ctx, ai: number): Promise<number> {
 
 /** Shows the computer rulers' messages and proposals one by one and sends the answers. */
 export async function deliverMessages(ctx: Ctx): Promise<void> {
+  const first = ctx.view().messages[0];
+  if (!first) return;
+  audio.play(audienceTune(ctx.view().empires[first[1].from].race));
+  try {
+    await messages(ctx);
+  } finally {
+    audio.stopMusic();
+  }
+}
+
+async function messages(ctx: Ctx): Promise<void> {
   for (let guard = 0; guard < 40; guard++) {
     const v = ctx.view();
     const first = v.messages[0];
@@ -394,6 +415,16 @@ export async function spyChances(ctx: Ctx): Promise<void> {
 
 /** The Galactic Council: vote, then accept or refuse the result (1oom `game_election`). */
 export async function councilDialog(ctx: Ctx): Promise<void> {
+  if (!ctx.view().election) return;
+  audio.play(TUNE.council);
+  try {
+    await council(ctx);
+  } finally {
+    audio.stopMusic();
+  }
+}
+
+async function council(ctx: Ctx): Promise<void> {
   const t = tr(ctx);
   let v = ctx.view();
   let el = v.election;

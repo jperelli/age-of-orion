@@ -50,6 +50,8 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `treaty.*`, `attitude.*`, `trait1.<n>`, `trait2.<n>` | Treaties, attitudes, personalities and objectives |
 | `audience.*`, `diplomacy.*`, `spy.*`, `council.*` | Audience, races, spy and council screens |
 | `monster.crystal`, `monster.amoeba` | Names of the two space monsters |
+| `battle.*` | Battle screen; `battle.special.<kind>` names the specials as they fire |
+| `techinfo.<field>.<n>` | Description of tech `n` of field `0..5` (computer, construction, force field, planetology, propulsion, weapon), shown on the research screen; filled from RESEARCH.LBX in the Classic theme |
 | `error.<code>` | Rejected orders |
 | `names.sites` | List of star/city names (at least 108 for huge maps, otherwise MOO1 names are used) |
 | `names.homes` | Home world name per race (10, in race order) |
@@ -69,6 +71,11 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `caravan` | Transports on the map |
 | `guardian` | The Guardian of Orion |
 | `monster/crystal`, `monster/amoeba` | The two space monsters on the map |
+| `ship/<look>` | A stack in battle (look = banner * 24 + hull * 6 + variant, 144..146 the crystal, amoeba and Guardian), facing right (SHIPS.LBX, SHIPS2.LBX) |
+| `battle/bg/<n>` | Battle background, 0 in a nebula, 1..4 otherwise (SPACE.LBX 0x1a..) |
+| `battle/rock/<n>` | Asteroids (rocks) on the battle grid, 0..3 |
+| `battle/explosion/0` | Explosion |
+| `missile/<kind>/<dir>` | Missiles in flight: kind 0..4 (missile, antimatter, hellfire, proton, plasma), direction 0 up, 1 up-right ... 7 up-left (MISSILE.LBX) |
 | `nebula/<n>` | Nebula of type `n` (0 to 9), drawn at half its size in map units (STARMAP.LBX 0x0f..) |
 | `stargate` | Stargate next to a planet (STARMAP.LBX 0x2d) |
 | `map/background` | Whole map background (stretched to the map size) |
@@ -109,8 +116,11 @@ its own as its techs improve.
 The LBX importer (`aoo import <dir> <out>` or the in-game import) writes:
 
 ```
-manifest.json        format, aliases, every archive and entry, warnings
+manifest.json        format, aliases, looping tunes, every archive and entry, warnings
 gfx/<lbx>/NNN.png    every graphics entry; animations as horizontal sheets (frame width in manifest)
+gfx/<lbx>/NNN-0.png  first frame of animations
+audio/music/NNN.mid  MUSIC.LBX tunes as standard MIDI files (alias music/<n>)
 text/lbx/names.json  NAMES.LBX leader names
-text/lbx/eventmsg.json  EVENTMSG.LBX texts, placeholders as {planet}, {race}, {n1}, {n2}
+text/lbx/eventmsg.json  EVENTMSG.LBX texts, placeholders as {planet}, {race}, {n1}, {n2}, {leader}...
+text/lbx/research.json  RESEARCH.LBX tech descriptions (field * 50 + tech - 1)
 ```

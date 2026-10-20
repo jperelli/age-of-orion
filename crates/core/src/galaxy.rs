@@ -385,6 +385,7 @@ fn empty_planet(x: i32, y: i32) -> Planet {
         unrest: Unrest::Normal,
         unrest_reported: false,
         claim: None,
+        rocks: 0,
     }
 }
 
@@ -689,7 +690,23 @@ fn generate_planets(rng: &mut Rng, w: u16, h: u16, nebulae: &[Nebula]) -> Vec<Pl
         {
             p.special = Special::Artifacts;
         }
-        rng.one_to(100); // asteroid rocks
+        {
+            // Asteroids in battles (1oom game_generate_planets).
+            let mut di = rng.one_to(100) as i32;
+            if p.special == Special::UltraRich {
+                di -= 20;
+            } else if p.special == Special::Rich {
+                di -= 10;
+            }
+            di -= 15 - p.kind as i32;
+            p.rocks = if di < 15 {
+                2
+            } else if di < 40 {
+                1
+            } else {
+                0
+            };
+        }
         p.growth = Growth::Normal;
         if p.kind < PlanetType::Minimal {
             p.growth = Growth::Hostile;
@@ -868,6 +885,8 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         council: Default::default(),
         evn: crate::events::EventState::new(),
         pending: Default::default(),
+        battle: None,
+        progress: None,
     };
 
     let mut races: Vec<Race> = Vec::new();

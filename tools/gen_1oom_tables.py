@@ -241,14 +241,16 @@ def main(root):
     for i, e in enumerate(entries(table(shiptech, "tbl_shiptech_weap"))):
         t = tokens(e)
         (_, _, dmin, dmax, rng, acc, halve, bomb, fade, miss, mul, nfire, nshots, cost, space, power,
-         bio, tech, _v24, _dtbl, _snd, nmiss) = t
+         bio, tech, v24, dtbl, snd, nmiss) = t
+        dt = [val(x) for x in dtbl]
         rs.append("    Weapon { key: \"%s\", damage_min: %d, damage_max: %d, range: %d, extra_acc: %d, "
                   "halve_shield: %s, bomb: %s, damage_fade: %s, miss_type: %d, damage_mul: %d, "
-                  "fire: %d, shots: %d, cost: %d, space: %d, power: %d, bio: %s, tech: %d, streams: %d },"
+                  "fire: %d, shots: %d, cost: %d, space: %d, power: %d, bio: %s, tech: %d, "
+                  "fuel: %d, dtbl: [%s], sound: %d, streams: %d },"
                   % (wkeys[i], val(dmin), val(dmax), val(rng), val(acc), str(bool(val(halve))).lower(),
                      str(bool(val(bomb))).lower(), str(bool(val(fade))).lower(), val(miss), val(mul),
                      val(nfire), val(nshots), val(cost), val(space), val(power), str(bool(val(bio))).lower(),
-                     val(tech), val(nmiss)))
+                     val(tech), val(v24), ", ".join(str(x) for x in dt), val(snd), val(nmiss)))
         if i:
             text["part.weapon.%s" % wkeys[i]] = wnames[i]
             if wextra[i]:

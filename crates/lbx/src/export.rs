@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::gfx::{decode, encode_png, GfxHeader};
+use crate::music;
 use crate::{Archive, Kind, Palette, Table};
 
 /// One file of the generated asset tree.
@@ -23,6 +24,14 @@ pub struct EntryInfo {
     /// Path of the PNG; multi-frame images are horizontal sheets of `gfx.width` frames.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub png: Option<String>,
+    /// First frame alone, for multi-frame images.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub png0: Option<String>,
+    /// MIDI file converted from an XMIDI tune.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub midi: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub loops: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -43,6 +52,8 @@ pub struct Manifest {
     pub aliases: BTreeMap<String, String>,
     pub archives: BTreeMap<String, ArchiveInfo>,
     pub text: Vec<String>,
+    /// Tunes that loop (aliases `music/<n>`).
+    pub looping: Vec<String>,
     pub warnings: Vec<String>,
 }
 
@@ -114,8 +125,25 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
                 bytes: d.len(),
                 gfx: None,
                 png: None,
+                png0: None,
+                midi: None,
+                loops: false,
                 error: None,
             };
+            if music::is_xmid(d) {
+                match music::convert_xmid(d) {
+                    Some((midi, loops)) => {
+                        let path = format!("audio/{dir}/{index:03}.mid");
+                        out.push(AssetFile {
+                            path: path.clone(),
+                            bytes: midi,
+                        });
+                        info.midi = Some(path);
+                        info.loops = loops;
+                    }
+                    None => info.error = Some("invalid XMIDI".into()),
+                }
+            }
             if archive.kind == Kind::Graphics && d.len() >= 0x16 {
                 match decode(d) {
                     Ok(img) => {
@@ -126,6 +154,15 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
                             path: path.clone(),
                             bytes: encode_png(w, h, &px),
                         });
+                        if img.frames.len() > 1 {
+                            let path0 = format!("gfx/{dir}/{index:03}-0.png");
+                            let (w, h) = (img.header.width as u32, img.header.height as u32);
+                            out.push(AssetFile {
+                                path: path0.clone(),
+                                bytes: encode_png(w, h, &img.frame_rgba(0, &pal)),
+                            });
+                            info.png0 = Some(path0);
+                        }
                         info.gfx = Some(img.header);
                         info.png = Some(path);
                     }
@@ -152,13 +189,24 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
     }
 
     let aliases = aliases(&archives);
+    let looping = archives
+        .get("MUSIC")
+        .map(|m| {
+            m.entries
+                .iter()
+                .filter(|e| e.loops)
+                .map(|e| format!("music/{}", e.index))
+                .collect()
+        })
+        .unwrap_or_default();
     let manifest = Manifest {
         format: "age-of-orion-assets",
-        version: 1,
+        version: 2,
         source: "lbx",
         aliases,
         archives,
         text,
+        looping,
         warnings,
     };
     out.push(AssetFile {
@@ -172,10 +220,16 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
 }
 
 fn text_table(name: &str, archive: &Archive) -> Option<Vec<String>> {
-    if archive.kind != Kind::Data || !matches!(name, "NAMES" | "EVENTMSG") {
+    // RESEARCH.LBX entry 2: tech descriptions, field * 50 + tech - 1 (1oom `game_tech_get_descr`).
+    let entry = match name {
+        "NAMES" | "EVENTMSG" => 0,
+        "RESEARCH" => 2,
+        _ => return None,
+    };
+    if archive.kind != Kind::Data && name != "RESEARCH" {
         return None;
     }
-    let strings = Table::parse(archive.entry(0)?).ok()?.strings();
+    let strings = Table::parse(archive.entry(entry)?).ok()?.strings();
     Some(
         strings
             .into_iter()
@@ -188,17 +242,56 @@ fn text_table(name: &str, archive: &Archive) -> Option<Vec<String>> {
     )
 }
 
-/// Semantic names for the images the game UI knows how to use (indices from 1oom
+/// Semantic names for the images and tunes the game UI knows how to use (indices from 1oom
 /// `ui/classic/uiclassic.c`): PLANETS.LBX 0..=34 planet globes, 35..=44 race portraits,
-/// STARMAP.LBX nebulae and the stargate.
+/// STARMAP.LBX nebulae and the stargate, battle pictures from SHIPS/SHIPS2/SPACE/MISSILE.LBX,
+/// MUSIC.LBX tunes.
 fn aliases(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, String> {
     let mut a = BTreeMap::new();
-    let png = |file: &str, i: usize| {
-        archives
-            .get(file)
-            .and_then(|f| f.entries.get(i))
-            .and_then(|e| e.png.clone())
-    };
+    let entry = |file: &str, i: usize| archives.get(file).and_then(|f| f.entries.get(i));
+    let png = |file: &str, i: usize| entry(file, i).and_then(|e| e.png.clone());
+    let png0 = |file: &str, i: usize| entry(file, i).and_then(|e| e.png0.clone().or(e.png.clone()));
+    // Ship looks (1oom `ui_data.gfx.ships`): 0..0x48 SHIPS2.LBX, 0x48..0x90 SHIPS.LBX,
+    // 0x90..0x93 the crystal, the amoeba and the Guardian (SHIPS2.LBX 0x48..).
+    for look in 0..0x93 {
+        let p = match look {
+            0..=0x45 => png0("SHIPS2", look),
+            0x48..=0x8f => png0("SHIPS", look - 0x48),
+            0x90.. => png0("SHIPS2", look - 0x48),
+            _ => None,
+        };
+        if let Some(p) = p {
+            a.insert(format!("ship/{look}"), p);
+        }
+    }
+    for i in 0..5 {
+        if let Some(p) = png0("SPACE", 0x1a + i) {
+            a.insert(format!("battle/bg/{i}"), p);
+        }
+    }
+    for (i, e) in [0x28, 0x29, 0x37, 0x38].into_iter().enumerate() {
+        if let Some(p) = png0("SPACE", e) {
+            a.insert(format!("battle/rock/{i}"), p);
+        }
+    }
+    for i in 0..10 {
+        if let Some(p) = png0("SPACE", 7 + i) {
+            a.insert(format!("battle/explosion/{i}"), p);
+        }
+    }
+    // Missiles (1oom `ui_data.gfx.missile`): 5 kinds x 8 directions.
+    for i in 0..40 {
+        if let Some(p) = png0("MISSILE", i) {
+            a.insert(format!("missile/{}/{}", i / 8, i % 8), p);
+        }
+    }
+    if let Some(m) = archives.get("MUSIC") {
+        for e in &m.entries {
+            if let Some(p) = &e.midi {
+                a.insert(format!("music/{}", e.index), p.clone());
+            }
+        }
+    }
     for i in 0..35 {
         if let Some(p) = png("PLANETS", i) {
             a.insert(format!("planet/{i}"), p);

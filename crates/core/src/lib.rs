@@ -15,6 +15,8 @@
 mod ai;
 mod ai_diplo;
 pub mod audience;
+pub mod battle;
+mod battle_ai;
 mod combat;
 mod commands;
 pub mod council;
@@ -34,7 +36,7 @@ mod types;
 mod view;
 
 pub use audience::{Reply, Talk};
-pub use commands::{Command, CommandError};
+pub use commands::{BattleMode, Command, CommandError};
 pub use design::{DesignStats, ShipDesign};
 pub use galaxy::{NewGameOptions, HOME_NAMES, SHIP_NAMES, STAR_NAMES};
 pub use rng::Rng;
@@ -90,6 +92,11 @@ impl Game {
         if self.st.winner.is_some() {
             return Err(CommandError { code: "game_over" });
         }
+        if self.st.progress.is_some() {
+            return Err(CommandError {
+                code: "battle_in_progress",
+            });
+        }
         audience::talk(&mut self.st, empire, with, talk).map_err(|code| CommandError { code })
     }
 
@@ -103,16 +110,55 @@ impl Game {
     }
 
     /// Lets the AI empires give their orders, then processes the turn.
+    ///
+    /// When a battle with a human interrupts the turn, `view().battle` shows it; fight it
+    /// with `Command::StartBattle` and `Command::Battle`, then call `end_turn` again to
+    /// finish the turn.
     pub fn end_turn(&mut self) {
         if self.st.winner.is_some() {
             return;
         }
-        for i in 0..self.st.empires.len() {
-            if self.st.empires[i].ai {
-                ai::play(&mut self.st, i as u8);
+        if self.st.battle.as_ref().is_some_and(|b| b.winner.is_none()) {
+            return;
+        }
+        if self.st.progress.is_none() {
+            for i in 0..self.st.empires.len() {
+                if self.st.empires[i].ai {
+                    ai::play(&mut self.st, i as u8);
+                }
             }
         }
         turn::process(&mut self.st);
+    }
+
+    /// Ends the turn and lets the computer fight the human players' battles (tools, tests).
+    pub fn end_turn_auto(&mut self) {
+        self.end_turn();
+        for _ in 0..500 {
+            if !self.in_battle() {
+                break;
+            }
+            let human = self
+                .st
+                .battle
+                .as_ref()
+                .filter(|b| b.winner.is_none())
+                .and_then(|b| b.s.iter().find(|s| s.human).map(|s| s.party as u8));
+            if let Some(h) = human {
+                let _ = self.command(
+                    h,
+                    &Command::StartBattle {
+                        mode: BattleMode::Auto,
+                    },
+                );
+            }
+            self.end_turn();
+        }
+    }
+
+    /// Whether the turn waits for a human battle.
+    pub fn in_battle(&self) -> bool {
+        self.st.progress.is_some()
     }
 
     pub fn view(&self, empire: EmpireId) -> View {
@@ -189,7 +235,7 @@ mod tests {
         .unwrap();
         let before = g.state().planets[home].clone();
         for _ in 0..5 {
-            g.end_turn();
+            g.end_turn_auto();
         }
         let after = &g.state().planets[home];
         assert!(after.factories > before.factories);
@@ -209,7 +255,7 @@ mod tests {
         )
         .unwrap();
         for _ in 0..40 {
-            g.end_turn();
+            g.end_turn_auto();
         }
         assert!(g.state().empires[0].tech.level.iter().any(|&l| l > 1));
         assert!(g.state().empires[0]
@@ -249,7 +295,7 @@ mod tests {
         .unwrap();
         assert_eq!(g.state().fleets.len(), 1);
         for _ in 0..6 {
-            g.end_turn();
+            g.end_turn_auto();
         }
         assert_eq!(g.state().planets[target].owner, Some(0));
         assert!(g.state().planets[target].pop >= 2);
@@ -290,13 +336,13 @@ mod tests {
     fn save_and_load_round_trip() {
         let mut g = Game::new(&opts(6)).unwrap();
         for _ in 0..3 {
-            g.end_turn();
+            g.end_turn_auto();
         }
         let json = g.save();
         let mut h = Game::load(&json).unwrap();
         assert_eq!(g, h);
-        g.end_turn();
-        h.end_turn();
+        g.end_turn_auto();
+        h.end_turn_auto();
         assert_eq!(g, h, "deterministic after reload");
     }
 
@@ -312,7 +358,7 @@ mod tests {
             })
             .unwrap();
             for _ in 0..400 {
-                g.end_turn();
+                g.end_turn_auto();
                 if g.state().winner.is_some() {
                     break;
                 }
@@ -353,7 +399,7 @@ mod tests {
             .is_ok());
         g.st.planets[home].bc_to_ship = 5000;
         g.st.planets[home].sliders = [100, 0, 0, 0, 0];
-        g.end_turn();
+        g.end_turn_auto();
         assert!(g.st.planets[home].stargate);
         g.st.planets[far].stargate = true;
         let mut ships = vec![0; 6];
@@ -368,7 +414,7 @@ mod tests {
         )
         .unwrap();
         assert!(g.st.fleets.iter().any(|f| f.owner == 0 && f.gate));
-        g.end_turn();
+        g.end_turn_auto();
         assert_eq!(g.st.empires[0].orbit[far][0], 1);
     }
 
@@ -401,7 +447,7 @@ mod tests {
             },
         )
         .unwrap();
-        g.end_turn();
+        g.end_turn_auto();
         assert!(g
             .st
             .fleets
@@ -508,7 +554,7 @@ mod tests {
         )
         .unwrap();
         for _ in 0..6 {
-            g.end_turn();
+            g.end_turn_auto();
         }
         let p = &g.st.planets[home];
         assert_eq!(p.growth, Growth::Fertile);
@@ -567,7 +613,7 @@ mod tests {
         .unwrap();
         let mut kinds = std::collections::BTreeSet::new();
         for _ in 0..150 {
-            g.end_turn();
+            g.end_turn_auto();
             for (_, m) in g.view(0).messages {
                 kinds.insert(m.kind);
             }
@@ -593,7 +639,15 @@ mod tests {
         assert_eq!(g.st.planets[target].bases, bases);
         diplo::set_treaty(&mut g.st, 0, 1, diplo::Treaty::War);
         g.st.planets[target].bases = 3;
-        combat::battles(&mut g.st);
+        assert!(combat::battles(&mut g.st), "the human fights on the grid");
+        g.command(
+            0,
+            &Command::StartBattle {
+                mode: BattleMode::Auto,
+            },
+        )
+        .unwrap();
+        assert!(g.st.battle.as_ref().unwrap().winner.is_some());
         assert!(g
             .st
             .events
@@ -783,7 +837,7 @@ mod tests {
                 let _ = g.command(0, &Command::Vote { candidate: None });
                 let _ = g.command(0, &Command::AcceptCouncil { accept: false });
             }
-            g.end_turn();
+            g.end_turn_auto();
             if g.state().winner.is_some() || !g.state().empires[0].alive {
                 break;
             }

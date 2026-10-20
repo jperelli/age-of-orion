@@ -1,102 +1,37 @@
 //! Space battles, orbital bombing, transports and ground combat.
 //!
-//! MOO1 fights battles tactically on a grid (1oom `game_battle_human.c`, milestone 0.4).
-//! Until then battles are resolved in rounds where every stack fires its weapons with the
-//! 1oom to-hit and damage formula (`game_battle_attack`): computer level against defense,
-//! shields absorbing damage, missiles against jammers and anti-missile specials.
+//! Battles follow 1oom `game_battle_handle_all`: two parties at a time per planet. A human
+//! fights on the tactical grid (`battle.rs`, the turn pauses until the battle is over);
+//! computers resolve their battles from the strength of both sides.
 //! Bombing (`game_bomb.c`), shooting at transports (`game_turn_transport_shoot`) and
 //! ground combat (`game_ground.c`) are direct ports.
 
+use crate::battle::{self, Battle};
 use crate::data::*;
-use crate::data_types::Weapon;
-use crate::design::*;
+use crate::design::WEAPON_SLOTS;
 use crate::diplo::{self, Treaty};
 use crate::events::{self, MonsterKind};
 use crate::rng::Rng;
 use crate::state::*;
 use crate::types::*;
 
+/// Battle parties: empires, or -1 the Guardian, -2 the crystal, -3 the amoeba.
 const GUARDIAN: i32 = -1;
-/// Side ids of the monsters: -2 the crystal, -3 the amoeba (at most one of each exists).
-const MONSTER0: i32 = -2;
 
-fn monster_id(kind: MonsterKind) -> i32 {
+fn monster_party(kind: MonsterKind) -> i32 {
     match kind {
-        MonsterKind::Crystal => MONSTER0,
-        MonsterKind::Amoeba => MONSTER0 - 1,
+        MonsterKind::Crystal => -2,
+        MonsterKind::Amoeba => -3,
     }
 }
 
-/// 1oom `tbl_monster[MONSTER_GUARDIAN]`, per difficulty:
-/// hit points, defense (= missile defense), shield absorb, weapon counts.
-const GUARDIAN_STATS: [(u32, i32, i32, [u32; 4]); 5] = [
-    (2000, 1, 5, [5, 1, 5, 6]),
-    (4000, 3, 6, [25, 1, 15, 9]),
-    (6000, 5, 7, [45, 1, 25, 12]),
-    (8000, 7, 8, [65, 1, 35, 15]),
-    (10000, 9, 9, [85, 1, 45, 18]),
-];
-/// Scatter Pack X (5), Death Ray, Stellar Converter, Plasma Torpedo.
-const GUARDIAN_WEAPONS: [usize; 4] = [56, 62, 58, 60];
-
-#[derive(Debug, Clone)]
-struct Arm {
-    kind: usize,
-    count: u32,
-    /// Shots left in the battle, -1 = unlimited.
-    shots: i32,
-}
-
-#[derive(Debug, Clone)]
-struct Stack {
-    /// Design index; `None` for missile bases and the guardian.
-    design: Option<usize>,
-    count: u32,
-    hp: u32,
-    hp_loss: u32,
-    comp_level: i32,
-    defense: i32,
-    missile_defense: i32,
-    absorb: i32,
-    missile_shield: i32,
-    flags: u16,
-    arms: Vec<Arm>,
-    /// Missile bases: beams and torpedoes do half damage (the planet absorbs it).
-    planet: bool,
-}
-
-impl Stack {
-    fn armed(&self) -> bool {
-        self.count > 0
-            && self
-                .arms
-                .iter()
-                .any(|a| a.count > 0 && !WEAPONS[a.kind].bomb)
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Side {
-    id: i32,
-    stacks: Vec<Stack>,
-    start_ships: u32,
-}
-
-impl Side {
-    fn alive(&self) -> bool {
-        self.stacks.iter().any(|s| s.count > 0)
-    }
-
-    fn armed(&self) -> bool {
-        self.stacks.iter().any(Stack::armed)
-    }
-
-    fn ships(&self) -> u32 {
-        self.stacks
-            .iter()
-            .filter(|s| s.design.is_some())
-            .map(|s| s.count)
-            .sum()
+/// 1oom party order: empires first, then crystal, amoeba, Guardian.
+fn party_order(p: i32) -> i32 {
+    match p {
+        -2 => 100,
+        -3 => 101,
+        -1 => 102,
+        e => e,
     }
 }
 
@@ -114,326 +49,11 @@ pub fn hostile_armed_at(st: &State, planet: PlanetId, empire: EmpireId) -> bool 
     })
 }
 
-/// Whether two battle sides fight each other.
-fn sides_hostile(st: &State, a: i32, b: i32, planet: PlanetId) -> bool {
-    if a == b {
-        return false;
-    }
-    if a < 0 || b < 0 {
-        return true;
-    }
-    diplo::hostile_at(st, a as u8, b as u8, planet)
-}
-
 fn armed_ships(e: &Empire, planet: PlanetId) -> bool {
     e.orbit[planet]
         .iter()
         .zip(&e.designs)
         .any(|(&c, d)| c > 0 && d.armed())
-}
-
-fn ship_stack(e: &Empire, d: usize, count: u32, nebula: bool) -> Stack {
-    let sd = &e.designs[d];
-    let extra_man = sd
-        .specials
-        .iter()
-        .map(|&s| SPECIALS[s as usize].extra_man as i32)
-        .max()
-        .unwrap_or(0);
-    let mut comp_level =
-        COMPS[sd.comp as usize].level as i32 + i32::from(sd.has_flag(FLAG_SCANNER));
-    let mut defense = sd.man as i32 + HULLS[sd.hull as usize].defense as i32 + extra_man + 1;
-    let mut missile_defense = defense + JAMMERS[sd.jammer as usize].level as i32;
-    if e.race == Race::Mrrshan {
-        comp_level += 4;
-    }
-    if e.race == Race::Alkari {
-        defense += 3;
-        missile_defense += 3;
-    }
-    Stack {
-        design: Some(d),
-        count,
-        hp: sd.hp.max(1),
-        hp_loss: 0,
-        comp_level,
-        defense,
-        missile_defense,
-        absorb: if nebula {
-            0
-        } else {
-            SHIELDS[sd.shield as usize].absorb as i32
-        },
-        missile_shield: sd
-            .specials
-            .iter()
-            .map(|&s| SPECIALS[s as usize].missile_shield as i32)
-            .max()
-            .unwrap_or(0),
-        flags: sd
-            .specials
-            .iter()
-            .fold(0, |m, &s| m | SPECIALS[s as usize].flags),
-        arms: (0..WEAPON_SLOTS)
-            .filter(|&i| sd.weapons[i] != 0 && sd.weapon_counts[i] > 0)
-            .map(|i| Arm {
-                kind: sd.weapons[i] as usize,
-                count: sd.weapon_counts[i] as u32,
-                shots: WEAPONS[sd.weapons[i] as usize].shots as i32,
-            })
-            .collect(),
-        planet: false,
-    }
-}
-
-/// 1oom `game_parsed_from_planet`: the missile bases of a colony.
-fn base_stack(st: &State, owner: EmpireId, planet: PlanetId) -> Stack {
-    let e = &st.empires[owner as usize];
-    let p = &st.planets[planet];
-    let (shield, comp, jammer) = st.base_parts(owner);
-    let mut comp_level = comp as i32 + 1;
-    if e.race == Race::Mrrshan {
-        comp_level += 4;
-    }
-    let a = e.abilities();
-    let absorb = if p.nebula {
-        0
-    } else {
-        SHIELDS[shield].absorb as i32 + p.shield
-    };
-    Stack {
-        design: None,
-        count: p.bases as u32,
-        hp: st.rules.base_hp[a.armor_tier.min(6)],
-        hp_loss: 0,
-        comp_level,
-        defense: 1,
-        missile_defense: jammer as i32 + 1,
-        absorb,
-        missile_shield: 0,
-        flags: FLAG_SCANNER,
-        arms: vec![
-            Arm {
-                kind: st.base_weapon(owner),
-                count: 3,
-                shots: -1,
-            },
-            Arm {
-                kind: st.base_weapon_2(owner),
-                count: 3,
-                shots: -1,
-            },
-        ],
-        planet: true,
-    }
-}
-
-fn guardian_stack(st: &State) -> Stack {
-    let (hp, def, absorb, counts) = GUARDIAN_STATS[st.difficulty as usize];
-    Stack {
-        design: None,
-        count: 1,
-        hp,
-        hp_loss: 0,
-        comp_level: COMPS[10].level as i32,
-        defense: def,
-        missile_defense: def,
-        absorb,
-        missile_shield: 100,
-        flags: 0,
-        arms: GUARDIAN_WEAPONS
-            .iter()
-            .zip(counts)
-            .map(|(&kind, count)| Arm {
-                kind,
-                count,
-                shots: WEAPONS[kind].shots as i32,
-            })
-            .collect(),
-        planet: false,
-    }
-}
-
-fn build_sides(st: &State, planet: PlanetId) -> Vec<Side> {
-    let p = &st.planets[planet];
-    let mut sides = Vec::new();
-    for (ei, e) in st.empires.iter().enumerate() {
-        let bases = p.owner == Some(ei as u8) && p.bases > 0;
-        let ships = e.orbit[planet].iter().any(|&c| c > 0);
-        if !bases && !ships {
-            continue;
-        }
-        let mut stacks: Vec<Stack> = e.orbit[planet]
-            .iter()
-            .enumerate()
-            .filter(|(d, &c)| c > 0 && *d < e.designs.len())
-            .map(|(d, &c)| ship_stack(e, d, c, p.nebula))
-            .collect();
-        if bases {
-            stacks.push(base_stack(st, ei as u8, planet));
-        }
-        let start_ships = stacks
-            .iter()
-            .filter(|s| s.design.is_some())
-            .map(|s| s.count)
-            .sum();
-        sides.push(Side {
-            id: ei as i32,
-            stacks,
-            start_ships,
-        });
-    }
-    if planet == st.orion && st.guardian {
-        sides.push(Side {
-            id: GUARDIAN,
-            stacks: vec![guardian_stack(st)],
-            start_ships: 0,
-        });
-    }
-    if let Some(mi) = events::monster_at(st, planet) {
-        sides.push(Side {
-            id: monster_id(st.evn.monsters[mi].kind),
-            stacks: vec![monster_stack(st, mi)],
-            start_ships: 0,
-        });
-    }
-    sides
-}
-
-/// 1oom `tbl_monster`: the crystal (crystal ray) and the amoeba (amoeba stream).
-fn monster_stack(st: &State, mi: usize) -> Stack {
-    let m = &st.evn.monsters[mi];
-    let (_, def, absorb) = events::monster_stats(m.kind, st.difficulty);
-    let (kind, count, missile_shield) = match m.kind {
-        MonsterKind::Crystal => (61, 10, 100),
-        MonsterKind::Amoeba => (63, 1, 0),
-    };
-    Stack {
-        design: None,
-        count: 1,
-        hp: m.hp.max(1),
-        hp_loss: 0,
-        comp_level: COMPS[10].level as i32,
-        defense: def,
-        missile_defense: def,
-        absorb,
-        missile_shield,
-        flags: 0,
-        arms: vec![Arm {
-            kind,
-            count,
-            shots: -1,
-        }],
-        planet: false,
-    }
-}
-
-/// One weapon of a stack firing at a target stack (1oom `game_battle_attack`).
-fn fire(rng: &mut Rng, w: &Weapon, volleys: u32, attacker: &Stack, target: &mut Stack) {
-    let missile = w.is_missile();
-    let defense = if missile {
-        target.missile_defense
-    } else {
-        target.defense
-    };
-    let mut miss = 50 - (attacker.comp_level - defense) * 10 - w.extra_acc as i32 * 10;
-    if target.flags & FLAG_CLOAK != 0 {
-        miss += 50;
-    }
-    let miss = miss.min(95);
-    let range = (w.damage_max - w.damage_min) as i32;
-    let damage_div = if target.planet && (w.miss_type > 0 || range != 0) {
-        2
-    } else {
-        1
-    };
-    let mut absorb_div =
-        1 + i32::from(w.halve_shield) + i32::from(attacker.flags & FLAG_ORACLE != 0);
-    if absorb_div == 3 {
-        absorb_div = 4;
-    }
-    let streaming = !missile && w.streams > 0;
-    let warheads = if missile { w.streams.max(1) as u32 } else { 1 };
-    let mut mul1 = volleys * w.fire.max(1) as u32 * warheads;
-    let mut mul2: u32 = 1;
-    while mul1 > 1000 {
-        mul1 /= 2;
-        mul2 *= 2;
-    }
-    let hp = target.hp.max(1);
-    for _ in 0..mul1 {
-        if target.count == 0 {
-            break;
-        }
-        let r = rng.one_to(100) as i32;
-        if r < miss {
-            continue;
-        }
-        if missile && target.missile_shield > 0 && rng.one_to(100) as i32 <= target.missile_shield {
-            continue;
-        }
-        let mut dmg = ((r - miss) * 2 * range) / (100 - miss).max(1);
-        dmg = (dmg + 1) / 2 + w.damage_min as i32;
-        dmg /= damage_div;
-        dmg -= target.absorb / absorb_div;
-        dmg *= w.damage_mul as i32 * mul2 as i32;
-        if target.flags & FLAG_DISPLACEMENT != 0 && rng.one_to(100) < 35 {
-            dmg = 0;
-        }
-        if dmg <= 0 {
-            continue;
-        }
-        target.hp_loss += dmg as u32;
-        let mut k = 0;
-        while (streaming || k < mul2) && target.hp_loss >= hp && target.count > 0 {
-            target.count -= 1;
-            target.hp_loss -= hp;
-            k += 1;
-        }
-        target.hp_loss %= hp;
-    }
-}
-
-fn round(rng: &mut Rng, sides: &mut [Side], hostile: &[Vec<bool>]) {
-    let mut shots: Vec<(usize, usize, usize, u32)> = Vec::new();
-    for (si, side) in sides.iter_mut().enumerate() {
-        for (ki, stack) in side.stacks.iter_mut().enumerate() {
-            if stack.count == 0 {
-                continue;
-            }
-            for (ai, arm) in stack.arms.iter_mut().enumerate() {
-                let w = &WEAPONS[arm.kind];
-                if arm.count == 0 || w.bomb || arm.shots == 0 {
-                    continue;
-                }
-                if arm.shots > 0 {
-                    arm.shots -= 1;
-                }
-                shots.push((si, ki, ai, stack.count * arm.count));
-            }
-        }
-    }
-    for (si, ki, ai, volleys) in shots {
-        let targets: Vec<(usize, usize)> = (0..sides.len())
-            .filter(|&t| t != si && hostile[si][t])
-            .flat_map(|t| {
-                sides[t]
-                    .stacks
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, s)| s.count > 0)
-                    .map(move |(k, _)| (t, k))
-            })
-            .collect();
-        if targets.is_empty() || sides[si].stacks[ki].count == 0 {
-            continue;
-        }
-        let (ts, tk) = targets[rng.below(targets.len() as u16) as usize];
-        let attacker = sides[si].stacks[ki].clone();
-        let w = WEAPONS[attacker.arms[ai].kind];
-        // Ships destroyed earlier this round still fire: rounds are simultaneous.
-        fire(rng, &w, volleys, &attacker, &mut sides[ts].stacks[tk]);
-    }
 }
 
 fn participants(st: &State, planet: PlanetId, ids: &[i32]) -> Vec<EmpireId> {
@@ -477,159 +97,320 @@ fn retreat(st: &mut State, empire: EmpireId, from: PlanetId) {
     }
 }
 
-/// "Apparent force" lost per side (1oom: hull size + 1 per ship).
-fn force_lost(st: &State, side: &Side, before: &[u32]) -> i32 {
-    if side.id < 0 {
-        return 0;
+/// Parties with forces at a planet (1oom `tbl_have_force`): an owner with missile bases,
+/// empires with ships, monsters there.
+fn forces(st: &State, planet: PlanetId) -> Vec<i32> {
+    let p = &st.planets[planet];
+    let mut v: Vec<i32> = (0..st.empires.len())
+        .filter(|&i| {
+            (p.owner == Some(i as u8) && p.bases > 0)
+                || st.empires[i].orbit[planet].iter().any(|&c| c > 0)
+        })
+        .map(|i| i as i32)
+        .collect();
+    if let Some(mi) = events::monster_at(st, planet) {
+        v.push(monster_party(st.evn.monsters[mi].kind));
     }
-    let e = &st.empires[side.id as usize];
-    side.stacks
-        .iter()
-        .zip(before)
-        .filter_map(|(s, &b)| s.design.map(|d| (d, b.saturating_sub(s.count))))
-        .map(|(d, lost)| (e.designs[d].hull as i32 + 1) * lost as i32)
-        .sum()
+    if planet == st.orion && st.guardian {
+        v.push(GUARDIAN);
+    }
+    v.sort_by_key(|&p| party_order(p));
+    v
 }
 
-fn fight(st: &mut State, planet: PlanetId, sides: &mut [Side]) {
-    let bases_before = st.planets[planet].bases;
-    let counts_before: Vec<Vec<u32>> = sides
-        .iter()
-        .map(|s| s.stacks.iter().map(|k| k.count).collect())
-        .collect();
-    let n = sides.len();
-    let hostile: Vec<Vec<bool>> = (0..n)
-        .map(|a| {
-            (0..n)
-                .map(|b| sides_hostile(st, sides[a].id, sides[b].id, planet))
-                .collect()
-        })
-        .collect();
-    let active = |sides: &[Side]| {
-        (0..n).any(|a| sides[a].armed() && (0..n).any(|b| hostile[a][b] && sides[b].alive()))
-    };
-    for _ in 0..st.rules.combat_rounds {
-        if !active(sides) {
-            break;
-        }
-        round(&mut st.rng, sides, &hostile);
-    }
-    // Sides still facing an armed enemy: a draw keeps everyone, otherwise the beaten retreat.
-    let armed: Vec<bool> = sides.iter().map(Side::armed).collect();
-    let contested =
-        (0..n).any(|a| armed[a] && (0..n).any(|b| armed[b] && hostile[a][b] && sides[b].alive()));
-    let winner_ids: Vec<i32> = (0..n).filter(|&a| armed[a]).map(|a| sides[a].id).collect();
-    let winner = if contested || winner_ids.is_empty() {
-        None
-    } else {
-        winner_ids.first().copied()
-    };
-    let mut losses = Vec::new();
-    for s in sides.iter() {
-        losses.push(s.start_ships - s.ships());
-        if s.id == GUARDIAN {
-            if s.stacks[0].count == 0 {
-                st.guardian = false;
-                if let Some(w) = winner.filter(|&w| w >= 0) {
-                    st.push_event(
-                        vec![],
-                        EventKind::GuardianDefeated {
-                            planet,
-                            by: w as u8,
-                        },
-                    );
-                    crate::tech::orion_loot(st, w as u8);
+fn is_human(st: &State, party: i32) -> bool {
+    party >= 0 && !st.empires[party as usize].ai
+}
+
+/// 1oom `game_battle_handle_all`: battles at every planet, in turn, two parties at a time.
+/// Returns true when a battle with a human player is waiting in `st.battle`.
+pub fn battles(st: &mut State) -> bool {
+    let (start, mut skipped) = st
+        .progress
+        .as_ref()
+        .map(|p| (p.battle_planet, p.skipped.clone()))
+        .unwrap_or((0, Vec::new()));
+    for pli in start..st.planets.len() {
+        let mut guard = 0;
+        loop {
+            guard += 1;
+            if guard > 50 {
+                break;
+            }
+            let f: Vec<i32> = forces(st, pli)
+                .into_iter()
+                .filter(|p| !skipped.contains(p))
+                .collect();
+            if f.len() < 2 {
+                break;
+            }
+            let owner = st.planets[pli].owner.map(|o| o as i32);
+            let def = match owner {
+                Some(o) if f.contains(&o) => o,
+                _ => f[0],
+            };
+            if def < 0 {
+                break;
+            }
+            let att = *f.iter().find(|&&p| p != def).expect("two parties");
+            if att >= 0 {
+                let t = diplo::treaty(st, def as u8, att as u8);
+                if t == Treaty::Alliance || (t == Treaty::NonAggression && Some(def) != owner) {
+                    skipped.push(att);
+                    continue;
                 }
             }
+            if !is_human(st, def) && !is_human(st, att) {
+                resolve_ai(st, att, def, pli);
+                continue;
+            }
+            if att >= 0 && !is_human(st, att) && diplo::rel(st, def as u8, att as u8).ceasefire > 0
+            {
+                skipped.push(att);
+                retreat(st, att as u8, pli);
+                continue;
+            }
+            let (l, r) = if is_human(st, def) {
+                (def, att)
+            } else {
+                (att, def)
+            };
+            let bt = Battle::new(st, r, l, pli);
+            st.battle = Some(Box::new(bt));
+            if let Some(p) = st.progress.as_mut() {
+                p.battle_planet = pli;
+                p.skipped = skipped;
+            }
+            return true;
+        }
+        skipped.clear();
+    }
+    if let Some(p) = st.progress.as_mut() {
+        p.battle_planet = st.planets.len();
+        p.skipped.clear();
+    }
+    false
+}
+
+/// 1oom `game_ai_classic_battle_ai_ai_get_weights`.
+fn weights(st: &State, party: i32) -> Vec<i64> {
+    if party < 0 {
+        return Vec::new();
+    }
+    const HULL_W: [i64; 4] = [1, 5, 25, 125];
+    let e = &st.empires[party as usize];
+    e.designs
+        .iter()
+        .map(|sd| {
+            let mut w = sd.shield as i64 * 5
+                + sd.comp as i64 * 5
+                + sd.weapons[0] as i64
+                + sd.armor as i64 * 10;
+            w += sd.specials.iter().map(|&s| s as i64 * 2).sum::<i64>();
+            w += e.tech.level[FIELD_CONSTRUCTION] as i64 / 2;
+            if matches!(e.race, Race::Mrrshan | Race::Alkari) {
+                w += 20;
+            }
+            w * HULL_W[sd.hull.min(3) as usize]
+        })
+        .collect()
+}
+
+/// 1oom `game_ai_classic_battle_ai_ai_resolve`: computer against computer (or a monster),
+/// resolved from the strength of both sides, then `game_battle_finish` and `_post`.
+fn resolve_ai(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) {
+    let mut bt = Battle::new(st, party_r, party_l, planet);
+    let wl_tbl = weights(st, party_l);
+    let wr_tbl = weights(st, party_r);
+    let force = |st: &State, party: i32, tbl: &[i64]| -> i64 {
+        if party < 0 {
+            return if party == GUARDIAN { 100_000 } else { 30_000 };
+        }
+        st.empires[party as usize].orbit[planet]
+            .iter()
+            .enumerate()
+            .map(|(d, &n)| n as i64 * tbl.get(d).copied().unwrap_or(0))
+            .sum()
+    };
+    let base = |st: &State, party: i32| -> i64 {
+        let t = &st.empires[party as usize].tech.level;
+        (t[FIELD_WEAPON] + t[FIELD_FORCE_FIELD]) as i64
+    };
+    let mut wl = force(st, party_l, &wl_tbl);
+    let mut wr = force(st, party_r, &wr_tbl);
+    match bt.planet_side {
+        battle::Side::L if party_l >= 0 => wl += base(st, party_l) * 75 * bt.bases as i64,
+        battle::Side::R if party_r >= 0 => wr += base(st, party_r) * 75 * bt.bases as i64,
+        _ => {}
+    }
+    let (mut wl2, mut wr2) = (wl, wr);
+    while wl2 > 0 && wr2 > 0 {
+        let v = (st.rng.one_to(10) as i64 * wl / 100).max(1);
+        wr2 -= v;
+        let v = (st.rng.one_to(10) as i64 * wr / 100).max(1);
+        wl2 -= v;
+    }
+    let (wl2, wr2) = (wl2.max(0), wr2.max(0));
+    let r_won = wr2 > 0;
+    for (k, party, ws, ws2) in [(0, party_l, wl, wl2), (1, party_r, wr, wr2)] {
+        if party < 0 {
             continue;
         }
-        if s.id <= MONSTER0 {
-            let killer = winner
-                .filter(|&w| w >= 0)
-                .or(sides.iter().map(|o| o.id).find(|&id| id >= 0))
-                .map(|w| w as u8);
+        let orbit = st.empires[party as usize].orbit[planet].clone();
+        bt.s[k].ships = orbit
+            .iter()
+            .map(|&n| {
+                if ws == 0 {
+                    0
+                } else {
+                    (n as i64 * ws2 / ws) as u32
+                }
+            })
+            .collect();
+    }
+    bt.bases = match bt.planet_side {
+        battle::Side::L if wl > 0 => (bt.bases as i64 * wl2 / wl) as i32,
+        battle::Side::R if wr > 0 => (bt.bases as i64 * wr2 / wr) as i32,
+        _ => 0,
+    };
+    bt.winner = Some(if r_won {
+        battle::Side::R
+    } else {
+        battle::Side::L
+    });
+    apply(st, &bt);
+}
+
+/// 1oom `game_battle_finish` and `game_battle_post`: puts the result of a finished battle
+/// into the game.
+pub fn apply(st: &mut State, bt: &Battle) {
+    let planet = bt.planet;
+    let winner = bt.winner.unwrap_or(battle::Side::R);
+    let bases_before = st.planets[planet].bases;
+    if bt.planet_side != battle::Side::None {
+        let p = &mut st.planets[planet];
+        p.max_pop = (p.max_pop - bt.biodamage).max(10.min(p.max_pop));
+        p.bases = bt.bases.max(0);
+        if p.pop == 0 && bt.s[1].party >= 0 {
+            destroy_colony(st, planet);
+        }
+    }
+    let mut losses = Vec::new();
+    let mut lost_force = [0i32; 2];
+    for k in 0..2 {
+        let party = bt.s[k].party;
+        if party < 0 {
+            let dead = (k == 1 && winner == battle::Side::L) as u32;
+            losses.push(dead);
+            continue;
+        }
+        let e = party as usize;
+        let mut lost = 0;
+        let mut remaining_force = 0;
+        for d in 0..st.empires[e].designs.len() {
+            let before = st.empires[e].orbit[planet][d];
+            if before == 0 {
+                continue;
+            }
+            let after = bt.s[k].ships.get(d).copied().unwrap_or(0).min(before);
+            lost += before - after;
+            remaining_force += (st.empires[e].designs[d].hull as i32 + 1) * after as i32;
+            st.empires[e].orbit[planet][d] = after;
+        }
+        lost_force[k] = bt.s[k].apparent_force - remaining_force;
+        losses.push(lost);
+    }
+    let (pl, pr) = (bt.s[0].party, bt.s[1].party);
+    if pl >= 0 && pr >= 0 {
+        diplo::battle_finish(
+            st,
+            pl as u8,
+            pr as u8,
+            0,
+            lost_force[0],
+            bt.biodamage,
+            lost_force[1],
+            planet,
+        );
+    }
+    let (loser, win) = if winner == battle::Side::R {
+        (pl, pr)
+    } else {
+        (pr, pl)
+    };
+    match loser {
+        GUARDIAN => {
+            st.guardian = false;
+            if win >= 0 {
+                st.push_event(
+                    vec![],
+                    EventKind::GuardianDefeated {
+                        planet,
+                        by: win as u8,
+                    },
+                );
+                crate::tech::orion_loot(st, win as u8);
+            }
+        }
+        -2 | -3 => {
             if let Some(m) = st
                 .evn
                 .monsters
                 .iter_mut()
-                .find(|m| monster_id(m.kind) == s.id)
+                .find(|m| monster_party(m.kind) == loser && m.dest == planet)
             {
-                if s.stacks[0].count == 0 {
-                    m.killer = killer;
-                } else {
-                    m.hp = s.stacks[0].hp;
-                }
+                m.killer = (win >= 0).then_some(win as u8);
             }
-            continue;
         }
-        let e = s.id as usize;
-        st.empires[e].orbit[planet].iter_mut().for_each(|c| *c = 0);
-        for stack in &s.stacks {
-            match stack.design {
-                Some(d) => st.empires[e].orbit[planet][d] = stack.count,
-                None => st.planets[planet].bases = stack.count as i32,
+        e => retreat(st, e as u8, planet),
+    }
+    // A wounded monster keeps its damage.
+    if pr <= -2 && winner == battle::Side::R {
+        if let Some(it) = bt
+            .item
+            .iter()
+            .find(|i| i.side == battle::Side::R && i.design.is_none())
+        {
+            if let Some(m) = st
+                .evn
+                .monsters
+                .iter_mut()
+                .find(|m| monster_party(m.kind) == pr && m.dest == planet)
+            {
+                m.hp = (it.hp1 * it.num.max(1) - it.hploss).max(1) as u32;
             }
         }
     }
-    if !contested {
-        for a in 0..n {
-            let id = sides[a].id;
-            if id >= 0 && !armed[a] && (0..n).any(|b| armed[b] && hostile[a][b]) {
-                retreat(st, id as u8, planet);
-            }
-        }
-    }
-    // Relations (1oom game_diplo_battle_finish) between the owner, or the first side, and the others.
-    let empire_sides: Vec<usize> = (0..n).filter(|&a| sides[a].id >= 0).collect();
-    let owner = st.planets[planet].owner.map(|o| o as i32);
-    let def_i = empire_sides
-        .iter()
-        .copied()
-        .find(|&a| Some(sides[a].id) == owner)
-        .or(empire_sides.first().copied());
-    if let Some(d) = def_i {
-        for &a in &empire_sides {
-            if a != d && hostile[a][d] {
-                let app_def = force_lost(st, &sides[d], &counts_before[d]);
-                let app_att = force_lost(st, &sides[a], &counts_before[a]);
-                diplo::battle_finish(
-                    st,
-                    sides[d].id as u8,
-                    sides[a].id as u8,
-                    0,
-                    app_def,
-                    0,
-                    app_att,
-                    planet,
-                );
-            }
-        }
-    }
-    let ids: Vec<i32> = sides.iter().map(|s| s.id).collect();
+    let sides = vec![pl, pr];
     st.push_event(
-        participants(st, planet, &ids),
+        participants(st, planet, &sides),
         EventKind::Battle {
             planet,
-            sides: ids,
-            winner,
+            sides,
+            winner: Some(win),
             losses,
             bases_lost: bases_before - st.planets[planet].bases,
         },
     );
 }
 
-/// Resolves every planet where hostile sides meet and one of them is armed.
-pub fn battles(st: &mut State) {
-    for planet in 0..st.planets.len() {
-        let mut sides = build_sides(st, planet);
-        let n = sides.len();
-        let any = (0..n).any(|a| {
-            sides[a].armed() && (0..n).any(|b| sides_hostile(st, sides[a].id, sides[b].id, planet))
-        });
-        if n >= 2 && any {
-            fight(st, planet, &mut sides);
+/// Ends the current human battle once it is over: applies its result.
+pub fn finish_battle(st: &mut State) {
+    let Some(mut bt) = st.battle.take() else {
+        return;
+    };
+    if bt.winner.is_some() && !bt.applied {
+        let p = &mut st.planets[bt.planet];
+        p.pop = bt.pop;
+        p.factories = bt.fact;
+        bt.bases = bt.item[0].num.max(0);
+        if bt.planet_side == battle::Side::None {
+            bt.bases = st.planets[bt.planet].bases;
         }
+        apply(st, &bt);
+        bt.applied = true;
     }
+    st.battle = Some(bt);
 }
 
 /// 1oom `game_turn_bomb_damage`: (population killed, factories destroyed, bio damage).
@@ -1044,23 +825,6 @@ fn invade(st: &mut State, planet: PlanetId, att_e: EmpireId, def: EmpireId, att:
 mod tests {
     use super::*;
 
-    fn stack(count: u32, hp: u32, comp: i32, defense: i32, absorb: i32) -> Stack {
-        Stack {
-            design: Some(0),
-            count,
-            hp,
-            hp_loss: 0,
-            comp_level: comp,
-            defense,
-            missile_defense: defense,
-            absorb,
-            missile_shield: 0,
-            flags: 0,
-            arms: vec![],
-            planet: false,
-        }
-    }
-
     #[test]
     fn ground_battle_bonus_matters() {
         let mut rng = Rng::new(3);
@@ -1068,28 +832,5 @@ mod tests {
             .filter(|_| ground_battle(&mut rng, 20, 30, 20, 0).1 == 0)
             .count();
         assert!(wins > 150, "{wins}");
-    }
-
-    #[test]
-    fn shields_absorb_lasers() {
-        let laser = WEAPONS[2];
-        let mut rng = Rng::new(5);
-        let attacker = stack(100, 3, 1, 1, 0);
-        let mut unshielded = stack(1000, 3, 1, 1, 0);
-        fire(&mut rng, &laser, 100, &attacker, &mut unshielded);
-        assert!(unshielded.count < 1000);
-        let mut shielded = stack(1000, 3, 1, 1, 5);
-        fire(&mut rng, &laser, 100, &attacker, &mut shielded);
-        assert_eq!(shielded.count, 1000, "laser 1-4 cannot pierce absorb 5");
-    }
-
-    #[test]
-    fn better_computers_hit_more() {
-        let laser = WEAPONS[2];
-        let (mut a, mut b) = (stack(200, 100, 1, 1, 0), stack(200, 100, 1, 1, 0));
-        let mut rng = Rng::new(9);
-        fire(&mut rng, &laser, 500, &stack(1, 1, 1, 1, 0), &mut a);
-        fire(&mut rng, &laser, 500, &stack(1, 1, 6, 1, 0), &mut b);
-        assert!(b.hp_loss + (200 - b.count) * 100 > a.hp_loss + (200 - a.count) * 100);
     }
 }

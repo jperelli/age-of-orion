@@ -931,6 +931,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 0,
         bio: false,
         tech: 0,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 0,
         streams: 0,
     },
     Weapon {
@@ -951,6 +954,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: false,
         tech: 1,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 37,
         streams: 0,
     },
     Weapon {
@@ -971,6 +977,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 25,
         bio: false,
         tech: 1,
+        fuel: 0,
+        dtbl: [64, 65, 66, 67, 68, 69, 70],
+        sound: 7,
         streams: 0,
     },
     Weapon {
@@ -991,6 +1000,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 20,
         bio: false,
         tech: 1,
+        fuel: 2,
+        dtbl: [96, 0, 0, 6, 80, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1011,6 +1023,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 30,
         bio: false,
         tech: 1,
+        fuel: 2,
+        dtbl: [64, 0, 0, 6, 80, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1031,6 +1046,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 75,
         bio: false,
         tech: 1,
+        fuel: 0,
+        dtbl: [64, 65, 66, 67, 68, 69, 70],
+        sound: 10,
         streams: 0,
     },
     Weapon {
@@ -1051,6 +1069,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 20,
         bio: false,
         tech: 4,
+        fuel: 2,
+        dtbl: [112, 0, 0, 5, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1071,6 +1092,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 30,
         bio: false,
         tech: 4,
+        fuel: 2,
+        dtbl: [80, 0, 0, 5, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1091,6 +1115,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 70,
         bio: false,
         tech: 5,
+        fuel: 0,
+        dtbl: [67, 65, 63, 37, 63, 65, 67],
+        sound: 1,
         streams: 0,
     },
     Weapon {
@@ -1111,6 +1138,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 25,
         bio: false,
         tech: 7,
+        fuel: 0,
+        dtbl: [0, 174, 0, 0, 0, 174, 0],
+        sound: 1,
         streams: 0,
     },
     Weapon {
@@ -1131,6 +1161,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 20,
         bio: false,
         tech: 8,
+        fuel: 2,
+        dtbl: [96, 0, 0, 6, 80, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1151,6 +1184,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 30,
         bio: false,
         tech: 8,
+        fuel: 2,
+        dtbl: [80, 0, 0, 6, 80, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1171,6 +1207,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: false,
         tech: 9,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 37,
         streams: 0,
     },
     Weapon {
@@ -1191,6 +1230,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 35,
         bio: false,
         tech: 10,
+        fuel: 1,
+        dtbl: [228, 229, 230, 231, 230, 229, 228],
+        sound: 16,
         streams: 0,
     },
     Weapon {
@@ -1211,6 +1253,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 105,
         bio: false,
         tech: 10,
+        fuel: 1,
+        dtbl: [228, 229, 230, 231, 230, 229, 228],
+        sound: 15,
         streams: 0,
     },
     Weapon {
@@ -1231,6 +1276,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 50,
         bio: false,
         tech: 11,
+        fuel: 2,
+        dtbl: [96, 0, 0, 5, 100, 0, 0],
+        sound: 3,
         streams: 5,
     },
     Weapon {
@@ -1251,6 +1299,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 80,
         bio: false,
         tech: 11,
+        fuel: 2,
+        dtbl: [80, 0, 0, 5, 100, 0, 0],
+        sound: 3,
         streams: 5,
     },
     Weapon {
@@ -1271,6 +1322,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: true,
         tech: 10,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 37,
         streams: 0,
     },
     Weapon {
@@ -1291,6 +1345,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 50,
         bio: false,
         tech: 13,
+        fuel: 0,
+        dtbl: [0, 12, 0, 0, 0, 12, 0],
+        sound: 23,
         streams: 0,
     },
     Weapon {
@@ -1311,6 +1368,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 20,
         bio: false,
         tech: 14,
+        fuel: 2,
+        dtbl: [128, 0, 0, 4, 120, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1331,6 +1391,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 30,
         bio: false,
         tech: 14,
+        fuel: 2,
+        dtbl: [96, 0, 0, 4, 120, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1351,6 +1414,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 60,
         bio: false,
         tech: 15,
+        fuel: 0,
+        dtbl: [207, 206, 205, 204, 203, 202, 201],
+        sound: 10,
         streams: 0,
     },
     Weapon {
@@ -1371,6 +1437,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 180,
         bio: false,
         tech: 15,
+        fuel: 0,
+        dtbl: [207, 206, 205, 204, 203, 202, 201],
+        sound: 18,
         streams: 0,
     },
     Weapon {
@@ -1391,6 +1460,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: false,
         tech: 16,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 37,
         streams: 0,
     },
     Weapon {
@@ -1411,6 +1483,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 50,
         bio: false,
         tech: 17,
+        fuel: 2,
+        dtbl: [209, 210, 211, 212, 213, 214, 215],
+        sound: 0,
         streams: 1,
     },
     Weapon {
@@ -1431,6 +1506,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 30,
         bio: false,
         tech: 18,
+        fuel: 2,
+        dtbl: [144, 0, 0, 5, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1451,6 +1529,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 45,
         bio: false,
         tech: 18,
+        fuel: 2,
+        dtbl: [112, 0, 0, 5, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1471,6 +1552,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 100,
         bio: false,
         tech: 19,
+        fuel: 0,
+        dtbl: [161, 150, 161, 150, 161, 150, 161],
+        sound: 1,
         streams: 0,
     },
     Weapon {
@@ -1491,6 +1575,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 75,
         bio: false,
         tech: 20,
+        fuel: 0,
+        dtbl: [183, 182, 181, 180, 179, 178, 177],
+        sound: 11,
         streams: 0,
     },
     Weapon {
@@ -1511,6 +1598,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 225,
         bio: false,
         tech: 20,
+        fuel: 0,
+        dtbl: [183, 182, 181, 180, 179, 178, 177],
+        sound: 25,
         streams: 0,
     },
     Weapon {
@@ -1531,6 +1621,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: false,
         tech: 22,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 37,
         streams: 0,
     },
     Weapon {
@@ -1551,6 +1644,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 300,
         bio: false,
         tech: 23,
+        fuel: 2,
+        dtbl: [128, 0, 0, 3, 160, 0, 0],
+        sound: 17,
         streams: 1,
     },
     Weapon {
@@ -1571,6 +1667,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 65,
         bio: false,
         tech: 25,
+        fuel: 3,
+        dtbl: [175, 215, 174, 215, 175, 215, 174],
+        sound: 18,
         streams: 0,
     },
     Weapon {
@@ -1591,6 +1690,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 90,
         bio: false,
         tech: 26,
+        fuel: 1,
+        dtbl: [219, 220, 221, 222, 221, 220, 219],
+        sound: 28,
         streams: 0,
     },
     Weapon {
@@ -1611,6 +1713,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 270,
         bio: false,
         tech: 26,
+        fuel: 1,
+        dtbl: [219, 220, 221, 222, 221, 220, 219],
+        sound: 26,
         streams: 0,
     },
     Weapon {
@@ -1631,6 +1736,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 50,
         bio: false,
         tech: 27,
+        fuel: 2,
+        dtbl: [128, 0, 0, 4, 120, 0, 0],
+        sound: 3,
         streams: 7,
     },
     Weapon {
@@ -1651,6 +1759,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 80,
         bio: false,
         tech: 27,
+        fuel: 2,
+        dtbl: [96, 0, 0, 4, 120, 0, 0],
+        sound: 3,
         streams: 7,
     },
     Weapon {
@@ -1671,6 +1782,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: true,
         tech: 27,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 37,
         streams: 0,
     },
     Weapon {
@@ -1691,6 +1805,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 90,
         bio: false,
         tech: 28,
+        fuel: 1,
+        dtbl: [190, 189, 188, 187, 186, 185, 184],
+        sound: 1,
         streams: 0,
     },
     Weapon {
@@ -1711,6 +1828,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 40,
         bio: false,
         tech: 29,
+        fuel: 2,
+        dtbl: [160, 0, 0, 4, 160, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1731,6 +1851,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 60,
         bio: false,
         tech: 29,
+        fuel: 2,
+        dtbl: [128, 0, 0, 4, 160, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1751,6 +1874,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 70,
         bio: false,
         tech: 30,
+        fuel: 2,
+        dtbl: [142, 140, 139, 138, 137, 136, 135],
+        sound: 31,
         streams: 1,
     },
     Weapon {
@@ -1771,6 +1897,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 105,
         bio: false,
         tech: 32,
+        fuel: 0,
+        dtbl: [0, 15, 0, 18, 0, 21, 0],
+        sound: 1,
         streams: 0,
     },
     Weapon {
@@ -1791,6 +1920,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 75,
         bio: false,
         tech: 33,
+        fuel: 0,
+        dtbl: [0, 15, 0, 18, 0, 21, 0],
+        sound: 33,
         streams: 0,
     },
     Weapon {
@@ -1811,6 +1943,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 40,
         bio: false,
         tech: 34,
+        fuel: 2,
+        dtbl: [176, 0, 0, 6, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1831,6 +1966,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 60,
         bio: false,
         tech: 34,
+        fuel: 2,
+        dtbl: [144, 0, 0, 6, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1851,6 +1989,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 100,
         bio: false,
         tech: 35,
+        fuel: 2,
+        dtbl: [70, 69, 68, 67, 68, 69, 70],
+        sound: 30,
         streams: 0,
     },
     Weapon {
@@ -1871,6 +2012,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 160,
         bio: false,
         tech: 37,
+        fuel: 0,
+        dtbl: [247, 246, 245, 244, 243, 242, 241],
+        sound: 28,
         streams: 0,
     },
     Weapon {
@@ -1891,6 +2035,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 120,
         bio: false,
         tech: 38,
+        fuel: 1,
+        dtbl: [219, 220, 221, 222, 221, 220, 219],
+        sound: 1,
         streams: 0,
     },
     Weapon {
@@ -1911,6 +2058,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: false,
         tech: 39,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 20,
         streams: 0,
     },
     Weapon {
@@ -1931,6 +2081,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 10,
         bio: true,
         tech: 40,
+        fuel: 0,
+        dtbl: [0, 0, 0, 0, 0, 0, 0],
+        sound: 20,
         streams: 0,
     },
     Weapon {
@@ -1951,6 +2104,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 350,
         bio: false,
         tech: 40,
+        fuel: 2,
+        dtbl: [160, 0, 0, 4, 140, 0, 0],
+        sound: 17,
         streams: 1,
     },
     Weapon {
@@ -1971,6 +2127,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 50,
         bio: false,
         tech: 41,
+        fuel: 2,
+        dtbl: [192, 0, 0, 5, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -1991,6 +2150,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 75,
         bio: false,
         tech: 41,
+        fuel: 2,
+        dtbl: [160, 0, 0, 5, 100, 0, 0],
+        sound: 8,
         streams: 1,
     },
     Weapon {
@@ -2011,6 +2173,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 400,
         bio: false,
         tech: 43,
+        fuel: 2,
+        dtbl: [255, 0, 0, 3, 200, 0, 0],
+        sound: 17,
         streams: 1,
     },
     Weapon {
@@ -2031,6 +2196,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 50,
         bio: false,
         tech: 44,
+        fuel: 2,
+        dtbl: [144, 0, 0, 5, 100, 0, 0],
+        sound: 3,
         streams: 10,
     },
     Weapon {
@@ -2051,6 +2219,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 80,
         bio: false,
         tech: 44,
+        fuel: 2,
+        dtbl: [112, 0, 0, 5, 100, 0, 0],
+        sound: 3,
         streams: 10,
     },
     Weapon {
@@ -2071,6 +2242,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 180,
         bio: false,
         tech: 45,
+        fuel: 1,
+        dtbl: [70, 69, 68, 67, 68, 69, 70],
+        sound: 27,
         streams: 0,
     },
     Weapon {
@@ -2091,6 +2265,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 300,
         bio: false,
         tech: 46,
+        fuel: 3,
+        dtbl: [73, 86, 113, 70, 73, 86, 113],
+        sound: 21,
         streams: 0,
     },
     Weapon {
@@ -2111,6 +2288,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 300,
         bio: false,
         tech: 48,
+        fuel: 4,
+        dtbl: [187, 188, 189, 189, 189, 188, 187],
+        sound: 35,
         streams: 0,
     },
     Weapon {
@@ -2131,6 +2311,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 450,
         bio: false,
         tech: 50,
+        fuel: 2,
+        dtbl: [192, 0, 0, 3, 160, 0, 0],
+        sound: 17,
         streams: 1,
     },
     Weapon {
@@ -2151,6 +2334,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 400,
         bio: false,
         tech: 101,
+        fuel: 3,
+        dtbl: [14, 199, 14, 14, 239, 14, 199],
+        sound: 24,
         streams: 0,
     },
     Weapon {
@@ -2171,6 +2357,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 2000,
         bio: false,
         tech: 36,
+        fuel: 4,
+        dtbl: [203, 197, 196, 70, 196, 197, 203],
+        sound: 29,
         streams: 0,
     },
     Weapon {
@@ -2191,6 +2380,9 @@ pub const WEAPONS: [Weapon; 64] = [
         power: 400,
         bio: false,
         tech: 101,
+        fuel: 2,
+        dtbl: [70, 70, 220, 220, 220, 211, 211],
+        sound: 12,
         streams: 1,
     },
 ];

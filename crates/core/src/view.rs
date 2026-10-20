@@ -3,6 +3,7 @@
 use serde::Serialize;
 
 use crate::audience::{self, AudienceOptions, Incoming};
+use crate::battle::Battle;
 use crate::council::Election;
 use crate::design::{self, DesignStats, KnownParts, ShipDesign};
 use crate::diplo::{self, SpyMode, TechRef, Treaty};
@@ -211,6 +212,10 @@ pub struct View {
     pub high_master: Option<EmpireId>,
     pub victory: Option<Victory>,
     pub monsters: Vec<MonsterView>,
+    /// The battle this empire is fighting: the turn waits until it is over.
+    pub battle: Option<Battle>,
+    /// The turn is interrupted by a battle.
+    pub in_battle: bool,
 }
 
 fn sees(st: &State, me: EmpireId, x: f64, y: f64) -> bool {
@@ -497,5 +502,11 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 dest: m.dest,
             })
             .collect(),
+        battle: st
+            .battle
+            .as_ref()
+            .filter(|b| b.s.iter().any(|s| s.party == me as i32))
+            .map(|b| (**b).clone()),
+        in_battle: st.progress.is_some(),
     }
 }

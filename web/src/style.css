@@ -247,3 +247,33 @@ label.checkbox { display: block; margin-top: 0.8em; }
   .panel { width: 100%; height: 42%; border-left: none; border-top: 3px solid var(--border); }
   .research-row { grid-template-columns: 1fr 1fr; }
 }
+
+/* Tactical battles */
+.battle-overlay { padding: 0.5em; background: rgba(0, 0, 0, 0.75); }
+.battle { background: var(--parchment); border: 3px solid var(--border); border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); display: flex; flex-direction: column; max-width: 1280px; width: 100%; max-height: 100%; overflow: hidden; }
+.battle-head { background: var(--wood); color: #f5e7c6; padding: 0.4em 1em; display: flex; align-items: center; gap: 1em; flex-wrap: wrap; border-bottom: 2px solid var(--border); }
+.battle-head h2 { margin: 0; font-size: 1.2em; }
+.battle-sides { display: flex; gap: 0.5em; align-items: center; }
+.battle-sides .muted { color: #cdbb93; }
+.battle-party { padding: 0.1em 0.6em; border-radius: 3px; border-left: 0.6em solid var(--banner); background: rgba(0, 0, 0, 0.25); }
+.battle-main { display: flex; gap: 0.6em; padding: 0.6em; min-height: 0; flex: 1; }
+.battle-field { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.battle-canvas { border: 2px solid var(--border); image-rendering: pixelated; cursor: crosshair; max-width: 100%; }
+.battle-status { min-height: 1.3em; font-size: 0.9em; color: var(--warn); }
+.battle-side { width: 250px; flex: none; overflow-y: auto; font-size: 0.92em; }
+.battle-side h3 { margin: 0.2em 0 0.4em; }
+.battle-side p { margin: 0.3em 0; }
+.battle-buttons { display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0.6em 0; }
+.battle-buttons.col { flex-direction: column; }
+.battle-buttons button { padding: 0.3em 0.6em; }
+.battle-buttons button.on { outline: 2px solid var(--gold); }
+.battle-list { margin: 0.2em 0 0.4em; padding-left: 1.2em; }
+.battle-stats table { border-collapse: collapse; margin: 0.3em 0; }
+.battle-stats td { padding: 0.05em 0.6em 0.05em 0; }
+.battle-stats td:last-child { font-weight: bold; }
+.battle-hover { margin-top: 0.6em; padding-top: 0.4em; border-top: 1px solid var(--parchment-dark); }
+.techinfo { margin: 0.2em 0 0; font-style: italic; }
+@media (max-width: 800px) {
+  .battle-main { flex-direction: column; }
+  .battle-side { width: 100%; }
+}

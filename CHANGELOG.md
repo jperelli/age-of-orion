@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-21
+
+Battles and presentation: tactical battles on the MOO1 grid, the soundtrack, and more of
+your original art.
+
+### Added
+
+- Tactical battles (1oom `game_battle_human.c`): when your ships or planets fight, the turn
+  pauses on the 10x8 battle grid. Stacks act in order of initiative; move them, fire beams
+  at range, launch missiles that fly over several turns (and can be dodged or hit
+  asteroids), hold missiles back, wait, retreat, or hand over to the computer at any time.
+  You can also let the computer fight the whole battle or order a retreat before it starts.
+- Every combat special works: stasis field, energy and ionic pulsars, ion and neutron stream
+  projectors, warp dissipator, black hole generator, technology nullifier, repulsor beam,
+  sub-space teleporter and interdictor, cloaking device, displacement device, damage control,
+  Oracle interface; asteroids in battle; retreat to the nearest colony.
+- The classic battle AI (1oom `game_ai_classic.c`): target choice, best range, dodging
+  missiles, retreating when the battle is lost; battles between computer empires are
+  resolved from the strength of both sides, as in 1oom.
+- Monsters and the Guardian fight on the battle grid too.
+- Music: the importer converts MUSIC.LBX tunes to MIDI (1oom `fmt_mus.c`) and a built-in
+  synthesizer plays them: on the menu, in battles, at the council and in audiences.
+  Sound effects for battles. Volume sliders on the main menu.
+- The importer runs in a Web Worker, so the page no longer freezes, and exports battle
+  pictures (SHIPS.LBX, SHIPS2.LBX, SPACE.LBX, MISSILE.LBX), music and the tech descriptions
+  of RESEARCH.LBX, shown on the research screen in the Classic theme.
+- Battle art for both themes when no original files are imported (formations and banners
+  in the Age theme, spaceships in the Classic theme).
+
+### Changed
+
+- Battles follow 1oom: two parties at a time per planet, so treaties, ceasefires and
+  retreats work as in MOO1. A loaded game that was saved during a battle resumes it.
+
 ### Fixed
 
 - Messages from other rulers are titled "Envoy from" instead of "Envoy to".
@@ -145,7 +179,8 @@ First playable version.
 - CI (fmt, clippy, tests, web and desktop builds), tag-driven releases and GitHub Pages
   deployment.
 
-[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jperelli/age-of-orion/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jperelli/age-of-orion/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jperelli/age-of-orion/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jperelli/age-of-orion/releases/tag/v0.1.0

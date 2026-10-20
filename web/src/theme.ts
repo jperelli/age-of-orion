@@ -29,10 +29,13 @@ export interface Settings {
   theme: string;
   mod: string | null;
   lang: string;
+  /** Volumes, 0..1. */
+  music: number;
+  sfx: number;
 }
 
 export const THEMES = ["age", "classic"];
-const DEFAULT_SETTINGS: Settings = { theme: "age", mod: null, lang: "en" };
+const DEFAULT_SETTINGS: Settings = { theme: "age", mod: null, lang: "en", music: 0.5, sfx: 0.5 };
 
 export async function loadSettings(): Promise<Settings> {
   return { ...DEFAULT_SETTINGS, ...((await store.get<Settings>("kv", "settings")) ?? {}) };
@@ -129,6 +132,7 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
   if (def.use_lbx) {
     const manifest = await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json");
     for (const [alias, path] of Object.entries(manifest?.aliases ?? {})) {
+      if (alias.startsWith("music/")) continue;
       const blob = await store.get<Blob>("assets", path);
       if (blob) await theme.addImage(alias, blob);
     }
@@ -142,6 +146,15 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
         const key = `news.${kind}.${i % 7}`;
         if (!msg || !kind || mod?.text[key]) return;
         text[key] = raw.reduce((m, [c, tok]) => m.split(c).join(tok), msg).replace(/\s+/g, " ").trim();
+      });
+    }
+    // RESEARCH.LBX: tech descriptions, field * 50 + tech - 1.
+    const research = await store.get<Blob>("assets", "text/lbx/research.json");
+    if (research) {
+      const all = JSON.parse(await research.text()) as string[];
+      all.forEach((d, i) => {
+        const key = `techinfo.${Math.floor(i / 50)}.${(i % 50) + 1}`;
+        if (d && !mod?.text[key]) text[key] = d.replace(/\s+/g, " ").trim();
       });
     }
     const names = await store.get<Blob>("assets", "text/lbx/names.json");

@@ -10,6 +10,17 @@ export function techName(ctx: Ctx, f: FieldView | string, key: string, tech?: nu
   return key === "advanced" ? ctx.theme.t("tech.advanced", { n: tech ?? 0 }) : ctx.theme.t(`tech.${field}.${key}`);
 }
 
+/** Description of a tech (from RESEARCH.LBX in the Classic theme, or a mod): `techinfo.<field>.<n>`. */
+function info(ctx: Ctx, field: number, tech: number): string | null {
+  const key = `techinfo.${field}.${tech}`;
+  return tech > 0 && ctx.theme.has(key) ? ctx.theme.t(key) : null;
+}
+
+function techInfo(ctx: Ctx, field: number, tech: number): HTMLElement | null {
+  const d = info(ctx, field, tech);
+  return d ? h("p", { class: "muted small techinfo" }, d) : null;
+}
+
 export function needsChoice(ctx: Ctx): boolean {
   return ctx.view().tech.some((f) => f.project === 0 && f.choices.length > 0);
 }
@@ -69,7 +80,7 @@ export function researchDialog(ctx: Ctx): Promise<number> {
         "details",
         { class: "known" },
         h("summary", {}, t("research.known", { n: f.completed.length })),
-        h("ul", {}, ...f.completed.map((c) => h("li", {}, techName(ctx, f, c.key, c.tech)))),
+        h("ul", {}, ...f.completed.map((c) => h("li", { title: info(ctx, i, c.tech) ?? "" }, techName(ctx, f, c.key, c.tech)))),
       );
       body.append(
         h(
@@ -79,6 +90,7 @@ export function researchDialog(ctx: Ctx): Promise<number> {
           f.project !== 0
             ? h("div", { class: "progress", title: `${f.invested} / ${f.cost} ${t("unit.rp")}` }, h("div", { style: `width:${pct}%` }))
             : h("p", { class: "warn small" }, t("research.saved", { rp: f.invested })),
+          techInfo(ctx, i, f.project),
           known,
         ),
       );

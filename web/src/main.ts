@@ -1,5 +1,6 @@
 import "./style.css";
-import { Game, engineVersion, importLbx, loadEngine } from "./engine";
+import { TUNE, audio } from "./audio";
+import { Game, engineVersion, importLbxAsync, loadEngine } from "./engine";
 import { AUTOSAVE, GameScreen } from "./game";
 import * as store from "./storage";
 import { THEMES, loadSettings, loadTheme, readModFolder, saveSettings, type ModData, type Settings, type Theme } from "./theme";
@@ -29,6 +30,7 @@ function show(el: HTMLElement): void {
 }
 
 function playGame(game: Game): void {
+  audio.stopMusic();
   const s = new GameScreen(game, theme, () => void menu(), (save) => loadSave(save));
   show(s.el);
   screen = s;
@@ -43,6 +45,7 @@ function loadSave(save: string): void {
 }
 
 async function menu(): Promise<void> {
+  void audio.play(TUNE.menu);
   const autosave = await store.get<string>("kv", AUTOSAVE);
   const assets = await store.get<{ archives: Record<string, unknown> }>("assets", "manifest.json");
   const mods = (await store.keys("mods")).map(String);
@@ -100,7 +103,14 @@ async function menu(): Promise<void> {
           h("button", { onclick: () => importer() }, t("menu.import")),
           h("button", { onclick: () => modsScreen() }, t("menu.mods")),
         ),
-        h("div", { class: "menu-options" }, h("label", {}, t("menu.theme"), themeSelect), h("label", {}, t("menu.mod"), modSelect)),
+        h(
+          "div",
+          { class: "menu-options" },
+          h("label", {}, t("menu.theme"), themeSelect),
+          h("label", {}, t("menu.mod"), modSelect),
+          volume("menu.music", "music"),
+          volume("menu.sfx", "sfx"),
+        ),
         h("p", { class: "muted small" }, t(`theme.${theme.def.id}.description`)),
         h("p", { class: "muted small" }, assets ? t("menu.assets_imported", { n: Object.keys(assets.archives).length }) : t("menu.assets_none")),
         h("p", { class: "footer small" }, t("app.footer", { version: engineVersion() }), " ", h("a", { href: "https://github.com/jperelli/age-of-orion", target: "_blank", rel: "noopener" }, "GitHub")),
@@ -174,6 +184,18 @@ function newGame(): void {
   );
 }
 
+/** A volume slider stored in the settings. */
+function volume(label: string, key: "music" | "sfx"): HTMLElement {
+  const input = h("input", { type: "range", min: 0, max: 100, value: Math.round(settings[key] * 100) });
+  input.addEventListener("change", async () => {
+    settings[key] = Number(input.value) / 100;
+    audio.setPrefs({ music: settings.music, sfx: settings.sfx });
+    if (key === "sfx") audio.sfx("explosion");
+    await saveSettings(settings);
+  });
+  return h("label", {}, t(label), input);
+}
+
 async function importer(): Promise<void> {
   const status = h("div", { class: "import-status" });
   const gallery = h("div", { class: "gallery" });
@@ -182,7 +204,10 @@ async function importer(): Promise<void> {
     const m = await store.get<{ aliases: Record<string, string>; warnings: string[]; archives: Record<string, unknown> }>("assets", "manifest.json");
     if (!m) return;
     status.textContent = t("import.done", { n: Object.keys(m.archives).length });
+    const tunes = Object.keys(m.aliases).filter((a) => a.startsWith("music/")).length;
+    if (tunes) gallery.append(h("p", { class: "small" }, t("import.music", { n: tunes })));
     for (const [alias, path] of Object.entries(m.aliases)) {
+      if (alias.startsWith("music/")) continue;
       const blob = await store.get<Blob>("assets", path);
       if (blob) gallery.append(h("img", { class: "pixel", src: URL.createObjectURL(blob), title: alias }));
     }
@@ -194,7 +219,7 @@ async function importer(): Promise<void> {
     status.textContent = t("import.working", { n: lbx.length });
     await new Promise((r) => setTimeout(r, 30));
     const input = await Promise.all(lbx.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
-    const result = importLbx(input);
+    const result = await importLbxAsync(input);
     await store.clear("assets");
     await store.putMany(
       "assets",
@@ -202,9 +227,10 @@ async function importer(): Promise<void> {
         f.path,
         f.path === "manifest.json"
           ? JSON.parse(new TextDecoder().decode(f.bytes))
-          : new Blob([f.bytes as BlobPart], { type: f.path.endsWith(".png") ? "image/png" : "application/json" }),
+          : new Blob([f.bytes as BlobPart], { type: f.path.endsWith(".png") ? "image/png" : f.path.endsWith(".mid") ? "audio/midi" : "application/json" }),
       ]),
     );
+    audio.reload();
     await applyTheme();
     await showGallery();
   };
@@ -321,6 +347,7 @@ async function main(): Promise<void> {
   try {
     await loadEngine();
     settings = await loadSettings();
+    audio.setPrefs({ music: settings.music, sfx: settings.sfx });
     await applyTheme();
     await menu();
   } catch (e) {

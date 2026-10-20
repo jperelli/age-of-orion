@@ -89,6 +89,9 @@ pub struct Planet {
     /// Empire with ships here or owning it, for diplomacy after battles (1oom `claim`).
     #[serde(default)]
     pub claim: Option<EmpireId>,
+    /// Asteroids in battles here: 0 none, 1 some, 2 many (1oom `rocks`).
+    #[serde(default)]
+    pub rocks: u8,
 }
 
 impl Planet {
@@ -389,6 +392,22 @@ pub struct State {
     /// Decisions waiting for human players.
     #[serde(default)]
     pub pending: Pending,
+    /// The battle a human is fighting; the turn waits for it.
+    #[serde(default)]
+    pub battle: Option<Box<crate::battle::Battle>>,
+    /// A turn interrupted by a human battle.
+    #[serde(default)]
+    pub progress: Option<Progress>,
+}
+
+/// Where an interrupted turn resumes (after the battles of `battle_planet`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Progress {
+    pub arrived: Vec<Transport>,
+    pub battle_planet: usize,
+    /// Parties left out of the battles at `battle_planet` (treaties, ceasefires).
+    pub skipped: Vec<i32>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

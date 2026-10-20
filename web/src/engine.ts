@@ -77,6 +77,31 @@ export interface ImportedFile {
   bytes: Uint8Array;
 }
 
+/**
+ * Converts LBX files in a Web Worker so the page stays responsive; falls back to the main
+ * thread where module workers are not available.
+ */
+export function importLbxAsync(files: { name: string; bytes: Uint8Array }[]): Promise<{ manifest: unknown; files: ImportedFile[] }> {
+  return new Promise((resolve) => {
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL("./import-worker.ts", import.meta.url), { type: "module" });
+    } catch {
+      resolve(importLbx(files));
+      return;
+    }
+    worker.onmessage = (e: MessageEvent<{ manifest: unknown; files: ImportedFile[] } | { error: string }>) => {
+      worker.terminate();
+      resolve("error" in e.data ? importLbx(files) : e.data);
+    };
+    worker.onerror = () => {
+      worker.terminate();
+      resolve(importLbx(files));
+    };
+    worker.postMessage(files);
+  });
+}
+
 /** Converts LBX files to PNG/JSON assets in WebAssembly. */
 export function importLbx(files: { name: string; bytes: Uint8Array }[]): { manifest: unknown; files: ImportedFile[] } {
   const imp = new LbxImporter();

@@ -31,9 +31,12 @@ device, and the **Classic** theme then shows the original planet pictures and ra
 - Ten races with their bonuses and research costs, five difficulty levels, 2 to 6 empires,
   four galaxy sizes, nebulae.
 - Fleets with fuel range and speed, colonization with colony bases for hostile planets,
-  rally points, stargates, scrapping, missile bases, space battles on the MOO1 to-hit and
-  damage formulas, orbital bombing, transports and ground invasions, the Guardian of
-  Orion.
+  rally points, stargates, scrapping, missile bases, orbital bombing, transports and ground
+  invasions, the Guardian of Orion.
+- Tactical battles on the MOO1 battle grid (`game_battle_human.c`): move your stacks, fire
+  beams and missiles, use stasis fields, pulsars, black holes, teleporters and the other
+  specials, retreat, or let the computer fight; computer opponents fight with the classic
+  battle AI.
 - MOO1 diplomacy (`game_diplo.c`, `game_audience.c`): contact, relations and moods,
   non-aggression pacts, alliances, wars, trade agreements, tribute, technology exchange,
   threats, and computer rulers who make their own proposals, demands and declarations.
@@ -45,6 +48,8 @@ device, and the **Classic** theme then shows the original planet pictures and ra
   treaties, spy and vote with the diplomacy of 1oom's classic AI.
 - Two themes: **Age** (medieval world map, the default) and **Classic** (starfield, with
   your original MOO1 art when imported). Every text and picture can be replaced by a mod.
+- The MOO1 soundtrack from your own MUSIC.LBX, converted to MIDI and played by a built-in
+  synthesizer; tech descriptions from RESEARCH.LBX; sound effects.
 - Autosave every turn, save/load to a file, keyboard shortcuts (Enter ends the turn).
 
 See [docs/PLAN.md](docs/PLAN.md) for what is ported, what is simplified and what comes next.

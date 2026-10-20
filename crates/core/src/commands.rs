@@ -2,13 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::battle::Action;
 use crate::design::{self, ShipDesign, BUILD_STARGATE, MAX_DESIGNS};
 use crate::diplo::{self, SpyMode, TechRef, Treaty};
 use crate::spy::SabotageKind;
 use crate::state::*;
 use crate::tech;
 use crate::types::*;
-use crate::{audience, council, spy};
+use crate::{audience, combat, council, spy};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -120,6 +121,25 @@ pub enum Command {
     AcceptCouncil {
         accept: bool,
     },
+    /// Begins the battle the turn is waiting for (1oom `ui_battle_init`).
+    StartBattle {
+        mode: BattleMode,
+    },
+    /// An order for the current stack in the battle.
+    Battle {
+        action: Action,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BattleMode {
+    /// Command the ships on the battle grid.
+    Fight,
+    /// Let the computer fight for you.
+    Auto,
+    /// Every ship retreats.
+    Retreat,
 }
 
 /// Why a command was rejected; the UI shows the text `error.<code>`.
@@ -212,6 +232,34 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
         || !st.empires.get(empire as usize).is_some_and(|e| e.alive)
     {
         return err("game_over");
+    }
+    let battle_cmd = matches!(cmd, Command::StartBattle { .. } | Command::Battle { .. });
+    if st.progress.is_some() && !battle_cmd {
+        return err("battle_in_progress");
+    }
+    if battle_cmd {
+        let Some(mut bt) = st.battle.take() else {
+            return err("no_battle");
+        };
+        let mine = bt.s.iter().any(|s| s.party == empire as i32 && s.human);
+        let r = if !mine || bt.winner.is_some() {
+            Err("no_battle")
+        } else {
+            match *cmd {
+                Command::StartBattle { mode } if !bt.started => {
+                    bt.start(st, mode == BattleMode::Auto, mode == BattleMode::Retreat);
+                    Ok(())
+                }
+                Command::Battle { action } if bt.started => bt.act(st, action),
+                _ => Err("no_battle"),
+            }
+        };
+        let over = bt.winner.is_some();
+        st.battle = Some(bt);
+        if over {
+            combat::finish_battle(st);
+        }
+        return r.map_err(|code| CommandError { code });
     }
     match *cmd {
         Command::SetSliders { planet, sliders } => {
@@ -484,6 +532,7 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
                 return err("invalid_planet");
             }
         }
+        Command::StartBattle { .. } | Command::Battle { .. } => unreachable!(),
         Command::Vote { candidate } => {
             council::vote(st, empire, candidate).map_err(|code| CommandError { code })?
         }

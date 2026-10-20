@@ -8,6 +8,7 @@
 mod cp437;
 mod export;
 mod gfx;
+pub mod music;
 mod palette;
 mod table;
 

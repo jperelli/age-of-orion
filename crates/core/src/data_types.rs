@@ -25,6 +25,12 @@ pub struct Weapon {
     pub bio: bool,
     /// Weapon tech number that unlocks it.
     pub tech: u8,
+    /// Missiles: turns of fuel (1oom `v24`).
+    pub fuel: u8,
+    /// Missiles: `dtbl[0]` is the speed in pixels per turn; beams: colour table (1oom `dtbl`).
+    pub dtbl: [u8; 7],
+    /// Sound effect number.
+    pub sound: u8,
     /// Missiles: warheads per launch; beams: streaming.
     pub streams: u8,
 }

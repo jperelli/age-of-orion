@@ -986,7 +986,7 @@ mod tests {
         .unwrap();
         let mut seen = 0;
         for _ in 0..250 {
-            g.end_turn();
+            g.end_turn_auto();
             seen += g
                 .state()
                 .events
@@ -1029,7 +1029,16 @@ mod tests {
         st.evn.monsters.push(m);
         assert_eq!(monster_at(st, home), Some(0));
         st.empires[0].orbit[home][1] = 40;
-        crate::combat::battles(st);
+        st.planets[home].bases = 20;
+        assert!(crate::combat::battles(st));
+        g.command(
+            0,
+            &crate::Command::StartBattle {
+                mode: crate::BattleMode::Auto,
+            },
+        )
+        .unwrap();
+        let st = g.state_mut();
         assert!(st
             .events
             .iter()
@@ -1037,7 +1046,7 @@ mod tests {
         assert_eq!(
             st.evn.monsters[0].killer,
             Some(0),
-            "40 fighters kill a wounded amoeba"
+            "missile bases kill a wounded amoeba"
         );
     }
 }

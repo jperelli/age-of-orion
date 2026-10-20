@@ -180,7 +180,25 @@ export interface Nebula {
 
 /** Static ship part tables (crates/core/src/data.rs). */
 export interface Parts {
-  weapons: { key: string; damage_min: number; damage_max: number; range: number; extra_acc: number; halve_shield: boolean; bomb: boolean; fire: number; shots: number; bio: boolean; streams: number; tech: number }[];
+  weapons: {
+    key: string;
+    damage_min: number;
+    damage_max: number;
+    range: number;
+    extra_acc: number;
+    halve_shield: boolean;
+    bomb: boolean;
+    damage_fade: boolean;
+    miss_type: number;
+    fire: number;
+    shots: number;
+    bio: boolean;
+    streams: number;
+    tech: number;
+    fuel: number;
+    dtbl: number[];
+    sound: number;
+  }[];
   comps: { key: string; level: number }[];
   jammers: { key: string; level: number }[];
   engines: { key: string; warp: number }[];
@@ -361,7 +379,137 @@ export interface View {
   high_master: number | null;
   victory: "conquest" | "council" | null;
   monsters: MonsterView[];
+  /** The battle the turn waits for. */
+  battle: Battle | null;
+  in_battle: boolean;
 }
+
+// ------------------------------------------------------------- battles (crates/core/src/battle.rs)
+
+export type BattleSide = "l" | "r" | "none";
+
+export interface BattleWpn {
+  t: number;
+  n: number;
+  numfire: number;
+  numshots: number;
+}
+
+export interface BattleItem {
+  uid: number;
+  name: string;
+  design: number | null;
+  look: number;
+  complevel: number;
+  specials: number[];
+  hp1: number;
+  hp2: number;
+  hull: number;
+  man: number;
+  defense: number;
+  misdefense: number;
+  absorb: number;
+  repair: number;
+  misshield: number;
+  pshield: number;
+  extrarange: number;
+  num: number;
+  pulsar: number;
+  stream: number;
+  stasis: number;
+  cloak: number;
+  subspace: number;
+  warpdis: number;
+  blackhole: number;
+  technull: number;
+  repulsor: number;
+  sbmask: number;
+  retreat: number;
+  sx: number;
+  sy: number;
+  stasisby: number;
+  unman: number;
+  side: BattleSide;
+  actman: number;
+  hploss: number;
+  maxrange: number;
+  missile: number;
+  wpn: BattleWpn[];
+}
+
+export interface BattleMissile {
+  id: number;
+  wpnt: number;
+  nummissiles: number;
+  x: number;
+  y: number;
+  source: number;
+  target: number;
+  fuel: number;
+  speed: number;
+}
+
+export interface BattleSideInfo {
+  /** Empire, or -1 guardian, -2 crystal, -3 amoeba. */
+  party: number;
+  race: Race | null;
+  ships: number[];
+  items: number;
+  human: boolean;
+  auto: boolean;
+  base_missile: boolean;
+}
+
+export type BattleAnim =
+  | { type: "turn"; uid: number }
+  | { type: "move"; uid: number; x: number; y: number }
+  | { type: "teleport"; uid: number; x: number; y: number }
+  | { type: "beam"; from: number; to: number; weapon: number }
+  | { type: "bomb"; from: number; to: number; weapon: number }
+  | { type: "damage"; uid: number; amount: number; killed: number }
+  | { type: "missile_launch"; id: number; from: number; to: number; weapon: number; x: number; y: number }
+  | { type: "missile_step"; id: number; x: number; y: number }
+  | { type: "missile_gone"; id: number }
+  | { type: "missile_shield"; uid: number }
+  | { type: "explosion"; x: number; y: number }
+  | { type: "destroyed"; uid: number }
+  | { type: "retreat"; uid: number }
+  | { type: "special"; kind: string; from: number; to: number | null }
+  | { type: "repulse"; uid: number; x: number; y: number }
+  | { type: "cloak"; uid: number; on: boolean };
+
+export interface Battle {
+  planet: number;
+  planet_side: BattleSide;
+  pop: number;
+  fact: number;
+  bases: number;
+  biodamage: number;
+  s: [BattleSideInfo, BattleSideInfo];
+  autoresolve: boolean;
+  special_button: number;
+  num_turn: number;
+  cur_item: number;
+  item: BattleItem[];
+  rocks: [number, number, number][];
+  missiles: BattleMissile[];
+  /** -100 rock, 1 reachable, 10+i friend, 30+i enemy in range, -i enemy out of range. */
+  area: number[][];
+  winner: BattleSide | null;
+  waiting: boolean;
+  started: boolean;
+  applied: boolean;
+  log: BattleAnim[];
+}
+
+export type BattleAction =
+  | { type: "cell"; x: number; y: number }
+  | { type: "done" }
+  | { type: "wait" }
+  | { type: "auto" }
+  | { type: "missile" }
+  | { type: "special" }
+  | { type: "retreat" };
 
 export type Command =
   | { type: "set_sliders"; planet: number; sliders: number[] }
@@ -385,7 +533,9 @@ export type Command =
   | { type: "steal_tech"; index: number; field: number }
   | { type: "sabotage"; index: number; planet: number; kind: SabotageKind }
   | { type: "vote"; candidate: number | null }
-  | { type: "accept_council"; accept: boolean };
+  | { type: "accept_council"; accept: boolean }
+  | { type: "start_battle"; mode: "fight" | "auto" | "retreat" }
+  | { type: "battle"; action: BattleAction };
 
 export interface NewGameOptions {
   seed: number;

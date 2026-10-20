@@ -1,4 +1,5 @@
 // The in-game screen: top bar, map, side panel and dialogs.
+import { battleScreen } from "./battle";
 import type { Ctx } from "./ctx";
 import { designDialog } from "./designer";
 import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefName } from "./diplomacy";
@@ -38,9 +39,10 @@ export class GameScreen {
     const home = this.view.planets.find((p) => p.owner === this.view.player);
     if (home) this.map.selection = { kind: "planet", id: home.id };
     this.render();
-    // A loaded game may have decisions waiting.
+    // A loaded game may have a battle or decisions waiting.
     setTimeout(() => {
-      if (this.view.alive && this.view.winner === null && !this.busy) {
+      if (this.view.in_battle) void this.endTurn();
+      else if (this.view.alive && this.view.winner === null && !this.busy) {
         this.busy = true;
         void this.decisions().finally(() => (this.busy = false));
       }
@@ -446,8 +448,17 @@ export class GameScreen {
   private async processTurn(): Promise<void> {
     this.map.targeting = null;
     this.game.endTurn();
-    await store.put("kv", AUTOSAVE, this.game.save());
     this.refresh();
+    // Battles with the player interrupt the turn: fight each, then let the turn go on.
+    for (let guard = 0; this.view.in_battle && guard < 200; guard++) {
+      if (this.view.battle && this.view.battle.winner === null) {
+        await store.put("kv", AUTOSAVE, this.game.save());
+        await battleScreen(this.ctx);
+      }
+      this.game.endTurn();
+      this.refresh();
+    }
+    await store.put("kv", AUTOSAVE, this.game.save());
     const v = this.view;
     const events = v.events.filter((e) => !["ships_built", "factories_complete"].includes(e.type) || e.to.includes(v.player));
     if (events.length) {

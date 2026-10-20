@@ -48,7 +48,10 @@ flowchart LR
 | `game_misc.c` production, growth, tech output | `turn.rs` | Ported |
 | `game_turn.c` eco, def, ship, ind, reserve, movement, explore | `turn.rs` | Ported with 1oom's fix options, including soil enrichment, atmospheric terraforming, stargates, nebulae and relocation |
 | `game_tech.c` | `tech.rs`, `rules.rs` | Ported: research lists, choices, interest, breakthroughs, field levels, tech effects, Orion and artifact loot |
-| `game_battle*.c` | `combat.rs` | Shot formula (`game_battle_attack`), ship and base stats (`game_parsed.c`), Guardian ported; battles resolve in rounds of simultaneous fire without the tactical grid, movement and most specials |
+| `game_battle.c` | `combat.rs` | Ported: battles two parties at a time per planet, results, retreat to the nearest colony |
+| `game_battle_human.c`, `game_parsed.c` | `battle.rs` | Ported as a state machine (the turn pauses for a human battle): grid, movement and routes, initiative, beams, missiles in flight, asteroids, every combat special, retreat; the hit points of ship pictures (FIRING.LBX) are taken as the cell centre |
+| battle AI of `game_ai_classic.c` | `battle_ai.rs`, `combat.rs` | Ported: targets, best range, evading missiles, retreat, and the computer-against-computer resolution |
+| `fmt_mus.c` | `crates/lbx/src/music.rs` | Ported: XMIDI to MIDI; played by a built-in synthesizer (`web/src/audio.ts`) |
 | `game_bomb.c`, `game_turn_transport_shoot` | `combat.rs` | Ported |
 | `game_ground.c` | `combat.rs` | Ported (d100 + bonus rounds) |
 | `game_shiptech.c`, `game_shipdesign.c`, `game_design.c` | `data.rs` (generated), `design.rs` | Ported: part tables, cost, space, engines, hit points, starting designs |
@@ -84,15 +87,20 @@ import, mods, CI/CD, releases, website.
 - Still open: the classic AI's fleet, production and design routines (`turn_p1`, `turn_p3`
   sliders, `design_ship`), the GNN newscast screen.
 
-### 0.4.0: battles and presentation
+### 0.4.0: battles and presentation (done)
 - Tactical combat on a grid (`game_battle_human.c`) with sprites from imported SHIPS.LBX or
   theme art.
-- Music and sound: XMIDI to MIDI in the importer (`fmt_mus.c`) and a SoundFont synth.
+- Music and sound: XMIDI to MIDI in the importer (`fmt_mus.c`) and a synthesizer (built in,
+  no SoundFont needed); procedural sound effects.
 - Combat specials (repulsor, stasis, black hole, teleporter, ...), retreat.
-- LBX import in a Web Worker, more aliases (ships, screens), tech descriptions from RESEARCH.LBX, fonts.
+- LBX import in a Web Worker, more aliases (ships, battle screens, missiles, music), tech
+  descriptions from RESEARCH.LBX.
+- Still open: MOO1 fonts, the ground battle and GNN newscast screens, sound effects from
+  SOUNDFX.LBX.
 
 ### Later
 - The rest of the classic AI (fleets, production sliders, ship design).
+- MOO1 fonts, ground battle and newscast screens, SOUNDFX.LBX.
 - Comparison harness against C 1oom (same seed, turn-by-turn state diff) to pin the rules.
 - Translations, accessibility, touch controls, multiplayer by save exchange.
 

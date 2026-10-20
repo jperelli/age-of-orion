@@ -775,7 +775,32 @@ fn claim(st: &mut State) {
 
 /// Processes one turn for every empire, in the order of 1oom `game_turn_process`.
 /// AI orders must have been given before (`ai::play`).
+/// Processes the turn. A battle with a human player interrupts it: `st.battle` holds the
+/// battle and `st.progress` where to resume; calling `process` again once the battle is
+/// over continues the turn.
 pub fn process(st: &mut State) {
+    if st.progress.is_none() {
+        let arrived = before_battles(st);
+        st.progress = Some(Progress {
+            arrived,
+            ..Default::default()
+        });
+    }
+    if let Some(bt) = st.battle.as_ref() {
+        if bt.winner.is_none() {
+            return;
+        }
+        combat::finish_battle(st);
+        st.battle = None;
+    }
+    if combat::battles(st) {
+        return;
+    }
+    let arrived = st.progress.take().map(|p| p.arrived).unwrap_or_default();
+    after_battles(st, arrived);
+}
+
+fn before_battles(st: &mut State) -> Vec<Transport> {
     st.events.clear();
     audience::expire(st);
     council::expire(st);
@@ -795,7 +820,10 @@ pub fn process(st: &mut State) {
     let arrived = move_ships(st);
     events::move_monsters(st);
     spy::report(st);
-    combat::battles(st);
+    arrived
+}
+
+fn after_battles(st: &mut State, arrived: Vec<Transport>) {
     spy::turn(st);
     tech::research(st);
     colonize(st);
