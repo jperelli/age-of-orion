@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Age theme says Disband instead of Scrap in the army roster.
+
 ## [0.2.0] - 2026-10-20
 
 Closer to Master of Orion: research choices, ship design and the missing planet and fleet

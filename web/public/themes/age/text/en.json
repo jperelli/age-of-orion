@@ -863,5 +863,6 @@
  "colony.rally_choose": "Choose the city where new units from {planet} will march (Esc to cancel).",
  "map.via_stargate": "1 turn (waygate)",
  "research.auto": "Choose the cheapest subject for every idle field",
- "unit.rp": "learning"
+ "unit.rp": "learning",
+ "designer.scrap": "Disband"
 }
