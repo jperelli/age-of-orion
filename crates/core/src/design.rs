@@ -51,6 +51,12 @@ pub struct ShipDesign {
     pub man: u8,
     #[serde(default)]
     pub hp: u32,
+    /// Cost in BC as of the last ship building (1oom `cost`, updated every turn).
+    #[serde(default)]
+    pub cost_bc: u32,
+    /// Free space after the parts (1oom `space`).
+    #[serde(default)]
+    pub space: i32,
 }
 
 /// The five MOO1 starting designs (1oom `tbl_startship`).
@@ -71,8 +77,12 @@ pub fn start_designs() -> Vec<ShipDesign> {
             armor: 0,
             man: 0,
             hp: 0,
+            cost_bc: 0,
+            space: 0,
         };
         sd.update();
+        sd.cost_bc = sd.cost(&[1; NUM_FIELDS]);
+        sd.space = sd.free_space(&[1; NUM_FIELDS]);
         sd
     };
     vec![
@@ -543,6 +553,8 @@ pub fn auto_design(tech: &Tech, role: Role, hull: u8, name: String) -> ShipDesig
         armor: 0,
         man: 0,
         hp: 0,
+        cost_bc: 0,
+        space: 0,
     };
     let fits = |d: &ShipDesign| {
         let mut t = d.clone();

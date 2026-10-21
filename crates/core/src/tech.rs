@@ -8,23 +8,40 @@
 
 use serde::Serialize;
 
-use crate::data::{RESEARCH_FLAGS, TECHS};
+use crate::data::{RESEARCH_FLAGS, TECHS, TECH_GROUPS};
 use crate::rng::Rng;
+use crate::rules::Abilities;
 use crate::state::*;
 use crate::types::*;
 
 pub const TIERS: usize = 10;
+/// 1oom `TECH_NEXT_MAX`.
 pub const NEXT_MAX: usize = 12;
 const NEVER: u8 = 1;
 const ALWAYS: u8 = 2;
 
-/// Whether tech `n` exists in `field`. Numbers 55, 60 .. 100 are the repeatable
-/// advanced techs available once a field's list is exhausted.
+/// Whether tech `n` exists in `field` (1oom: its RESEARCH.LBX group is not `0xff`).
+/// Numbers 55, 60 .. 100 are the repeatable advanced techs available once a field's list
+/// is exhausted.
 pub fn exists(field: usize, n: u8) -> bool {
     match n {
-        1..=50 => !TECHS[field][n as usize].is_empty(),
+        1..=50 => !TECHS[field][n as usize].is_empty() && TECH_GROUPS[field][n as usize][1] > 0,
         55..=100 => n % 5 == 0,
         _ => false,
+    }
+}
+
+/// 1oom `game_tech_get_group` (`None` = `TECH_GROUP_UNUSED`).
+pub fn group(field: usize, n: u8) -> Option<u8> {
+    (n <= 50 && exists(field, n)).then(|| TECH_GROUPS[field][n as usize][0])
+}
+
+/// 1oom `game_tech_get_tier`.
+pub fn tier(field: usize, n: u8) -> u8 {
+    if group(field, n).is_some() {
+        TECH_GROUPS[field][n as usize][1]
+    } else {
+        0
     }
 }
 
@@ -106,24 +123,28 @@ pub fn next_techs(t: &Tech, field: usize) -> Vec<u8> {
     } else {
         ((tmax as usize).saturating_sub(1) / 5 + 2).min(TIERS)
     };
-    let mut out: Vec<u8> = t.list[field][..maxtier]
-        .iter()
-        .flatten()
-        .copied()
-        .filter(|&n| n != 0 && !c.contains(&n))
-        .take(NEXT_MAX)
-        .collect();
+    let mut out: Vec<u8> = Vec::new();
+    for row in &t.list[field][..maxtier] {
+        for &n in row {
+            if n != 0 && !c.contains(&n) && out.len() < NEXT_MAX {
+                out.push(n);
+            }
+        }
+    }
     if out.is_empty() {
         let top = if tmax <= 50 { 55 } else { (tmax + 5).min(100) };
-        out = (55..=top)
-            .step_by(5)
-            .filter(|n| !c.contains(n))
-            .take(NEXT_MAX)
-            .collect();
+        let mut n = 55;
+        while n <= top {
+            if !c.contains(&n) && out.len() < NEXT_MAX {
+                out.push(n);
+            }
+            n += 5;
+        }
     }
     out
 }
 
+/// 1oom `game_tech_get_next_rp` (with the mod multiplier `research_cost_percent`).
 pub fn cost_of(st: &State, empire: EmpireId, field: usize, tech: u8) -> u32 {
     let e = &st.empires[empire as usize];
     st.rules
@@ -141,17 +162,13 @@ pub fn start_project(st: &mut State, empire: EmpireId, field: usize, tech: u8) {
     t.cost[field] = cost;
 }
 
-/// 1oom `game_ai_classic_tech_next`.
+/// 1oom `game_tech_ai_tech_next`.
 pub fn ai_choose(st: &mut State, empire: EmpireId, field: usize) {
     let next = next_techs(&st.empires[empire as usize].tech, field);
     if next.is_empty() {
         return;
     }
-    let tech = if st.rng.one_to(6) < st.difficulty as u16 {
-        next[next.len() - 1]
-    } else {
-        next[st.rng.below(next.len() as u16) as usize]
-    };
+    let tech = crate::ai::tech_next(st, &next);
     start_project(st, empire, field, tech);
 }
 
@@ -192,7 +209,6 @@ pub fn grant_from(
         return;
     }
     t.add(field, tech);
-    t.level[field] = field_level(t, field);
     if t.project[field] == tech {
         t.project[field] = 0;
         t.invested[field] = 1;
@@ -220,17 +236,18 @@ pub fn research(st: &mut State) {
             let t = &mut st.empires[ei].tech;
             let slider = t.alloc[f];
             let mut invest = t.invested[f];
-            let t3 = slider * total / 100;
-            let t1 = (invest * 3 / 20).min(t3 * 2);
-            invest += t3 + t1;
+            let t3 = slider.wrapping_mul(total) / 100;
+            let t1 = (invest.wrapping_mul(3) / 20).min(t3.wrapping_mul(2));
+            invest = invest.wrapping_add(t3).wrapping_add(t1);
             t.invested[f] = invest;
             t.level[f] = field_level(t, f);
             let cost = t.cost[f];
             if cost != 0 && slider != 0 && total != 0 {
                 if cost < invest {
-                    let v = ((invest - cost) as u64 * 250 / cost as u64).min(500) as u16;
-                    if st.rng.one_to(500) <= v {
+                    let v = (invest - cost).wrapping_mul(250) / cost;
+                    if st.rng.one_to(500) as u32 <= v {
                         let project = st.empires[ei].tech.project[f];
+                        crate::misc::planet_random(st, ei as EmpireId);
                         grant(st, ei as u8, f, project, Source::Research);
                     }
                 }
@@ -239,75 +256,94 @@ pub fn research(st: &mut State) {
             }
         }
     }
+    update_tech_util(st);
 }
 
-/// 1oom `game_tech_final_war_share`: the sides of the final war pool their techs.
-pub fn final_war_share(st: &mut State) {
+/// 1oom `game_update_tech_util`.
+pub fn update_tech_util(st: &mut State) {
+    for e in st.empires.iter_mut() {
+        e.ab = Abilities::new(&e.tech, e.race);
+    }
+}
+
+/// 1oom `game_tech_share`: the empires on one side of the final war pool their techs.
+fn share(st: &mut State, f: usize, accepted: bool, from_dead: bool) {
     let n = st.empires.len();
-    let refusers = st.council.refuse.iter().filter(|&&r| r).count();
-    for f in 0..NUM_FIELDS {
-        for side in [false, true] {
-            if side && refusers < 2 {
-                continue;
+    let refuse = |st: &State, i: usize| st.council.refuse.get(i).copied().unwrap_or(false);
+    let mut have = [false; 101];
+    let mut source = [0u8; 101];
+    let mut maxtech = 0u8;
+    for pi in 0..n {
+        if (!refuse(st, pi)) == accepted && (from_dead || st.empires[pi].alive) {
+            for &t in &st.empires[pi].tech.completed[f] {
+                have[t as usize] = true;
+                maxtech = maxtech.max(t);
+                source[t as usize] = pi as u8;
             }
-            let members: Vec<usize> = (0..n)
-                .filter(|&i| st.council.refuse.get(i).copied().unwrap_or(false) == side)
-                .collect();
-            let mut pool: Vec<(u8, usize)> = Vec::new();
-            for &i in &members {
-                for &t in &st.empires[i].tech.completed[f] {
-                    pool.push((t, i));
-                }
-            }
-            let alive: Vec<usize> = members
-                .iter()
-                .copied()
-                .filter(|&i| st.empires[i].alive)
-                .collect();
-            for i in alive {
-                for &(t, src) in &pool {
-                    if !st.empires[i].tech.has(f, t) {
-                        grant_from(st, i as u8, f, t, Source::Trade, Some(src as u8));
-                    }
+        }
+    }
+    for pi in 0..n {
+        if refuse(st, pi) == accepted || !st.empires[pi].alive {
+            continue;
+        }
+        if st.empires[pi].ai {
+            st.empires[pi].tech.completed[f] =
+                (0..=maxtech).filter(|&t| have[t as usize]).collect();
+        } else {
+            for t in 0..=maxtech {
+                if have[t as usize] && !st.empires[pi].tech.has(f, t) {
+                    grant_from(st, pi as u8, f, t, Source::Trade, Some(source[t as usize]));
                 }
             }
         }
     }
 }
 
-/// Picks a random tech the empire lacks among `range`, up to `levels` above its level.
-fn random_missing(
-    st: &mut State,
-    empire: EmpireId,
-    range: (u8, u8),
-    levels: u32,
-) -> Option<(usize, u8)> {
-    for _ in 0..200 {
-        let field = st.rng.below(NUM_FIELDS as u16) as usize;
-        let tech = range.0 + st.rng.below((range.1 - range.0 + 1) as u16) as u8;
-        let t = &st.empires[empire as usize].tech;
-        let limit = (t.level[field] + levels).min(50);
-        if limit >= tech as u32 && exists(field, tech) && !t.has(field, tech) {
-            return Some((field, tech));
-        }
+/// 1oom `game_tech_final_war_share`.
+pub fn final_war_share(st: &mut State) {
+    for f in 0..NUM_FIELDS {
+        share(st, f, true, true);
+        share(st, f, false, false);
     }
-    None
 }
 
 /// 1oom `game_tech_get_orion_loot`: the Death Ray and three advanced techs.
 pub fn orion_loot(st: &mut State, empire: EmpireId) {
     grant(st, empire, FIELD_WEAPON, 36, Source::Orion);
+    let level = st.empires[empire as usize].tech.level;
+    let percent: Vec<u32> = level.iter().map(|&l| (l + 25).min(50)).collect();
     for _ in 0..3 {
-        if let Some((f, n)) = random_missing(st, empire, (20, 50), 25) {
-            grant(st, empire, f, n, Source::Orion);
+        for _ in 0..200 {
+            let field = st.rng.below(NUM_FIELDS as u16) as usize;
+            let tech = (st.rng.one_to(31) + 19) as u8;
+            if percent[field] >= tech as u32
+                && group(field, tech).is_some()
+                && !st.empires[empire as usize].tech.has(field, tech)
+            {
+                grant(st, empire, field, tech, Source::Orion);
+                break;
+            }
         }
     }
 }
 
-/// 1oom `game_tech_get_artifact_loot`: one tech for the first explorer of ancient ruins.
+/// 1oom `game_tech_get_artifact_loot`: one tech for the first human explorer of ruins.
 pub fn artifact_loot(st: &mut State, empire: EmpireId) {
-    if let Some((f, n)) = random_missing(st, empire, (1, 30), 10) {
-        grant(st, empire, f, n, Source::Artifacts);
+    if st.empires[empire as usize].ai {
+        return;
+    }
+    let level = st.empires[empire as usize].tech.level;
+    let percent: Vec<u32> = level.iter().map(|&l| (l + 10).min(50)).collect();
+    for _ in 0..200 {
+        let field = st.rng.below(NUM_FIELDS as u16) as usize;
+        let tech = st.rng.one_to(30) as u8;
+        if percent[field] >= tech as u32
+            && group(field, tech).is_some()
+            && !st.empires[empire as usize].tech.has(field, tech)
+        {
+            grant(st, empire, field, tech, Source::Artifacts);
+            break;
+        }
     }
 }
 

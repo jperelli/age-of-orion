@@ -722,7 +722,7 @@ pub fn update_trade(st: &mut State) {
 /// Fleet strength statistic, 0..100 (1oom `game_stat_fleet`).
 pub fn stat_fleet(st: &State, e: EmpireId) -> i32 {
     const HULL_W: [i64; 4] = [1, 5, 25, 125];
-    let totals = crate::turn::ship_totals(st, e);
+    let totals = crate::misc::ship_totals(st, e as usize);
     let mut sum: i64 = st.empires[e as usize]
         .designs
         .iter()
@@ -838,8 +838,14 @@ pub fn diplo_adjust(st: &mut State) {
             st.empires[i].rel[j].relation = r1.clamp(-100, 100);
         }
     }
-    for (i, e) in st.empires.iter_mut().enumerate() {
-        e.rel[i].relation = 0;
+    for i in 0..n as usize {
+        for j in 0..n as usize {
+            if i == j {
+                st.empires[i].rel[j].relation = 0;
+            } else {
+                st.empires[j].rel[i].relation = st.empires[i].rel[j].relation;
+            }
+        }
     }
 }
 

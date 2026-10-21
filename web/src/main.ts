@@ -126,6 +126,7 @@ function newGame(): void {
   const size = select<GalaxySize>(["small", "medium", "large", "huge"], "newgame.size.", "small");
   const diff = select<Difficulty>(["simple", "easy", "average", "hard", "impossible"], "newgame.difficulty.", "easy");
   const players = h("select", {}, ...[2, 3, 4, 5, 6].map((n) => h("option", { value: n, selected: n === 4 }, t("newgame.opponents_n", { n: n - 1 }))));
+  const ai = h("select", {}, ...[0, 1].map((n) => h("option", { value: n }, t(`newgame.ai.${n}`))));
   const race = h(
     "select",
     {},
@@ -142,6 +143,7 @@ function newGame(): void {
       galaxy_size: size.value as GalaxySize,
       difficulty: diff.value as Difficulty,
       players: Number(players.value),
+      ai_id: Number(ai.value),
       race: r,
       banner: banner.value === "" ? null : Number(banner.value),
       star_names: theme.list("names.sites"),
@@ -176,6 +178,7 @@ function newGame(): void {
           field(t("newgame.size"), size),
           field(t("newgame.difficulty"), diff),
           field(t("newgame.opponents"), players),
+          field(t("newgame.ai"), ai),
           field(t("newgame.seed"), seed),
         ),
         h("div", { class: "menu-buttons row" }, h("button", { onclick: () => menu() }, t("btn.back")), h("button", { class: "primary", onclick: start }, t("newgame.start"))),

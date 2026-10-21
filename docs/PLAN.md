@@ -44,25 +44,27 @@ flowchart LR
 | 1oom | Rust | Status |
 |---|---|---|
 | `rnd.c` | `rng.rs` | Ported exactly |
-| `game_new.c` (nebulae, planets, names, homes, research lists) | `galaxy.rs`, `tech.rs` | Nebulae, planets and research lists ported exactly; home placement simplified |
-| `game_misc.c` production, growth, tech output | `turn.rs` | Ported |
-| `game_turn.c` eco, def, ship, ind, reserve, movement, explore | `turn.rs` | Ported with 1oom's fix options, including soil enrichment, atmospheric terraforming, stargates, nebulae and relocation |
-| `game_tech.c` | `tech.rs`, `rules.rs` | Ported: research lists, choices, interest, breakthroughs, field levels, tech effects, Orion and artifact loot |
+| `util_math.c` | `umath.rs` | Ported exactly: integer angles, distances and movement in map units |
+| `game_new.c` (nebulae, planets, names, homes, research lists) | `galaxy.rs`, `tech.rs` | Nebulae, planets and research lists ported; home placement simplified, so the same seed does not yet give 1oom's galaxy |
+| `game_misc.c`, `game_planet.c` | `misc.rs` | Ported exactly (production, maintenance, research totals, waste, ranges, contact, visibility) |
+| `game_turn.c` | `turn.rs` | Ported exactly, in `game_turn_process` order, with 1oom's default rules (MOO1 v1.3a fixes, no optional fixes) |
+| `game_fleet.c` | `fleet.rs` | Ported exactly (fleet and transport lists keep 1oom's order) |
+| `game_tech.c` | `tech.rs`, `rules.rs` | Ported exactly: research lists, interest, breakthroughs, field levels, `game_update_tech_util`, Orion and artifact loot |
 | `game_battle.c` | `combat.rs` | Ported: battles two parties at a time per planet, results, retreat to the nearest colony |
 | `game_battle_human.c`, `game_parsed.c` | `battle.rs` | Ported as a state machine (the turn pauses for a human battle): grid, movement and routes, initiative, beams, missiles in flight, asteroids, every combat special, retreat; the hit points of ship pictures (FIRING.LBX) are taken as the cell centre |
-| battle AI of `game_ai_classic.c` | `battle_ai.rs`, `combat.rs` | Ported: targets, best range, evading missiles, retreat, and the computer-against-computer resolution |
+| battle AI of `game_ai_classic.c` | `battle_ai.rs`, `combat.rs` | Ported: targets, best range, evading missiles, retreat, and the computer-against-computer resolution (checked with the harness) |
 | `fmt_mus.c` | `crates/lbx/src/music.rs` | Ported: XMIDI to MIDI; played by a built-in synthesizer (`web/src/audio.ts`) |
-| `game_bomb.c`, `game_turn_transport_shoot` | `combat.rs` | Ported |
-| `game_ground.c` | `combat.rs` | Ported (d100 + bonus rounds) |
+| `game_bomb.c` | `combat.rs` | Ported; damage still differs from 1oom in some harness turns |
+| `game_turn_transport`, `game_ground.c` | `ground.rs` | Ported exactly |
 | `game_shiptech.c`, `game_shipdesign.c`, `game_design.c` | `data.rs` (generated), `design.rs` | Ported: part tables, cost, space, engines, hit points, starting designs |
-| `game_ai_classic.c` | `ai.rs`, `ai_diplo.rs`, `audience.rs` | Diplomacy (`turn_diplo_p1/p2`, `diplo_wage_war`, audience answers), votes, spying, security, taxes, research choice and focus ported; fleets, production and ship design use a compact strategy of their own |
-| `game_diplo.c`, diplomacy steps of `game_turn.c` | `diplo.rs` | Ported (relations, moods, treaties, trade, contact, battle consequences) with the Classic+ fixes |
+| `game_ai_classic.c` | `ai.rs`, `ai_diplo.rs`, `audience.rs` | Ported: `turn_p1` (scouts, colony ships, fronts, attack, defence, idle fleets, transports, reserve, taxes), `turn_p2` (design, scrapping, production), `turn_p3` (sliders, research focus, security, spies), new-game setup, diplomacy, audiences, votes; Classic and Classic+ |
+| `game_diplo.c`, diplomacy steps of `game_turn.c` | `diplo.rs` | Ported (relations, moods, treaties, trade, contact, battle consequences) |
 | `game_audience.c` | `audience.rs` | Ported as request/answer steps instead of a blocking dialogue |
 | `game_spy.c` | `spy.rs` | Ported; tech groups and tiers (in RESEARCH.LBX in MOO1) are derived from the tech names |
-| `game_event.c`, `game_turn_coup` | `events.rs` | Ported: all 16 events, monsters, rebellions, coups; texts are our own, or MOO1's from an imported EVENTMSG.LBX |
+| `game_event.c`, `game_turn_coup` | `events.rs` | Ported: all 16 events, monsters, rebellions, coups; some events still differ from 1oom in harness turns; texts are our own, or MOO1's from an imported EVENTMSG.LBX |
 | `game_election.c` | `council.rs` | Ported, with the vote and the acceptance as player commands |
 | `game_news.c` | `web/src/game.ts` | Event reports in the turn summary; the GNN newscast and its statistics are not shown |
-| `game_save.c` | `serde` JSON | New format; MOO1 save import not yet |
+| `game_save.c` | `serde` JSON; `crates/harness/src/oom.rs` | New format; 1oom saves are read by the harness (not yet by the game) |
 
 ## Milestones
 
@@ -98,11 +100,27 @@ import, mods, CI/CD, releases, website.
 - Still open: MOO1 fonts, the ground battle and GNN newscast screens, sound effects from
   SOUNDFX.LBX.
 
+### 0.5.0: the classic AI and the comparison harness (done)
+- The rest of the classic AI (`turn_p1`, `turn_p2`, `turn_p3`, new-game setup), Classic and
+  Classic+.
+- Turn processing, production, fleets, research and ground combat ported exactly, with
+  integer map geometry (`util_math.c`).
+- Comparison harness against C 1oom ([HARNESS.md](HARNESS.md)): the first 40 years of a
+  computer-only game are identical turn by turn; about half the turns of longer games.
+
+### 0.6.0: presentation
+- MOO1 fonts, the ground battle and GNN newscast screens, sound effects from SOUNDFX.LBX.
+
+### 0.7.0: exact rules
+- Drive the remaining subsystems to 1oom parity with the harness: random events, orbital
+  bombing, diplomacy, espionage, the council, battles; the same galaxy from the same seed;
+  long freeruns.
+
+### 0.8.0: Spanish
+- Spanish translation of both themes and a language selector.
+
 ### Later
-- The rest of the classic AI (fleets, production sliders, ship design).
-- MOO1 fonts, ground battle and newscast screens, SOUNDFX.LBX.
-- Comparison harness against C 1oom (same seed, turn-by-turn state diff) to pin the rules.
-- Translations, accessibility, touch controls, multiplayer by save exchange.
+- Accessibility, touch controls, multiplayer by save exchange, MOO1 save import.
 
 ## Legal constraints
 

@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use crate::diplo::{self, Treaty};
 use crate::state::*;
 use crate::tech::{self, Source};
-use crate::turn::tech_prod;
 use crate::types::*;
 
 pub const EVENT_NUM: usize = 17;
@@ -38,8 +37,8 @@ pub enum MonsterKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Monster {
     pub kind: MonsterKind,
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
     pub dest: PlanetId,
     /// Turns it waits at a planet before destroying it.
     pub counter: i32,
@@ -214,8 +213,8 @@ fn monster_start(st: &mut State, kind: MonsterKind) -> Monster {
     let dest = (dest.max(0) as usize).min(st.planets.len() - 1);
     Monster {
         kind,
-        x: x as f64,
-        y: y as f64,
+        x,
+        y,
         dest,
         counter: 2,
         nuked: 0,
@@ -258,34 +257,13 @@ fn monster_next(st: &mut State, m: &mut Monster) {
 }
 
 /// Monsters move one parsec per turn (1oom `game_turn_move_ships`).
-pub fn move_monsters(st: &mut State) {
-    let parsec = st.rules.parsec;
-    let planets = st.planets.clone();
-    for m in st.evn.monsters.iter_mut() {
-        if m.counter > 0 {
-            continue;
-        }
-        let (tx, ty) = (planets[m.dest].x as f64, planets[m.dest].y as f64);
-        let d = ((tx - m.x).powi(2) + (ty - m.y).powi(2)).sqrt();
-        if d <= parsec {
-            m.x = tx;
-            m.y = ty;
-        } else {
-            m.x += (tx - m.x) * parsec / d;
-            m.y += (ty - m.y) * parsec / d;
-        }
-    }
-}
-
 /// The monster sitting at `planet`, if any.
 pub fn monster_at(st: &State, planet: PlanetId) -> Option<usize> {
     let p = &st.planets[planet];
-    st.evn.monsters.iter().position(|m| {
-        m.killer.is_none()
-            && m.dest == planet
-            && (m.x - p.x as f64).abs() < 0.5
-            && (m.y - p.y as f64).abs() < 0.5
-    })
+    st.evn
+        .monsters
+        .iter()
+        .position(|m| m.killer.is_none() && m.dest == planet && m.x == p.x && m.y == p.y)
 }
 
 /// 1oom `game_event_new`: maybe start a new event.
@@ -481,7 +459,7 @@ pub fn new_event(st: &mut State) {
                 .owner
                 .map_or(0, |o| st.empires[o as usize].abilities().terraform);
             let max = st.rules.max_pop;
-            crate::turn::soil_enrich(&mut st.planets[planet], tf, false, max);
+            crate::misc::soil_enrich(&mut st.planets[planet], tf, false, max);
             news(
                 st,
                 vec![],
@@ -545,13 +523,38 @@ pub fn blocked_research(st: &State, planet: PlanetId) -> bool {
 
 /// 1oom `game_event_run`: lasting events, monsters, rebellions.
 pub fn run(st: &mut State) {
+    let news_before = st
+        .events
+        .iter()
+        .filter(|e| matches!(e.kind, EventKind::News { .. }))
+        .count();
+    run_events(st);
+    if let Some(k) = st.guardian_killer.take() {
+        let planet = st.orion;
+        st.push_event(vec![], EventKind::GuardianDefeated { planet, by: k });
+        crate::tech::orion_loot(st, k);
+    }
+    let any_news = st
+        .events
+        .iter()
+        .filter(|e| matches!(e.kind, EventKind::News { .. }))
+        .count()
+        > news_before;
+    // 1oom: a newscast with galaxy statistics when nothing else happened.
+    if !any_news && st.rng.below(40) == 0 && year_n(st) > 25 && !st.council.final_war {
+        let sub = st.rng.below(4);
+        news(st, vec![], "stats", sub as u8, None, None, 0, 0);
+    }
+}
+
+fn run_events(st: &mut State) {
     if let Some(mut l) = st.evn.plague.take() {
         let p = &st.planets[l.planet];
         if p.owner == Some(l.player) {
             let race = st.empires[l.player as usize].race;
             let mut killed = 0;
             if l.stage != 1 {
-                l.val -= tech_prod(p, race);
+                l.val -= crate::misc::tech_prod(p.prod, p.sliders[SLIDER_TECH], race, p.special);
                 killed = ((st.rng.one_to(6) as i32 + 4) * p.pop / 100).min(p.pop);
                 st.planets[l.planet].pop -= killed;
             }
@@ -595,7 +598,10 @@ pub fn run(st: &mut State) {
         if l.stage != 1 {
             if let Some(o) = owner {
                 let race = st.empires[o as usize].race;
-                l.val -= tech_prod(&st.planets[l.planet], race);
+                l.val -= {
+                    let p = &st.planets[l.planet];
+                    crate::misc::tech_prod(p.prod, p.sliders[SLIDER_TECH], race, p.special)
+                };
                 l.years -= 1;
             }
         }
@@ -831,7 +837,7 @@ pub fn run(st: &mut State) {
             return false;
         }
         let p = &st.planets[m.dest];
-        let at = (m.x - p.x as f64).abs() < 0.5 && (m.y - p.y as f64).abs() < 0.5;
+        let at = m.x == p.x && m.y == p.y;
         if at && m.counter <= 0 {
             let owner = p.owner;
             let colony = p.pop > 0 && owner.is_some();
@@ -1005,9 +1011,9 @@ mod tests {
         let m = monster_start(st, MonsterKind::Amoeba);
         st.evn.monsters.push(m);
         for _ in 0..40 {
-            move_monsters(st);
-            run(st);
+            g.end_turn_auto();
         }
+        let st = g.state();
         assert!(
             st.evn.monsters.is_empty()
                 || st.evn.monsters[0].nuked > 0
@@ -1020,7 +1026,7 @@ mod tests {
         let mut g = Game::new(&NewGameOptions::default()).unwrap();
         let st = g.state_mut();
         let home = st.empires[0].home;
-        let (x, y) = (st.planets[home].x as f64, st.planets[home].y as f64);
+        let (x, y) = (st.planets[home].x, st.planets[home].y);
         let mut m = monster_start(st, MonsterKind::Amoeba);
         m.x = x;
         m.y = y;

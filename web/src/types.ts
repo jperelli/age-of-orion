@@ -38,6 +38,8 @@ export interface Colony {
   waste: number;
   clean_eco: number;
   pop_oper_fact: number;
+  /** Colonists leaving at the end of the turn: [pop, destination]. */
+  transport: [number, number] | null;
 }
 
 export interface PlanetView {
@@ -542,6 +544,8 @@ export interface NewGameOptions {
   galaxy_size: GalaxySize;
   difficulty: Difficulty;
   players: number;
+  /** 0: Classic (MOO1's computer players, bugs included), 1: Classic+ (1oom's fixes). */
+  ai_id?: number;
   race: Race | null;
   banner: number | null;
   star_names?: string[];

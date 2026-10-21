@@ -8,11 +8,12 @@ use crate::council::Election;
 use crate::design::{self, DesignStats, KnownParts, ShipDesign};
 use crate::diplo::{self, SpyMode, TechRef, Treaty};
 use crate::events::MonsterKind;
+use crate::misc::{self, ship_totals};
 use crate::rules::Abilities;
 use crate::spy::SpyChance;
 use crate::state::*;
 use crate::tech;
-use crate::turn::{clean_eco_percent, factory_cost, ship_totals, tech_prod};
+use crate::turn::clean_eco_percent;
 use crate::types::*;
 
 #[derive(Debug, Clone, Serialize)]
@@ -32,6 +33,8 @@ pub struct Colony {
     /// Ecology percent that keeps the colony clean.
     pub clean_eco: i32,
     pub pop_oper_fact: i32,
+    /// Colonists leaving at the end of the turn, and where to (1oom `trans_num`).
+    pub transport: Option<(i32, PlanetId)>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -74,8 +77,8 @@ pub struct FleetView {
     pub owner: EmpireId,
     /// Planet orbited, for ships in orbit.
     pub at: Option<PlanetId>,
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
     pub dest: Option<PlanetId>,
     pub eta: Option<u32>,
     pub ships: Vec<u32>,
@@ -89,8 +92,8 @@ pub struct FleetView {
 pub struct TransportView {
     pub id: u32,
     pub owner: EmpireId,
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
     pub dest: PlanetId,
     pub eta: u32,
     /// Only known for own transports.
@@ -136,8 +139,8 @@ pub struct RelationView {
 #[derive(Debug, Clone, Serialize)]
 pub struct MonsterView {
     pub kind: MonsterKind,
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
     pub dest: PlanetId,
 }
 
@@ -218,16 +221,15 @@ pub struct View {
     pub in_battle: bool,
 }
 
-fn sees(st: &State, me: EmpireId, x: f64, y: f64) -> bool {
-    let e = &st.empires[me as usize];
-    let range = e.abilities().scanner_range as f64 * st.rules.parsec;
-    st.colonies(me).any(|(i, _)| st.dist_xy(x, y, i) <= range)
-        || (0..st.planets.len()).any(|p| {
-            e.orbit[p].iter().any(|&c| c > 0) && st.dist_xy(x, y, p) <= st.rules.parsec * 2.0
-        })
-        || st.fleets.iter().any(|f| {
-            f.owner == me && ((f.x - x).powi(2) + (f.y - y).powi(2)).sqrt() <= st.rules.parsec * 2.0
-        })
+/// 1oom `game_check_coord_is_visible` with the empire's scanner range.
+fn sees(st: &State, me: EmpireId, x: i32, y: i32) -> bool {
+    misc::coord_visible(
+        st,
+        me as usize,
+        st.empires[me as usize].ab.scanner_range,
+        x,
+        y,
+    )
 }
 
 fn field_view(st: &State, me: EmpireId, f: usize) -> FieldView {
@@ -271,12 +273,13 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 },
                 bc_to_ship: p.bc_to_ship,
                 rally: p.rally,
-                factory_cost: factory_cost(p, e),
+                factory_cost: misc::fact_adj_cost(st, p),
                 max_factories: p.max_pop * a.colonist_oper_factories,
-                research: tech_prod(p, e.race),
+                research: misc::tech_prod(p.prod, p.sliders[SLIDER_TECH], e.race, p.special),
                 waste: p.waste,
-                clean_eco: clean_eco_percent(p, e),
+                clean_eco: clean_eco_percent(st, p),
                 pop_oper_fact: p.pop_oper_fact,
+                transport: (p.trans_num > 0).then_some((p.trans_num, p.trans_dest)),
             });
             let known_owner = ex && p.owner.is_some();
             PlanetView {
@@ -318,8 +321,14 @@ pub fn view(st: &State, me: EmpireId) -> View {
             if o.iter().all(|&c| c == 0) {
                 continue;
             }
-            let (x, y) = (st.planets[pi].x as f64, st.planets[pi].y as f64);
-            if ei == me as usize || sees(st, me, x, y) {
+            let (x, y) = (st.planets[pi].x, st.planets[pi].y);
+            if ei == me as usize
+                || st.planets[pi]
+                    .within_srange
+                    .get(me as usize)
+                    .copied()
+                    .unwrap_or(false)
+            {
                 fleets.push(FleetView {
                     id: None,
                     owner: ei as u8,
@@ -345,7 +354,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 x: f.x,
                 y: f.y,
                 dest: Some(f.dest),
-                eta: Some(if f.gate {
+                eta: Some(if f.speed == SPEED_STARGATE {
                     1
                 } else {
                     st.eta(f.x, f.y, f.dest, f.speed)
@@ -367,7 +376,17 @@ pub fn view(st: &State, me: EmpireId) -> View {
             x: t.x,
             y: t.y,
             dest: t.dest,
-            eta: st.eta(t.x, t.y, t.dest, t.speed),
+            eta: if t.speed == SPEED_STARGATE {
+                1
+            } else {
+                st.eta_trans(
+                    t.speed,
+                    t.x,
+                    t.y,
+                    st.planets[t.dest].x,
+                    st.planets[t.dest].y,
+                ) as u32
+            },
             pop: (t.owner == me).then_some(t.pop),
         })
         .collect();
@@ -390,7 +409,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 .count(),
         })
         .collect();
-    let totals = ship_totals(st, me);
+    let totals = ship_totals(st, me as usize);
     let designs = e
         .designs
         .iter()
@@ -446,7 +465,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
         reserve: e.reserve,
         total_prod: e.total_prod,
         maintenance: e.maintenance,
-        research: st.colonies(me).map(|(_, p)| tech_prod(p, e.race)).sum(),
+        research: e.research,
         bombard: e.bombard,
         tech: (0..NUM_FIELDS).map(|f| field_view(st, me, f)).collect(),
         abilities: a,

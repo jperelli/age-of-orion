@@ -261,6 +261,15 @@ export class GameScreen {
         rally ? h("button", { class: "mini", onclick: () => this.command({ type: "set_rally", planet: p.id, to: null }) }, this.t("colony.rally_clear")) : null,
       ),
       p.rebellion ? h("p", { class: "warn small" }, this.t("colony.rebellion_hint")) : null,
+      c.transport
+        ? h(
+            "p",
+            { class: "small" },
+            this.t("colony.transport_pending", { pop: c.transport[0], planet: v.planets[c.transport[1]].name }),
+            " ",
+            h("button", { class: "mini", onclick: () => this.command({ type: "send_transport", from: p.id, to: p.id, pop: 0 }) }, this.t("colony.transport_cancel")),
+          )
+        : null,
       h(
         "div",
         { class: "row" },

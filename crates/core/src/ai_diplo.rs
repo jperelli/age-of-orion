@@ -3,7 +3,7 @@
 //! `turn_p3`). Where 1oom marks a MOO1 bug, the fixed (Classic+) behaviour is used.
 
 use crate::diplo::{
-    self, msg, rel, rel_mut, SpyMode, Treaty, ERRATIC, EXPANSIONIST, HONORABLE, MILITARIST, RELDIFF,
+    self, msg, rel, rel_mut, Treaty, ERRATIC, EXPANSIONIST, HONORABLE, MILITARIST, RELDIFF,
 };
 use crate::spy;
 use crate::state::*;
@@ -35,7 +35,7 @@ fn ratio_roll(st: &mut State, a: i64, b: i64) -> i32 {
 fn fleet_w(st: &mut State, p1: EmpireId, p2: EmpireId) -> i32 {
     const HULL_W: [i64; 4] = [1, 5, 25, 125];
     let w = |st: &State, e: EmpireId| -> i64 {
-        let t = crate::turn::ship_totals(st, e);
+        let t = crate::misc::ship_totals(st, e as usize);
         st.empires[e as usize]
             .designs
             .iter()
@@ -640,54 +640,4 @@ pub fn vote(st: &mut State, player: EmpireId, c1: EmpireId, c2: EmpireId) -> u8 
         }
     }
     0
-}
-
-/// Spying and security of a computer empire (1oom `game_ai_classic_turn_p3` and `_sub1`).
-pub fn spying(st: &mut State, pi: EmpireId) {
-    if st.turn <= 30 {
-        return;
-    }
-    let n = st.empires.len() as u8;
-    let total: i32 = (0..n)
-        .filter(|&p2| rel(st, pi, p2).contact)
-        .map(|p2| rel(st, p2, pi).spies)
-        .sum();
-    let mut sec = if total == 0 {
-        0
-    } else {
-        st.rng.below(2) as i32 * total
-    };
-    sec = (sec + st.difficulty as i32 * 8).min(100);
-    st.empires[pi as usize].security = sec;
-    for p2 in 0..n {
-        rel_mut(st, pi, p2).spymode_next = SpyMode::Hide;
-        let human_cease = !is_ai(st, p2) && rel(st, p2, pi).ceasefire > 0;
-        if human_cease || p2 == pi || !rel(st, pi, p2).contact {
-            continue;
-        }
-        if rel(st, pi, p2).treaty >= Treaty::War {
-            rel_mut(st, pi, p2).spymode_next = SpyMode::Sabotage;
-        } else if st.empires[pi as usize].race == Race::Darlok || st.rng.below(2) == 1 {
-            let r = rel(st, pi, p2).relation;
-            if st.rng.one_to(200) as i32 > r * 2 + 200 {
-                rel_mut(st, pi, p2).spymode_next = SpyMode::Espionage;
-            }
-        }
-    }
-    for p2 in 0..n {
-        {
-            let r = rel_mut(st, pi, p2);
-            r.spying = 0;
-            r.spymode = SpyMode::Hide;
-        }
-        let r = rel(st, pi, p2);
-        let candidate = p2 != pi && r.contact && r.spymode_next != SpyMode::Hide;
-        if candidate && (!is_ai(st, p2) || st.rng.below(3) == 0) {
-            let next = rel(st, pi, p2).spymode_next;
-            let s = st.rng.one_to(5) as i32 + 5;
-            let r = rel_mut(st, pi, p2);
-            r.spymode = next;
-            r.spying = s;
-        }
-    }
 }

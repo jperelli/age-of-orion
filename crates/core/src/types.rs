@@ -129,6 +129,15 @@ pub enum GalaxySize {
 }
 
 impl GalaxySize {
+    pub const ALL: [GalaxySize; 4] = [
+        GalaxySize::Small,
+        GalaxySize::Medium,
+        GalaxySize::Large,
+        GalaxySize::Huge,
+    ];
+}
+
+impl GalaxySize {
     /// Star grid of 1oom `game_generate_galaxy`.
     pub fn grid(self) -> (u16, u16) {
         match self {
@@ -149,6 +158,16 @@ pub enum Difficulty {
     Average,
     Hard,
     Impossible,
+}
+
+impl Difficulty {
+    pub const ALL: [Difficulty; 5] = [
+        Difficulty::Simple,
+        Difficulty::Easy,
+        Difficulty::Average,
+        Difficulty::Hard,
+        Difficulty::Impossible,
+    ];
 }
 
 /// Research fields, 1oom order.

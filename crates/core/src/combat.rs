@@ -35,27 +35,6 @@ fn party_order(p: i32) -> i32 {
     }
 }
 
-/// Whether a hostile empire, the guardian or a monster has armed forces at `planet`.
-pub fn hostile_armed_at(st: &State, planet: PlanetId, empire: EmpireId) -> bool {
-    if (planet == st.orion && st.guardian) || events::monster_at(st, planet).is_some() {
-        return true;
-    }
-    st.empires.iter().enumerate().any(|(i, e)| {
-        i as u8 != empire
-            && diplo::hostile_at(st, empire, i as u8, planet)
-            && armed_ships(e, planet)
-    }) || st.planets[planet].owner.is_some_and(|o| {
-        o != empire && diplo::hostile_at(st, empire, o, planet) && st.planets[planet].bases > 0
-    })
-}
-
-fn armed_ships(e: &Empire, planet: PlanetId) -> bool {
-    e.orbit[planet]
-        .iter()
-        .zip(&e.designs)
-        .any(|(&c, d)| c > 0 && d.armed())
-}
-
 fn participants(st: &State, planet: PlanetId, ids: &[i32]) -> Vec<EmpireId> {
     let mut v: Vec<EmpireId> = ids.iter().filter(|&&i| i >= 0).map(|&i| i as u8).collect();
     if let Some(o) = st.planets[planet].owner {
@@ -70,31 +49,30 @@ fn participants(st: &State, planet: PlanetId, ids: &[i32]) -> Vec<EmpireId> {
 /// (1oom `game_battle_post`), or are lost if there is none.
 fn retreat(st: &mut State, empire: EmpireId, from: PlanetId) {
     let ships = st.empires[empire as usize].orbit[from].clone();
+    let (fx, fy) = (st.planets[from].x, st.planets[from].y);
+    let mut dest = None;
+    let mut mindist = 10000;
+    for (i, p) in st.planets.iter().enumerate() {
+        if i != from && p.owner == Some(empire) {
+            let d = crate::umath::dist_fast(fx, fy, p.x, p.y);
+            if d < mindist {
+                mindist = d;
+                dest = Some(i);
+            }
+        }
+    }
+    if let Some(to) = dest {
+        let pairs: Vec<(usize, u32)> = ships
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|&(_, c)| c > 0)
+            .collect();
+        crate::fleet::send_retreat(st, empire, from, to, &pairs);
+    }
     st.empires[empire as usize].orbit[from]
         .iter_mut()
         .for_each(|c| *c = 0);
-    if ships.iter().all(|&c| c == 0) {
-        return;
-    }
-    let dest = st
-        .colonies(empire)
-        .map(|(i, _)| i)
-        .filter(|&i| i != from)
-        .min_by_key(|&i| (st.dist(from, i) as i64, i));
-    if let Some(to) = dest {
-        let speed = st.fleet_speed(empire, &ships);
-        let id = st.alloc_id();
-        st.fleets.push(Fleet {
-            id,
-            owner: empire,
-            x: st.planets[from].x as f64,
-            y: st.planets[from].y as f64,
-            dest: to,
-            ships,
-            speed,
-            gate: false,
-        });
-    }
 }
 
 /// Parties with forces at a planet (1oom `tbl_have_force`): an owner with missile bases,
@@ -175,7 +153,7 @@ pub fn battles(st: &mut State) -> bool {
             } else {
                 (att, def)
             };
-            let bt = Battle::new(st, r, l, pli);
+            let bt = Battle::new_human(st, r, l, pli);
             st.battle = Some(Box::new(bt));
             if let Some(p) = st.progress.as_mut() {
                 p.battle_planet = pli;
@@ -193,61 +171,84 @@ pub fn battles(st: &mut State) -> bool {
 }
 
 /// 1oom `game_ai_classic_battle_ai_ai_get_weights`.
-fn weights(st: &State, party: i32) -> Vec<i64> {
+fn weights(st: &State, party: i32) -> Vec<i32> {
     if party < 0 {
         return Vec::new();
     }
-    const HULL_W: [i64; 4] = [1, 5, 25, 125];
+    const HULL_W: [i32; 4] = [1, 5, 25, 125];
     let e = &st.empires[party as usize];
     e.designs
         .iter()
         .map(|sd| {
-            let mut w = sd.shield as i64 * 5
-                + sd.comp as i64 * 5
-                + sd.weapons[0] as i64
-                + sd.armor as i64 * 10;
-            w += sd.specials.iter().map(|&s| s as i64 * 2).sum::<i64>();
-            w += e.tech.level[FIELD_CONSTRUCTION] as i64 / 2;
+            let mut w = sd.shield as i32 * 5
+                + sd.comp as i32 * 5
+                + sd.weapons[0] as i32
+                + sd.armor as i32 * 10;
+            w += sd.specials.iter().map(|&s| s as i32 * 2).sum::<i32>();
+            w += e.tech.level[FIELD_CONSTRUCTION] as i32 / 2;
             if matches!(e.race, Race::Mrrshan | Race::Alkari) {
-                w += 20;
+                w += if st.ai_id == 0 { 15 } else { 20 };
             }
-            w * HULL_W[sd.hull.min(3) as usize]
+            w.wrapping_mul(HULL_W[sd.hull.min(3) as usize])
         })
         .collect()
 }
 
 /// 1oom `game_ai_classic_battle_ai_ai_resolve`: computer against computer (or a monster),
-/// resolved from the strength of both sides, then `game_battle_finish` and `_post`.
+/// resolved from the strength of both sides (32-bit, as MOO1), then `game_battle_finish`
+/// and `_post`.
 fn resolve_ai(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) {
     let mut bt = Battle::new(st, party_r, party_l, planet);
     let wl_tbl = weights(st, party_l);
     let wr_tbl = weights(st, party_r);
-    let force = |st: &State, party: i32, tbl: &[i64]| -> i64 {
+    let force = |st: &State, party: i32, tbl: &[i32]| -> i32 {
         if party < 0 {
             return if party == GUARDIAN { 100_000 } else { 30_000 };
         }
-        st.empires[party as usize].orbit[planet]
-            .iter()
-            .enumerate()
-            .map(|(d, &n)| n as i64 * tbl.get(d).copied().unwrap_or(0))
-            .sum()
+        let e = &st.empires[party as usize];
+        let mut w: i32 = 0;
+        for d in 0..e.designs.len() {
+            let n = e.orbit[planet][d];
+            if n > 0 {
+                w = w.wrapping_add((n as i32).wrapping_mul(tbl[d]));
+            }
+        }
+        w
     };
-    let base = |st: &State, party: i32| -> i64 {
+    let base = |st: &State, party: i32| -> i32 {
         let t = &st.empires[party as usize].tech.level;
-        (t[FIELD_WEAPON] + t[FIELD_FORCE_FIELD]) as i64
+        (t[FIELD_WEAPON] + t[FIELD_FORCE_FIELD]) as i32
     };
-    let mut wl = force(st, party_l, &wl_tbl);
-    let mut wr = force(st, party_r, &wr_tbl);
+    let mut wl = if party_l >= 0 {
+        force(st, party_l, &wl_tbl)
+    } else {
+        0
+    };
+    let mut wr = if party_r >= 0 {
+        force(st, party_r, &wr_tbl)
+    } else {
+        0
+    };
     match bt.planet_side {
-        battle::Side::L if party_l >= 0 => wl += base(st, party_l) * 75 * bt.bases as i64,
-        battle::Side::R if party_r >= 0 => wr += base(st, party_r) * 75 * bt.bases as i64,
+        battle::Side::L => {
+            wl = wl.wrapping_add(base(st, party_l).wrapping_mul(75).wrapping_mul(bt.bases))
+        }
+        battle::Side::R => {
+            wr = wr.wrapping_add(base(st, party_r).wrapping_mul(75).wrapping_mul(bt.bases))
+        }
         _ => {}
+    }
+    if party_l < 0 {
+        wl = force(st, party_l, &[]);
+    }
+    if party_r < 0 {
+        wr = force(st, party_r, &[]);
     }
     let (mut wl2, mut wr2) = (wl, wr);
     while wl2 > 0 && wr2 > 0 {
-        let v = (st.rng.one_to(10) as i64 * wl / 100).max(1);
+        let v = ((st.rng.one_to(10) as i32).wrapping_mul(wl) / 100).max(1);
         wr2 -= v;
-        let v = (st.rng.one_to(10) as i64 * wr / 100).max(1);
+        let v = ((st.rng.one_to(10) as i32).wrapping_mul(wr) / 100).max(1);
         wl2 -= v;
     }
     let (wl2, wr2) = (wl2.max(0), wr2.max(0));
@@ -263,16 +264,20 @@ fn resolve_ai(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) {
                 if ws == 0 {
                     0
                 } else {
-                    (n as i64 * ws2 / ws) as u32
+                    // 32-bit as MOO1: large fleets overflow (to be capped next turn).
+                    ((n as i32).wrapping_mul(ws2) / ws) as u16 as u32
                 }
             })
             .collect();
     }
-    bt.bases = match bt.planet_side {
-        battle::Side::L if wl > 0 => (bt.bases as i64 * wl2 / wl) as i32,
-        battle::Side::R if wr > 0 => (bt.bases as i64 * wr2 / wr) as i32,
-        _ => 0,
-    };
+    if st.ai_id != 0 {
+        bt.bases = match bt.planet_side {
+            battle::Side::L if wl > 0 => (bt.bases as i64 * wl2 as i64 / wl as i64) as i32,
+            battle::Side::R if wr > 0 => (bt.bases as i64 * wr2 as i64 / wr as i64) as i32,
+            battle::Side::None => 0,
+            _ => 0,
+        };
+    }
     bt.winner = Some(if r_won {
         battle::Side::R
     } else {
@@ -289,8 +294,8 @@ pub fn apply(st: &mut State, bt: &Battle) {
     let bases_before = st.planets[planet].bases;
     if bt.planet_side != battle::Side::None {
         let p = &mut st.planets[planet];
-        p.max_pop = (p.max_pop - bt.biodamage).max(10.min(p.max_pop));
-        p.bases = bt.bases.max(0);
+        p.max_pop = (p.max_pop - bt.biodamage).max(10);
+        p.bases = bt.bases;
         if p.pop == 0 && bt.s[1].party >= 0 {
             destroy_colony(st, planet);
         }
@@ -312,8 +317,8 @@ pub fn apply(st: &mut State, bt: &Battle) {
             if before == 0 {
                 continue;
             }
-            let after = bt.s[k].ships.get(d).copied().unwrap_or(0).min(before);
-            lost += before - after;
+            let after = bt.s[k].ships.get(d).copied().unwrap_or(0);
+            lost += before.saturating_sub(after);
             remaining_force += (st.empires[e].designs[d].hull as i32 + 1) * after as i32;
             st.empires[e].orbit[planet][d] = after;
         }
@@ -322,11 +327,12 @@ pub fn apply(st: &mut State, bt: &Battle) {
     }
     let (pl, pr) = (bt.s[0].party, bt.s[1].party);
     if pl >= 0 && pr >= 0 {
+        let pop_killed = bt.pop - st.planets[planet].pop;
         diplo::battle_finish(
             st,
             pl as u8,
             pr as u8,
-            0,
+            pop_killed,
             lost_force[0],
             bt.biodamage,
             lost_force[1],
@@ -341,16 +347,8 @@ pub fn apply(st: &mut State, bt: &Battle) {
     match loser {
         GUARDIAN => {
             st.guardian = false;
-            if win >= 0 {
-                st.push_event(
-                    vec![],
-                    EventKind::GuardianDefeated {
-                        planet,
-                        by: win as u8,
-                    },
-                );
-                crate::tech::orion_loot(st, win as u8);
-            }
+            // The loot comes with the news (1oom `game_event_run`, `guardian_killer`).
+            st.guardian_killer = (win >= 0).then_some(win as u8);
         }
         -2 | -3 => {
             if let Some(m) = st
@@ -532,12 +530,7 @@ pub fn bomb(st: &mut State) {
                 .map(|t| t.pop)
                 .sum();
             let go = if e.ai {
-                let inbound = if e.race == Race::Bulrathi {
-                    inbound + inbound / 5
-                } else {
-                    inbound
-                };
-                st.planets[planet].pop > inbound
+                crate::ai::bomb(st, ei as u8, planet, inbound)
             } else {
                 e.bombard
             };
@@ -589,248 +582,4 @@ fn destroy_colony(st: &mut State, planet: PlanetId) {
     p.waste = 0;
     p.stargate = false;
     st.push_event(vec![], EventKind::ColonyDestroyed { planet, owner });
-}
-
-/// 1oom `game_turn_transport_shoot`: transports killed by `shooter` at `planet`.
-fn transport_shoot(
-    st: &mut State,
-    planet: PlanetId,
-    owner: EmpireId,
-    num: i32,
-    speed: i32,
-    shooter: EmpireId,
-    bases: i32,
-) -> i32 {
-    let transport_hp = (st.empires[owner as usize].abilities().armor_tier as i32 + 1) * 15;
-    let total_hp = transport_hp as i64 * num as i64;
-    let mut tbl = vec![0u32; WEAPONS.len()];
-    let speed = speed.max(1);
-    if bases > 0 {
-        tbl[st.base_weapon(shooter)] += bases as u32 * 24;
-    }
-    let mut bestcomp = 0;
-    let e = &st.empires[shooter as usize];
-    for (d, sd) in e.designs.iter().enumerate() {
-        if sd.comp as i32 > speed {
-            bestcomp = sd.comp as i32;
-        }
-        let n = e.orbit[planet][d];
-        for s in 0..WEAPON_SLOTS {
-            let w = &WEAPONS[sd.weapons[s] as usize];
-            let mut v = n * sd.weapon_counts[s] as u32;
-            if v == 0 {
-                continue;
-            }
-            v *= if w.shots == -1 { 4 } else { w.shots as u32 };
-            if w.streams != 0 {
-                v *= w.streams as u32;
-            }
-            v = v.min(32_000);
-            if w.bomb || w.bio {
-                v = 0;
-            }
-            if w.miss_type != 0 {
-                v /= 2;
-            }
-            tbl[sd.weapons[s] as usize] += v * 2 / speed as u32;
-        }
-    }
-    if bases > 0 {
-        bestcomp = st.base_parts(owner).1 as i32;
-    }
-    let complevel = ((bestcomp - speed) * 2 + 12).clamp(1, 20) as u16;
-    let mut total: i64 = 0;
-    for (i, &vcur) in tbl.iter().enumerate() {
-        if vcur == 0 {
-            continue;
-        }
-        let w = &WEAPONS[i];
-        let (dmin, dmax) = (w.damage_min as i64, w.damage_max as i64);
-        if dmin == dmax {
-            for _ in 0..vcur {
-                if st.rng.one_to(20) <= complevel {
-                    total += dmax;
-                }
-            }
-        } else {
-            let range = (dmax - dmin + 1) as u16;
-            for _ in 0..(complevel as u32 * vcur / 20) {
-                let dmg = st.rng.one_to(range) as i64 + dmin - 1;
-                total += dmg.max(0);
-            }
-        }
-        if total >= total_hp {
-            break;
-        }
-    }
-    ((total / transport_hp as i64).min(1000)) as i32
-}
-
-/// 1oom `game_ground_kill`: rounds of d100 + bonus, the loser of each round loses one unit.
-fn ground_battle(
-    rng: &mut Rng,
-    mut att: i32,
-    abonus: i32,
-    mut def: i32,
-    dbonus: i32,
-) -> (i32, i32) {
-    while att > 0 && def > 0 {
-        let ra = rng.one_to(100) as i32 + abonus;
-        let rd = rng.one_to(100) as i32 + dbonus;
-        if ra > rd {
-            def -= 1;
-        } else {
-            att -= 1;
-        }
-    }
-    (att, def)
-}
-
-/// 1oom `game_turn_transport` and ground combat.
-pub fn land_transports(st: &mut State, arrived: Vec<Transport>) {
-    for t in arrived {
-        let planet = t.dest;
-        let mut pop = t.pop;
-        for j in 0..st.empires.len() as u8 {
-            if j == t.owner {
-                continue;
-            }
-            let tr = diplo::treaty(st, t.owner, j);
-            if st.planets[planet].owner != Some(j) && tr != Treaty::None && tr < Treaty::War {
-                continue;
-            }
-            if st.planets[planet].owner == Some(j) {
-                let bases = st.planets[planet].bases;
-                pop -= transport_shoot(st, planet, t.owner, pop, t.speed, j, bases);
-            } else if st.empires[j as usize].orbit[planet].iter().any(|&c| c > 0) {
-                pop -= transport_shoot(st, planet, t.owner, pop, t.speed, j, 0);
-            }
-        }
-        if (planet == st.orion && st.guardian) || events::monster_at(st, planet).is_some() {
-            pop = 0;
-        }
-        pop = pop.max(0);
-        let a = st.empires[t.owner as usize].abilities();
-        if a.combat_transporters && pop < t.pop {
-            let chance = match st.planets[planet].owner {
-                Some(o) if st.empires[o as usize].abilities().sub_space_interdictor => 4,
-                _ => 2,
-            };
-            for _ in 0..(t.pop - pop) {
-                if st.rng.below(chance) == 0 {
-                    pop += 1;
-                }
-            }
-        }
-        if pop < t.pop {
-            let mut to = vec![t.owner];
-            to.extend(st.planets[planet].owner);
-            st.push_event(
-                to,
-                EventKind::TransportsLost {
-                    planet,
-                    owner: t.owner,
-                    pop: t.pop - pop,
-                },
-            );
-        }
-        if pop <= 0 {
-            continue;
-        }
-        match st.planets[planet].owner {
-            Some(o) if o == t.owner && st.planets[planet].unrest == Unrest::Rebellion => {
-                // 1oom game_ground: troops landing on a rebel planet fight the rebels.
-                let abonus = st.empires[o as usize].abilities().ground_bonus;
-                let rebels = st.planets[planet].rebels;
-                let (a, d) = ground_battle(&mut st.rng, pop, abonus, rebels, 5);
-                let p = &mut st.planets[planet];
-                if d == 0 {
-                    p.unrest = Unrest::Resolved;
-                    p.pop = (p.pop - p.rebels + a).clamp(1, p.max_pop.max(1));
-                    p.rebels = 0;
-                    st.push_event(vec![o], EventKind::RebelsDefeated { planet });
-                } else {
-                    p.rebels = d;
-                }
-            }
-            Some(o) if o == t.owner => {
-                let p = &mut st.planets[planet];
-                p.pop = (p.pop + pop).min(p.max_pop);
-            }
-            None => {
-                // MOO1: transports cannot found colonies; they are lost.
-                st.push_event(
-                    vec![t.owner],
-                    EventKind::TransportsLost {
-                        planet,
-                        owner: t.owner,
-                        pop,
-                    },
-                );
-            }
-            Some(def) => invade(st, planet, t.owner, def, pop),
-        }
-    }
-}
-
-fn invade(st: &mut State, planet: PlanetId, att_e: EmpireId, def: EmpireId, att: i32) {
-    let abonus = st.empires[att_e as usize].abilities().ground_bonus;
-    let dbonus = st.empires[def as usize].abilities().ground_bonus + 5;
-    let defenders = st.planets[planet].pop;
-    let (a, d) = ground_battle(&mut st.rng, att, abonus, defenders, dbonus);
-    let won = d == 0;
-    st.push_event(
-        vec![att_e, def],
-        EventKind::GroundBattle {
-            planet,
-            attacker: att_e,
-            defender: def,
-            won,
-            attackers_left: a,
-            defenders_left: d,
-        },
-    );
-    if !won {
-        st.planets[planet].pop = d;
-        return;
-    }
-    let p = &mut st.planets[planet];
-    p.owner = Some(att_e);
-    p.pop = a.min(p.max_pop);
-    p.bases = 0;
-    p.shield = 0;
-    p.bc_to_shield = 0;
-    p.bc_to_base = 0;
-    p.bc_to_ship = 0;
-    p.bc_to_refit = 0;
-    p.pop_oper_fact = 1;
-    p.sliders = crate::turn::new_colony_sliders();
-    p.build = 0;
-    p.rally = None;
-    p.rebels = 0;
-    p.unrest = Unrest::Normal;
-    p.reserve = 0;
-    st.empires[att_e as usize].explored[planet] = true;
-    st.push_event(
-        vec![],
-        EventKind::PlanetCaptured {
-            planet,
-            from: def,
-            to: att_e,
-        },
-    );
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ground_battle_bonus_matters() {
-        let mut rng = Rng::new(3);
-        let wins = (0..200)
-            .filter(|_| ground_battle(&mut rng, 20, 30, 20, 0).1 == 0)
-            .count();
-        assert!(wins > 150, "{wins}");
-    }
 }

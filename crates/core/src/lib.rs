@@ -25,7 +25,10 @@ pub mod data_types;
 pub mod design;
 pub mod diplo;
 pub mod events;
+mod fleet;
 mod galaxy;
+mod ground;
+mod misc;
 mod rng;
 mod rules;
 pub mod spy;
@@ -33,17 +36,34 @@ mod state;
 pub mod tech;
 mod turn;
 mod types;
+mod umath;
 mod view;
 
 pub use audience::{Reply, Talk};
 pub use commands::{BattleMode, Command, CommandError};
 pub use design::{DesignStats, ShipDesign};
 pub use galaxy::{NewGameOptions, HOME_NAMES, SHIP_NAMES, STAR_NAMES};
-pub use rng::Rng;
+pub use rng::{trace_start, trace_take, Rng, RngCall};
 pub use rules::{Abilities, Rules};
 pub use state::*;
 pub use types::*;
 pub use view::*;
+
+/// 1oom `game_start`: values derived from the state, recomputed after loading.
+fn start(st: &mut State) {
+    st.init_star_dist();
+    // 1oom keeps `colonist_oper_factories` in its saves: derive it before production.
+    tech::update_tech_util(st);
+    misc::update_production(st);
+    tech::update_tech_util(st);
+    for i in 0..st.empires.len() {
+        misc::update_eco_on_waste(st, i as u8, false);
+        misc::update_seen_by_orbit(st, i);
+    }
+    misc::update_within_range(st);
+    misc::update_visibility(st);
+    misc::update_have_reserve_fuel(st);
+}
 
 /// A game in progress.
 #[derive(Debug, Clone, PartialEq)]
@@ -53,7 +73,16 @@ pub struct Game {
 
 impl Game {
     pub fn new(opts: &NewGameOptions) -> Result<Self, String> {
-        galaxy::new_game(opts).map(|st| Game { st })
+        galaxy::new_game(opts).map(|mut st| {
+            start(&mut st);
+            Game { st }
+        })
+    }
+
+    /// Wraps a state from elsewhere (the 1oom save importer), as 1oom does after loading.
+    pub fn from_state(mut st: State) -> Self {
+        start(&mut st);
+        Game { st }
     }
 
     /// Restores a game from [`Game::save`] output.
@@ -65,7 +94,8 @@ impl Game {
                 "save format {version} is from another version of the game (this one reads format {SAVE_VERSION})"
             ));
         }
-        let st: State = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        let mut st: State = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        start(&mut st);
         Ok(Game { st })
     }
 
@@ -120,13 +150,6 @@ impl Game {
         }
         if self.st.battle.as_ref().is_some_and(|b| b.winner.is_none()) {
             return;
-        }
-        if self.st.progress.is_none() {
-            for i in 0..self.st.empires.len() {
-                if self.st.empires[i].ai {
-                    ai::play(&mut self.st, i as u8);
-                }
-            }
         }
         turn::process(&mut self.st);
     }
@@ -204,6 +227,13 @@ impl Game {
 mod tests {
     use super::*;
 
+    fn settle(st: &mut State, p: PlanetId, owner: EmpireId, pop: i32) {
+        let pl = &mut st.planets[p];
+        pl.owner = Some(owner);
+        pl.pop = pop.min(pl.max_pop);
+        st.empires[owner as usize].explored[p] = true;
+    }
+
     fn opts(seed: u32) -> NewGameOptions {
         NewGameOptions {
             seed,
@@ -216,9 +246,9 @@ mod tests {
         let g = Game::new(&opts(1)).unwrap();
         let home = g.state().empires[0].home;
         let p = &g.state().planets[home];
-        // 30 factories + 50 pop * (1 * 3 + 50) / 100 = 56 BC, minus ship maintenance.
-        let maint = g.state().empires[0].maintenance;
-        assert_eq!(p.prod + maint, 56);
+        // 30 factories + 50 pop * (1 * 3 + 50) / 100 = 56 BC before maintenance.
+        assert_eq!(p.total_prod, 56);
+        assert!(p.prod < 56);
     }
 
     #[test]
@@ -274,13 +304,10 @@ mod tests {
     fn fleets_travel_and_colonize() {
         let mut g = Game::new(&opts(4)).unwrap();
         let home = g.state().empires[0].home;
-        let target = g
-            .view(0)
-            .planets
-            .iter()
-            .filter(|p| p.colonizable && p.range <= 3)
-            .min_by_key(|p| p.range)
-            .map(|p| p.id)
+        let st = g.state();
+        let target = (0..st.planets.len())
+            .filter(|&p| turn::can_colonize(st, 0, p) && st.range_to(0, p) <= 3)
+            .min_by_key(|&p| st.range_to(0, p))
             .expect("a colonizable neighbour");
         let mut ships = vec![0; 6];
         ships[4] = 1;
@@ -378,8 +405,56 @@ mod tests {
             .filter(|&p| g.st.planets[p].owner.is_none() && p != g.st.orion)
             .min_by_key(|&p| g.st.parsecs(home, p))
             .unwrap();
-        turn::found_colony(&mut g.st, p, empire, 20);
+        let pl = &mut g.st.planets[p];
+        pl.owner = Some(empire);
+        pl.pop = 20;
+        g.st.empires[empire as usize].explored[p] = true;
         p
+    }
+
+    #[test]
+    fn transports_leave_at_the_end_of_the_turn() {
+        let mut g = Game::new(&opts(12)).unwrap();
+        let home = g.st.empires[0].home;
+        let to = own_colony(&mut g, 0);
+        g.command(
+            0,
+            &Command::SendTransport {
+                from: home,
+                to,
+                pop: 10,
+            },
+        )
+        .unwrap();
+        let colony = |g: &Game| g.view(0).planets[home].colony.clone().unwrap();
+        assert_eq!(colony(&g).transport, Some((10, to)));
+        g.command(
+            0,
+            &Command::SendTransport {
+                from: home,
+                to: home,
+                pop: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(colony(&g).transport, None);
+        g.command(
+            0,
+            &Command::SendTransport {
+                from: home,
+                to,
+                pop: 10,
+            },
+        )
+        .unwrap();
+        let before = g.st.planets[home].pop;
+        g.end_turn_auto();
+        assert!(g.st.planets[home].pop < before + 5);
+        assert!(
+            g.st.transports.iter().any(|t| t.owner == 0 && t.pop == 10)
+                || g.st.planets[to].pop >= 20
+        );
+        assert_eq!(g.st.planets[home].trans_num, 0);
     }
 
     #[test]
@@ -388,6 +463,7 @@ mod tests {
         let home = g.st.empires[0].home;
         let far = own_colony(&mut g, 0);
         g.st.empires[0].tech.add(FIELD_PROPULSION, 27);
+        tech::update_tech_util(&mut g.st);
         assert!(g
             .command(
                 0,
@@ -413,7 +489,11 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(g.st.fleets.iter().any(|f| f.owner == 0 && f.gate));
+        assert!(g
+            .st
+            .fleets
+            .iter()
+            .any(|f| f.owner == 0 && f.speed == SPEED_STARGATE));
         g.end_turn_auto();
         assert_eq!(g.st.empires[0].orbit[far][0], 1);
     }
@@ -571,11 +651,10 @@ mod tests {
         .unwrap();
         assert!(!g.st.nebulae.is_empty());
         let n = &g.st.nebulae[0].rects[0];
-        let (x, y) = ((n[0] + n[2]) as f64 / 2.0, (n[1] + n[3]) as f64 / 2.0);
+        let (x, y) = ((n[0] + n[2]) / 2, (n[1] + n[3]) / 2);
         assert!(g.st.in_nebula(x, y));
-        assert_eq!(g.st.move_step(x, y, 2), g.st.rules.parsec);
         for p in g.st.planets.iter().filter(|p| p.nebula) {
-            assert!(g.st.in_nebula(p.x as f64, p.y as f64));
+            assert!(g.st.in_nebula(p.x, p.y));
         }
     }
 
@@ -666,7 +745,7 @@ mod tests {
         .unwrap();
         for p in 0..g.st.planets.len() {
             if g.st.planets[p].owner.is_none() && g.st.planets[p].habitable() {
-                turn::found_colony(&mut g.st, p, (p % 4) as u8, 10);
+                settle(&mut g.st, p, (p % 4) as u8, 10);
             }
         }
         council::convene(&mut g.st);
@@ -728,7 +807,7 @@ mod tests {
         .unwrap();
         for p in 0..g.st.planets.len() {
             if g.st.planets[p].owner.is_none() && g.st.planets[p].habitable() {
-                turn::found_colony(&mut g.st, p, (p % 4) as u8, 30);
+                settle(&mut g.st, p, (p % 4) as u8, 30);
             }
         }
         assert!(council::due(&g.st));
@@ -843,8 +922,9 @@ mod tests {
             }
         }
         assert!(g.state().turn > 50, "turn {}", g.state().turn);
-        let save = g.save();
-        let again = Game::load(&save).unwrap();
-        assert_eq!(again.save(), save);
+        // Loading recomputes derived values as 1oom does; after that saves are stable.
+        let again = Game::load(&g.save()).unwrap();
+        let save = again.save();
+        assert_eq!(Game::load(&save).unwrap().save(), save);
     }
 }

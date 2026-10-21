@@ -7,6 +7,7 @@
 - Web: `cd web && npm ci && npm run build` (runs `tsc --noEmit` then Vite); `npm run dev` for a dev server
 - Desktop: build the web first, then `cd desktop && npm ci && npx tauri build` (Linux needs `libwebkit2gtk-4.1-dev`). `desktop/src-tauri` is its own Cargo workspace on purpose.
 - Balance check: `cargo run --release -p aoo-cli -- sim --seed 1 --size medium --players 4`
+- 1oom parity (needs your own MOO1 LBX files, see `docs/HARNESS.md`): `tools/harness/build-1oom.sh`, `tools/harness/run-1oom.sh LBXDIR OUT YEARS`, then `cargo run --release -p aoo-harness -- lockstep OUT --oom target/1oom/src/1oom_cmdline --data LBXDIR`. Run it after touching turn, economy, fleet or AI rules; a change that was identical before should stay identical.
 
 ## Conventions
 
@@ -14,6 +15,6 @@
 - A battle with a human player interrupts the turn (`State.battle`, `State.progress`); tests that end turns with a human use `Game::end_turn_auto`, which lets the computer fight those battles.
 - Everything crossing to the UI is JSON (`View`, `Command`, `Event` with `type` tags in snake_case).
 - Every user-visible string is a text key (`web/public/text/en.json`); themes override in `web/public/themes/<id>/text/en.json`.
-- When porting from 1oom, name the source function in a doc comment (for example "1oom `game_turn_build_eco`").
+- When porting from 1oom, name the source function in a doc comment (for example "1oom `game_turn_build_eco`"). Keep 1oom's integer types and order of operations (random numbers drawn in the same order, 16/32-bit wrapping where MOO1 overflows, list order of fleets): the harness compares them. 1oom always applies MOO1 v1.3a's fixes (`game_num_fix_bugs_1_3a`) and none of its optional ones.
 - Never commit original MOO1 files or anything converted from them (`*.LBX` is git-ignored).
 - Update `CHANGELOG.md` under `[Unreleased]`; releases are cut by pushing a `vX.Y.Z` tag that matches the version in `Cargo.toml`, `web/package.json`, `desktop/package.json` and `desktop/src-tauri/tauri.conf.json`.

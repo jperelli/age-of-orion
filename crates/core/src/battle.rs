@@ -455,10 +455,10 @@ fn dist_fast(x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
     }
 }
 
-/// 1oom `game_battle_get_absorbdiv` (with the Oracle fix: only the attacker's interface counts).
-pub fn absorbdiv(b: &Item, w: usize, force_oracle_check: bool) -> i32 {
+/// 1oom `game_battle_get_absorbdiv` (with MOO1 v1.3a's Oracle fix, always on in 1oom).
+pub fn absorbdiv(b: &Item, w: usize, _force_oracle_check: bool) -> i32 {
     let mut v = 1;
-    if force_oracle_check && b.sbmask & FLAG_ORACLE != 0 {
+    if b.sbmask & FLAG_ORACLE != 0 {
         v = 2;
     }
     v += i32::from(WEAPONS[w].halve_shield);
@@ -556,7 +556,11 @@ fn monster_item(party: i32, diff: Difficulty, hp: u32, uid: u32) -> Item {
             b.defense = DEF[d];
             b.misdefense = DEF[d];
             b.absorb = ABS[d];
-            b.repair = if d == 3 { 15 } else { 0 };
+            b.repair = match d {
+                3 => 15,
+                4 => 30,
+                _ => 0,
+            };
             b.misshield = 100;
             b.extrarange = 3;
             for (i, &t) in [56usize, 62, 58, 60].iter().enumerate() {
@@ -714,6 +718,14 @@ impl Battle {
         } else {
             bt.add_ships(st, Side::R, planet);
         }
+        bt
+    }
+
+    /// 1oom `game_battle_prepare` and `game_battle_with_human_init`: a battle on the grid
+    /// (places the asteroids and the stacks, drawing random numbers).
+    pub fn new_human(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) -> Battle {
+        let mut bt = Battle::new(st, party_r, party_l, planet);
+        bt.rng = st.rng;
         bt.init(st);
         st.rng = bt.rng;
         bt
@@ -2744,7 +2756,7 @@ impl Battle {
 
     /// Resolves a battle without any human input (computer against computer and monsters).
     pub fn resolve_auto(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) -> Battle {
-        let mut bt = Battle::new(st, party_r, party_l, planet);
+        let mut bt = Battle::new_human(st, party_r, party_l, planet);
         bt.start(st, true, false);
         bt
     }
@@ -2771,6 +2783,8 @@ mod tests {
             armor: r.below(ARMOR.len() as u16) as u8,
             man: 0,
             hp: 0,
+            cost_bc: 0,
+            space: 0,
         };
         d.look = d.hull * 6;
         d.man = r.below(d.engine as u16 + 1) as u8;

@@ -1,0 +1,18 @@
+[package]
+name = "aoo-harness"
+description = "Comparison harness: runs C 1oom and Age of Orion side by side and diffs their game states"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "aoo-harness"
+path = "src/main.rs"
+
+[dependencies]
+aoo-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true

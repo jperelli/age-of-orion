@@ -44,8 +44,13 @@ device, and the **Classic** theme then shows the original planet pictures and ra
 - Random events (`game_event.c`): plagues, novas, comets, pirates, rebellions, coups, and
   the Space Crystal and Space Amoeba roaming the map.
 - The Galactic Council (`game_election.c`): win by conquest or by being elected High Master.
-- Computer opponents that expand, research, design new ships, build fleets, invade, make
-  treaties, spy and vote with the diplomacy of 1oom's classic AI.
+- The computer players of MOO1, ported line by line from 1oom's classic AI
+  (`game_ai_classic.c`): scouting, colony ships, attack and defence fleets, invasions,
+  production sliders, ship design and scrapping, research focus, taxes, spying, diplomacy and
+  votes, with a choice between MOO1's behaviour ("Classic") and 1oom's fixes ("Classic+").
+- Checked against the C original: a comparison harness plays the same turns in 1oom and in
+  Age of Orion and diffs the game state and every random number
+  ([docs/HARNESS.md](docs/HARNESS.md)).
 - Two themes: **Age** (medieval world map, the default) and **Classic** (starfield, with
   your original MOO1 art when imported). Every text and picture can be replaced by a mod.
 - The MOO1 soundtrack from your own MUSIC.LBX, converted to MIDI and played by a built-in
@@ -99,10 +104,12 @@ aoo sim --seed 7 --size medium --players 4 --turns 300 --save end.json
 | `crates/lbx` | LBX reader (container, graphics, palettes, string tables) and LBX to PNG/JSON converter |
 | `crates/wasm` | WebAssembly bindings for the UI (game API with JSON in/out, LBX importer) |
 | `crates/cli` | `aoo` command line tool |
+| `crates/harness` | `aoo-harness`: comparison against C 1oom (save decoder, state diff, random number diff) |
+| `tools/harness/` | Patch and scripts to build and run 1oom for the harness |
 | `tools/gen_1oom_tables.py` | Generates the ship part and tech tables (`crates/core/src/data.rs`) from a 1oom checkout |
 | `web/` | HTML/CSS/canvas UI (TypeScript, Vite), themes and texts in `web/public/` |
 | `desktop/` | Tauri shell that packages `web/dist` as a native app |
-| `docs/` | Plan and modding guide |
+| `docs/` | Plan, modding guide, comparison harness |
 
 ## Releases
 

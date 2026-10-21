@@ -14,8 +14,22 @@ use crate::rules::{Abilities, Rules};
 use crate::spy::{SabotageKind, SpyChance};
 use crate::tech::{Source, TIERS};
 use crate::types::*;
+use crate::umath;
 
-pub const SAVE_VERSION: u32 = 3;
+pub const SAVE_VERSION: u32 = 4;
+
+/// 1oom `FLEET_SPEED_STARGATE`: the speed of fleets travelling through stargates.
+pub const SPEED_STARGATE: i32 = 35;
+/// 1oom `PLAYER_NUM`.
+pub const PLAYER_NUM: usize = 6;
+/// 1oom `FINISHED_*`: factories, max population, soil/atmosphere, stargate, shield, ship.
+pub const FINISHED_NUM: usize = 6;
+pub const FINISHED_FACT: usize = 0;
+pub const FINISHED_POPMAX: usize = 1;
+pub const FINISHED_SOILATMOS: usize = 2;
+pub const FINISHED_STARGATE: usize = 3;
+pub const FINISHED_SHIELD: usize = 4;
+pub const FINISHED_SHIP: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -92,6 +106,49 @@ pub struct Planet {
     /// Asteroids in battles here: 0 none, 1 some, 2 many (1oom `rocks`).
     #[serde(default)]
     pub rocks: u8,
+    /// Picture variant and animation frame on the classic map (1oom `look`, `frame`).
+    #[serde(default)]
+    pub look: u8,
+    #[serde(default)]
+    pub frame: u8,
+    /// Battle background 0..4, 0 = in a nebula (1oom `battlebg`).
+    #[serde(default)]
+    pub battlebg: u8,
+    #[serde(default)]
+    pub prev_owner: Option<EmpireId>,
+    #[serde(default)]
+    pub pop_prev: i32,
+    /// Production before the empire-wide maintenance share (1oom `total_prod`).
+    #[serde(default)]
+    pub total_prod: i32,
+    #[serde(default)]
+    pub slider_lock: [bool; NUM_SLIDERS],
+    #[serde(default)]
+    pub bc_upgrade_base: i32,
+    /// Colonists to send at the start of the next turn (1oom `trans_num`, `trans_dest`).
+    #[serde(default)]
+    pub trans_num: i32,
+    #[serde(default)]
+    pub trans_dest: PlanetId,
+    /// Per empire: 0 out of fuel range, 1 in range, 2 in range with reserve tanks.
+    #[serde(default)]
+    pub within_frange: Vec<u8>,
+    /// Per empire: inside scanner range.
+    #[serde(default)]
+    pub within_srange: Vec<bool>,
+    /// Per empire: ships here ran out of fuel this turn.
+    #[serde(default)]
+    pub unrefuel: Vec<bool>,
+    /// Projects finished this turn (`FINISHED_*`).
+    #[serde(default)]
+    pub finished: [bool; FINISHED_NUM],
+    /// Turn temporaries (1oom `inbound`, `total_inbound`, `artifact_looter`).
+    #[serde(default)]
+    pub inbound: Vec<i32>,
+    #[serde(default)]
+    pub total_inbound: Vec<i32>,
+    #[serde(default)]
+    pub artifact_looter: Option<EmpireId>,
 }
 
 impl Planet {
@@ -186,11 +243,58 @@ pub struct Empire {
     pub total_trade: i32,
     #[serde(default)]
     pub spying_maint: i32,
+    /// Values derived from the completed techs, updated when 1oom updates them
+    /// (`game_update_tech_util`).
+    #[serde(default)]
+    pub ab: Abilities,
+    /// Missile base parts (1oom `base_shield`, `base_comp`, `base_weapon`), updated each turn.
+    #[serde(default)]
+    pub base_shield: usize,
+    #[serde(default)]
+    pub base_comp: usize,
+    #[serde(default)]
+    pub base_weapon: usize,
+    /// 1oom `ship_maint_bc`, `bases_maint_bc`, `total_maint_bc`, `percent_prod_total_to_actual`.
+    #[serde(default)]
+    pub ship_maint: i32,
+    #[serde(default)]
+    pub bases_maint: i32,
+    #[serde(default)]
+    pub percent_prod_total_to_actual: i32,
+    /// Classic AI countdowns (1oom `ai_p2_countdown`, `ai_p3_countdown`).
+    #[serde(default)]
+    pub ai_p2_countdown: i32,
+    #[serde(default)]
+    pub ai_p3_countdown: i32,
+    /// Classic AI: the colony ship and bomber designs, -1 none (1oom `shipi_colony`, `shipi_bomber`).
+    #[serde(default)]
+    pub shipi_colony: i32,
+    #[serde(default)]
+    pub shipi_bomber: i32,
+    /// Per design: year it was designed, ships existing, has reserve fuel tanks.
+    #[serde(default)]
+    pub design_year: Vec<i32>,
+    #[serde(default)]
+    pub shipcount: Vec<u32>,
+    #[serde(default)]
+    pub have_reserve_fuel: Vec<bool>,
+    /// What this empire last saw of each planet (1oom `seen`).
+    #[serde(default)]
+    pub seen: Vec<Seen>,
+}
+
+/// 1oom `seen_t`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Seen {
+    pub owner: Option<EmpireId>,
+    pub pop: i32,
+    pub bases: i32,
+    pub factories: i32,
 }
 
 impl Empire {
     pub fn abilities(&self) -> Abilities {
-        Abilities::new(&self.tech, self.race)
+        self.ab
     }
 }
 
@@ -198,25 +302,30 @@ impl Empire {
 pub struct Fleet {
     pub id: u32,
     pub owner: EmpireId,
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
     pub dest: PlanetId,
     pub ships: Vec<u32>,
+    /// Warp speed, or `SPEED_STARGATE` through stargates (arrives next turn).
     pub speed: i32,
-    /// Travels through stargates: arrives next turn.
     #[serde(default)]
-    pub gate: bool,
+    pub retreat: bool,
+    /// Per empire: this fleet is visible to it.
+    #[serde(default)]
+    pub visible: Vec<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transport {
     pub id: u32,
     pub owner: EmpireId,
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
     pub dest: PlanetId,
     pub pop: i32,
     pub speed: i32,
+    #[serde(default)]
+    pub visible: Vec<bool>,
 }
 
 /// A nebula: up to four rectangles `[x0, y0, x1, y1]` (1oom `tbl_nebula_data`).
@@ -328,7 +437,7 @@ pub enum EventKind {
     PlanetCaptured {
         planet: PlanetId,
         from: EmpireId,
-        to: EmpireId,
+        by: EmpireId,
     },
     ColonyDestroyed {
         planet: PlanetId,
@@ -398,13 +507,34 @@ pub struct State {
     /// A turn interrupted by a human battle.
     #[serde(default)]
     pub progress: Option<Progress>,
+    /// 1oom `ai_id`: 0 classic (as MOO1), 1 classic+ (1oom's improved AI).
+    #[serde(default)]
+    pub ai_id: u8,
+    /// 1oom `galaxy_seed`, `galaxy_w`, `galaxy_h`.
+    #[serde(default)]
+    pub galaxy_seed: u32,
+    #[serde(default)]
+    pub galaxy_w: i32,
+    #[serde(default)]
+    pub galaxy_h: i32,
+    /// 1oom `evn.ceasefire[human][ai]` lives in `Relation::ceasefire`; this is the year of
+    /// the next MOO1 copy protection roll (1oom `copyprot_status`, never acted upon here).
+    #[serde(default)]
+    pub copyprot_status: i32,
+    /// Who killed the Guardian this turn (1oom `guardian_killer`): loot and news follow.
+    #[serde(default)]
+    pub guardian_killer: Option<EmpireId>,
+    /// Parsecs between planets (1oom `gaux->star_dist`), derived from the positions.
+    #[serde(skip)]
+    pub star_dist: Vec<Vec<u8>>,
 }
 
 /// Where an interrupted turn resumes (after the battles of `battle_planet`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Progress {
-    pub arrived: Vec<Transport>,
+    /// Contacts at the start of the turn (1oom `old_contact`).
+    pub old_contact: Vec<Vec<bool>>,
     pub battle_planet: usize,
     /// Parties left out of the battles at `battle_planet` (treaties, ceasefires).
     pub skipped: Vec<i32>,
@@ -424,19 +554,30 @@ fn reduce(level: u32) -> u32 {
 }
 
 impl State {
-    pub fn dist(&self, a: PlanetId, b: PlanetId) -> f64 {
-        let (p, q) = (&self.planets[a], &self.planets[b]);
-        (((p.x - q.x).pow(2) + (p.y - q.y).pow(2)) as f64).sqrt()
-    }
-
-    pub fn dist_xy(&self, x: f64, y: f64, b: PlanetId) -> f64 {
-        let q = &self.planets[b];
-        ((x - q.x as f64).powi(2) + (y - q.y as f64).powi(2)).sqrt()
-    }
-
-    /// Distance in parsecs (rounded up), the unit of fuel range and speed.
+    /// Parsecs between two planets (1oom `gaux->star_dist`, `util_math_dist_steps`).
     pub fn parsecs(&self, a: PlanetId, b: PlanetId) -> i32 {
-        (self.dist(a, b) / self.rules.parsec).ceil() as i32
+        match self.star_dist.get(a).and_then(|r| r.get(b)) {
+            Some(&d) => d as i32,
+            None => {
+                let (p, q) = (&self.planets[a], &self.planets[b]);
+                umath::dist_steps(p.x, p.y, q.x, q.y) as u8 as i32
+            }
+        }
+    }
+
+    /// 1oom `init_star_dist`: fills the parsec table; call after planets move or on load.
+    pub fn init_star_dist(&mut self) {
+        let n = self.planets.len();
+        let mut t = vec![vec![0u8; n]; n];
+        for i in 0..n {
+            for j in i + 1..n {
+                let (p, q) = (&self.planets[i], &self.planets[j]);
+                let d = umath::dist_steps(p.x, p.y, q.x, q.y) as u8;
+                t[i][j] = d;
+                t[j][i] = d;
+            }
+        }
+        self.star_dist = t;
     }
 
     /// Parsecs from `planet` to the nearest colony of `empire` or of its allies
@@ -460,45 +601,60 @@ impl State {
     }
 
     /// 1oom `game_xy_is_in_nebula`.
-    pub fn in_nebula(&self, x: f64, y: f64) -> bool {
+    pub fn in_nebula(&self, x: i32, y: i32) -> bool {
         self.nebulae.iter().any(|n| {
-            n.rects.iter().any(|r| {
-                x >= r[0] as f64 && x <= r[2] as f64 && y >= r[1] as f64 && y <= r[3] as f64
-            })
+            n.rects
+                .iter()
+                .any(|r| x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])
         })
     }
 
-    /// Turns to reach `dest`; ships inside nebulae move at half speed (1oom `game_calc_eta_ship`).
-    pub fn eta(&self, x: f64, y: f64, dest: PlanetId, speed: i32) -> u32 {
-        let (tx, ty) = (self.planets[dest].x as f64, self.planets[dest].y as f64);
-        let (mut x, mut y) = (x, y);
-        let mut turns = 0;
-        while (x - tx).abs() > 1e-9 || (y - ty).abs() > 1e-9 {
-            let step = self.move_step(x, y, speed);
-            let d = ((tx - x).powi(2) + (ty - y).powi(2)).sqrt();
-            if d <= step + 1e-9 {
-                x = tx;
-                y = ty;
-            } else {
-                x += (tx - x) * step / d;
-                y += (ty - y) * step / d;
-            }
-            turns += 1;
-            if turns > 500 {
-                break;
-            }
-        }
-        turns.max(1)
+    /// 1oom `game_calc_eta_ship`: turns for ships at `speed` from (x0, y0) to `dest`.
+    pub fn eta(&self, x0: i32, y0: i32, dest: PlanetId, speed: i32) -> u32 {
+        let (x1, y1) = (self.planets[dest].x, self.planets[dest].y);
+        self.eta_ship(speed, x0, y0, x1, y1) as u32
     }
 
-    /// Distance covered in one turn from `(x, y)`.
-    pub fn move_step(&self, x: f64, y: f64, speed: i32) -> f64 {
-        let step = self.rules.parsec * speed.max(1) as f64;
-        if self.in_nebula(x, y) {
-            step / 2.0
-        } else {
-            step
+    pub fn eta_ship(&self, speed: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+        let (mut x, mut y, mut num) = (x0, y0, 0);
+        while x != x1 || y != y1 {
+            let mut v = speed;
+            let mut first = true;
+            loop {
+                // Inside nebulae, ships move on frame 0 and then on every odd frame.
+                if first || !self.in_nebula(x, y) {
+                    umath::go_line_dist(&mut x, &mut y, x1, y1, 5);
+                }
+                umath::go_line_dist(&mut x, &mut y, x1, y1, 6);
+                first = false;
+                v -= 1;
+                if v <= 0 {
+                    break;
+                }
+            }
+            num += 1;
         }
+        num
+    }
+
+    /// 1oom `game_calc_eta_trans`.
+    pub fn eta_trans(&self, speed: i32, x0: i32, y0: i32, x1: i32, y1: i32) -> i32 {
+        let (mut x, mut y, mut num) = (x0, y0, 0);
+        while x != x1 || y != y1 {
+            let mut v = speed;
+            loop {
+                umath::go_line_dist(&mut x, &mut y, x1, y1, 5);
+                if !self.in_nebula(x, y) {
+                    umath::go_line_dist(&mut x, &mut y, x1, y1, 6);
+                }
+                v -= 1;
+                if v <= 0 {
+                    break;
+                }
+            }
+            num += 1;
+        }
+        num
     }
 
     pub fn colonies(&self, empire: EmpireId) -> impl Iterator<Item = (PlanetId, &Planet)> {
@@ -588,7 +744,7 @@ impl State {
         )
     }
 
-    /// 1oom `game_get_base_cost`.
+    /// 1oom `game_get_base_cost` (with the stored base parts `base_weapon` etc.).
     pub fn base_cost(&self, empire: EmpireId) -> i32 {
         let e = &self.empires[empire as usize];
         let t = &e.tech;
@@ -599,7 +755,7 @@ impl State {
             .max()
             .unwrap_or(0);
         armor = armor.saturating_sub(1);
-        let (shield, comp, _) = self.base_parts(empire);
+        let (shield, comp) = (e.base_shield, e.base_comp);
         let jammer = (0..JAMMERS.len())
             .filter(|&i| t.has(FIELD_COMPUTER, JAMMERS[i].tech))
             .max()
@@ -607,7 +763,8 @@ impl State {
         let mut cost = (ARMOR[armor].cost[l] as u32 + HULLS[l].cost as u32)
             * reduce(lv[FIELD_CONSTRUCTION])
             / 1500;
-        cost += WEAPONS[self.base_weapon(empire)].cost as u32 * reduce(lv[FIELD_WEAPON]) * 9 / 1000;
+        cost +=
+            WEAPONS[e.base_weapon].cost as u32 * ((reduce(lv[FIELD_WEAPON]) * 9) & 0xffff) / 1000;
         cost += SHIELDS[shield].cost[l] as u32 * reduce(lv[FIELD_FORCE_FIELD]) / 1000
             + SHIELDS[shield].power[l] as u32 / 10;
         cost += COMPS[comp].cost[l] as u32 * reduce(lv[FIELD_COMPUTER]) / 1000

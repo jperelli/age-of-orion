@@ -1,0 +1,141 @@
+diff --git a/src/game/game.c b/src/game/game.c
+index 8b25f7f..dfaedcb 100644
+--- a/src/game/game.c
++++ b/src/game/game.c
+@@ -832,6 +832,10 @@ int main_do(void)
+         main_menu_start_game:
+         game_aux_start(&game_aux, &game);
+         game_start(&game);
++        rnd_log_seed = &game.seed;
++        if (getenv("OOM_HARNESS_YEARS")) {
++            game_save_do_save_year(NULL, &game);
++        }
+         ui_game_start(&game);
+         game_end.type = GAME_END_NONE;
+         while ((game_end.type == GAME_END_NONE) || (game_end.type == GAME_END_FINAL_WAR)) {
+@@ -872,6 +876,15 @@ int main_do(void)
+                 game_end = game_turn_process(&game);
+             }
+             game.active_player = PLAYER_0;
++            {   /* Age of Orion comparison harness: a save every year, stop after N years. */
++                const char *hy = getenv("OOM_HARNESS_YEARS");
++                if (hy) {
++                    game_save_do_save_year(NULL, &game);
++                    if (((int)game.year >= atoi(hy)) && (game_end.type == GAME_END_NONE)) {
++                        game_end.type = GAME_END_QUIT;
++                    }
++                }
++            }
+         }
+         ui_game_end(&game);
+         do_ending:
+diff --git a/src/game/game_election.c b/src/game/game_election.c
+index e4c5b17..a367ec6 100644
+--- a/src/game/game_election.c
++++ b/src/game/game_election.c
+@@ -22,6 +22,8 @@ static void game_election_prepare(struct election_s *el)
+     uint16_t tbl_votes[PLAYER_NUM];
+     player_id_t tbl_ei[PLAYER_NUM];
+     int num = 0, total_votes = 0;
++    el->first_human = PLAYER_NONE;  /* Age of Orion harness: computer-only games */
++    el->last_human = PLAYER_0;
+     {
+         bool found_human = false;
+         for (player_id_t i = PLAYER_0; i < g->players; ++i) {
+@@ -220,7 +222,7 @@ void game_election(struct game_s *g)
+         el->ui_delay = 3;
+         ui_election_show(el);
+     }
+-    {
++    if (el->first_human != PLAYER_NONE) {    /* Age of Orion harness: computer-only games */
+         int votefor, n;
+         player_id_t player;
+         player = el->first_human;
+diff --git a/src/game/game_turn.c b/src/game/game_turn.c
+index 5498d27..7e7ea89 100644
+--- a/src/game/game_turn.c
++++ b/src/game/game_turn.c
+@@ -757,9 +757,15 @@ static void game_turn_move_ships(struct game_s *g)
+         g->gaux->move_temp->crystal = g->evn.crystal;
+         g->gaux->move_temp->amoeba = g->evn.amoeba;
+     }
++    bool harness_no_humans = (getenv("OOM_HARNESS_YEARS") != NULL) && BOOLVEC_IS_CLEAR(g->is_ai, PLAYER_NUM) == false;
++    for (player_id_t i = PLAYER_0; i < g->players; ++i) {
++        if (IS_HUMAN(g, i)) {
++            harness_no_humans = false;
++        }
++    }
+     for (g->active_player = 0; g->active_player < g->players; ++g->active_player) {
+         bool flag_more;
+-        if (BOOLVEC_IS1(g->is_ai, g->active_player)) {
++        if (BOOLVEC_IS1(g->is_ai, g->active_player) && !(harness_no_humans && (g->active_player == 0))) {
+             continue;
+         }
+         if (move_back) {
+@@ -1373,7 +1379,7 @@ static bool game_turn_check_end(struct game_s *g, struct game_end_s *ge)
+             ge->race = g->eto[pi1].race;
+             return true;
+         }
+-        if (!human_alive) {
++        if (!human_alive && (getenv("OOM_HARNESS_YEARS") == NULL)) {
+             struct news_s ns;
+             int killer = g->gaux->human_killer;
+             if (killer >= g->players) {
+diff --git a/src/rnd.c b/src/rnd.c
+index 76ef6a6..9a9bfd1 100644
+--- a/src/rnd.c
++++ b/src/rnd.c
+@@ -1,5 +1,9 @@
+ #include "config.h"
+ 
++#include <stdio.h>
++#include <stdlib.h>
++
++#define RND_NO_LOG_MACROS
+ #include "rnd.h"
+ #include "hw.h"
+ #include "types.h"
+@@ -57,6 +61,26 @@ uint16_t rnd_1_n(uint16_t n, uint32_t *seed)
+     return 1 + rnd_0_nm1(n, seed);
+ }
+ 
++uint32_t *rnd_log_seed = NULL;
++
++uint16_t rnd_0_nm1_log(uint16_t n, uint32_t *seed, const char *file, int line)
++{
++    static FILE *fd = NULL;
++    static int opened = 0;
++    uint16_t r = rnd_0_nm1(n, seed);
++    if (seed == rnd_log_seed) {
++        if (!opened) {
++            const char *path = getenv("OOM_HARNESS_RNGLOG");
++            opened = 1;
++            fd = path ? fopen(path, "w") : NULL;
++        }
++        if (fd) {
++            fprintf(fd, "%u %u %s:%d\n", (unsigned)n, (unsigned)r, file, line);
++        }
++    }
++    return r;
++}
++
+ uint32_t rnd_get_new_seed(void)
+ {
+     uint32_t seed;
+diff --git a/src/rnd.h b/src/rnd.h
+index 7c05b8e..72106ea 100644
+--- a/src/rnd.h
++++ b/src/rnd.h
+@@ -8,4 +8,12 @@ extern uint16_t rnd_1_n(uint16_t n, uint32_t *seed);
+ extern uint32_t rnd_get_new_seed(void);
+ extern uint16_t rnd_bitfiddle(uint16_t ax);
+ 
++/* Age of Orion comparison harness: log the calls made on one seed (the game's). */
++extern uint32_t *rnd_log_seed;
++extern uint16_t rnd_0_nm1_log(uint16_t n, uint32_t *seed, const char *file, int line);
++#ifndef RND_NO_LOG_MACROS
++#define rnd_0_nm1(n_, s_) rnd_0_nm1_log((n_), (s_), __FILE__, __LINE__)
++#define rnd_1_n(n_, s_) ((uint16_t)(1 + rnd_0_nm1_log((n_), (s_), __FILE__, __LINE__)))
++#endif
++
+ #endif

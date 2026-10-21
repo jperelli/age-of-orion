@@ -61,7 +61,7 @@ impl Default for Rules {
             home_max_pop: 100,
             home_factories: 30,
             max_pop: 300,
-            max_factories: 2500,
+            max_factories: 2700,
             colony_ship_pop: 2,
             research_cost_percent: 100,
             race_tech_cost: [
@@ -98,10 +98,14 @@ impl Default for Rules {
 }
 
 /// Values derived from the techs an empire has completed (1oom `game_update_tech_util`).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+/// They are stored per empire and refreshed when 1oom refreshes them (after research, at
+/// the end of the turn), not the moment a tech arrives.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Abilities {
     pub colonist_oper_factories: i32,
     pub factory_cost: i32,
+    /// 1oom `factory_adj_cost`: cost of a factory including the colonists to run it.
+    pub factory_adj_cost: i32,
     pub ind_waste_scale: i32,
     pub fuel_range: i32,
     pub scanner_range: i32,
@@ -111,19 +115,29 @@ pub struct Abilities {
     pub terraform: i32,
     pub terraform_cost: i32,
     pub planet_shield: i32,
+    pub planet_shield_cost: i32,
     pub soil_enrich: bool,
     pub adv_soil_enrich: bool,
     pub atmos_terraform: bool,
     pub stargates: bool,
+    pub hyperspace_comm: bool,
+    pub ia_scanner: bool,
+    pub adv_scanner: bool,
     pub combat_transporters: bool,
     pub sub_space_interdictor: bool,
     pub antidote: i32,
+    /// 1oom `have_engine`: the best engine's warp, the speed of transports.
+    pub engine_warp: i32,
     /// Ground combat bonus (1oom `game_ground_resolve_init`).
     pub ground_bonus: i32,
-    /// Warp of the best known engine: speed of transports.
-    pub engine_warp: i32,
     /// Best armour tier (0 titanium .. 6 neutronium): bases and transports.
     pub armor_tier: usize,
+}
+
+impl Default for Abilities {
+    fn default() -> Self {
+        Abilities::new(&Tech::new(), Race::Human)
+    }
 }
 
 /// 1oom `find_best_tech_type`: best completed tech `base + k * step <= last`, 0 if none.
@@ -139,30 +153,39 @@ fn best(t: &Tech, field: usize, base: u8, step: u8, last: u8) -> i32 {
     b
 }
 
-/// The value of the highest completed tech of `table` (`(tech, value)`), or `default`.
-fn pick(t: &Tech, field: usize, default: i32, table: &[(u8, i32)]) -> i32 {
+/// The value of the first completed tech of `table` (`(tech, value)`, in 1oom's test
+/// order), or `default`.
+fn first(t: &Tech, field: usize, default: i32, table: &[(u8, i32)]) -> i32 {
     table
         .iter()
-        .filter(|(n, _)| t.has(field, *n))
-        .max_by_key(|(n, _)| *n)
+        .find(|(n, _)| t.has(field, *n))
         .map_or(default, |(_, v)| *v)
 }
 
-/// Tier of the best completed tech of a group (MOO1 research groups), 0 if none.
-fn tier(t: &Tech, field: usize, techs: &[u8]) -> i32 {
-    techs
-        .iter()
-        .enumerate()
-        .filter(|(_, &n)| t.has(field, n))
-        .map(|(i, _)| i as i32 + 1)
-        .max()
-        .unwrap_or(0)
+/// Tier of the last completed tech of a research group, in completion order (1oom loops
+/// over `researchcompleted` keeping the last group match; groups and tiers are
+/// RESEARCH.LBX data, `TECH_GROUPS` here).
+pub fn group_tier(t: &Tech, field: usize, group: u8) -> (i32, u8) {
+    let mut b = (0, 0);
+    for &n in &t.completed[field] {
+        if n <= 50 {
+            let [g, tier] = crate::data::TECH_GROUPS[field][n as usize];
+            if g == group && tier > 0 {
+                b = (tier as i32, n);
+            }
+        }
+    }
+    b
 }
 
-/// Armour techs (construction) in tier order: duralloy .. neutronium.
-pub const ARMOR_TECHS: [u8; 6] = [10, 17, 26, 34, 42, 50];
+/// 1oom `TECH_GROUP_*` numbers used by the rules.
+pub const GROUP_ARMOR: u8 = 7;
+pub const GROUP_PERSONAL_ARMOR: u8 = 15;
+pub const GROUP_PERSONAL_SHIELD: u8 = 16;
+pub const GROUP_PERSONAL_WEAPONS: u8 = 21;
 
 impl Abilities {
+    /// 1oom `game_update_tech_util` for one empire.
     pub fn new(t: &Tech, race: Race) -> Self {
         let (comp, cons, ff, plan, prop, weap) = (
             FIELD_COMPUTER,
@@ -182,7 +205,7 @@ impl Abilities {
         if silicoid {
             colony_for = PlanetType::Radiated;
         }
-        let mut inc_pop_cost = pick(t, plan, 20, &[(21, 10), (42, 5)]);
+        let mut inc_pop_cost = first(t, plan, 20, &[(42, 5), (21, 10)]);
         if race == Race::Sakkra {
             inc_pop_cost = inc_pop_cost * 2 / 3;
         }
@@ -198,21 +221,53 @@ impl Abilities {
         } else {
             5
         };
+        let mut eco_restoration = 2;
+        for (n, v) in [(5, 3), (13, 5), (24, 10), (34, 20)] {
+            if t.has(plan, n) {
+                eco_restoration = v;
+            }
+        }
+        let scanner_range = first(t, comp, 3, &[(23, 9), (13, 7), (4, 5)]);
         let rc = best(t, comp, 8, 10, 50);
         let mut cof = if rc > 0 { (rc + 12) / 10 + 1 } else { 2 };
         if race == Race::Meklar {
             cof += 2;
         }
+        let factory_cost = first(
+            t,
+            cons,
+            10,
+            &[
+                (38, 2),
+                (33, 3),
+                (28, 4),
+                (23, 5),
+                (18, 6),
+                (13, 7),
+                (8, 8),
+                (3, 9),
+            ],
+        );
+        let factory_adj_cost = if race != Race::Meklar {
+            factory_cost * cof / 2
+        } else {
+            factory_cost
+        };
         let fs = best(t, ff, 2, 10, 50);
-        let planet_shield = if fs >= 10 { 5 * ((fs - 2) / 10) } else { 0 };
-        let mut scanner_range = pick(t, comp, 3, &[(4, 5), (13, 7), (23, 9)]);
-        if race == Race::Darlok {
-            scanner_range += 2;
+        let fs = if fs < 10 { 0 } else { fs };
+        let planet_shield = if fs > 0 { 5 * ((fs - 2) / 10) } else { 0 };
+        let mut engine = 1;
+        let mut i = 6;
+        while i < 50 {
+            if t.has(prop, i) {
+                engine = (i as i32 - 6) / 6 + 1;
+            }
+            i += 6;
         }
-        let armor_tier = tier(t, cons, &ARMOR_TECHS) as usize;
-        let suit = tier(t, cons, &[11, 24, 40]);
-        let pshield = tier(t, ff, &[8, 21, 38]);
-        let mut pweap = tier(t, weap, &[2, 12, 24, 31, 42]);
+        let armor_tier = group_tier(t, cons, GROUP_ARMOR).0 as usize;
+        let suit = group_tier(t, cons, GROUP_PERSONAL_ARMOR).0;
+        let pshield = group_tier(t, ff, GROUP_PERSONAL_SHIELD).0;
+        let mut pweap = group_tier(t, weap, GROUP_PERSONAL_WEAPONS).0;
         if pweap > 2 {
             pweap += 1;
         }
@@ -221,61 +276,47 @@ impl Abilities {
             + pshield * 10
             + pweap * 5
             + if race == Race::Bulrathi { 25 } else { 0 };
-        let engine_warp = crate::data::ENGINES
-            .iter()
-            .filter(|e| t.has(prop, e.tech))
-            .map(|e| e.warp as i32)
-            .max()
-            .unwrap_or(1);
         Abilities {
             colonist_oper_factories: cof,
-            factory_cost: pick(
-                t,
-                cons,
-                10,
-                &[
-                    (3, 9),
-                    (8, 8),
-                    (13, 7),
-                    (18, 6),
-                    (23, 5),
-                    (28, 4),
-                    (33, 3),
-                    (38, 2),
-                ],
-            ),
-            ind_waste_scale: pick(t, cons, 10, &[(5, 8), (15, 6), (25, 4), (35, 2), (45, 0)]),
-            fuel_range: pick(
+            factory_cost,
+            factory_adj_cost,
+            ind_waste_scale: first(t, cons, 10, &[(45, 0), (35, 2), (25, 4), (15, 6), (5, 8)]),
+            fuel_range: first(
                 t,
                 prop,
                 3,
                 &[
-                    (3, 4),
-                    (5, 5),
-                    (9, 6),
-                    (14, 7),
-                    (19, 8),
-                    (23, 9),
-                    (29, 10),
                     (41, 30),
+                    (29, 10),
+                    (23, 9),
+                    (19, 8),
+                    (14, 7),
+                    (9, 6),
+                    (5, 5),
+                    (3, 4),
                 ],
             ),
             scanner_range,
             colony_for,
             inc_pop_cost,
-            eco_restoration: pick(t, plan, 2, &[(5, 3), (13, 5), (24, 10), (34, 20)]),
+            eco_restoration,
             terraform,
             terraform_cost,
             planet_shield,
+            planet_shield_cost: [0, 500, 1000, 1500, 2000]
+                [(planet_shield / 5).clamp(0, 4) as usize],
             soil_enrich: !silicoid && t.has(plan, 16),
             adv_soil_enrich: !silicoid && t.has(plan, 30),
             atmos_terraform: !silicoid && t.has(plan, 22),
             stargates: t.has(prop, 27),
+            hyperspace_comm: t.has(comp, 34),
+            ia_scanner: t.has(comp, 13) || t.has(comp, 23),
+            adv_scanner: t.has(comp, 23),
             combat_transporters: t.has(prop, 45),
             sub_space_interdictor: t.has(prop, 43),
-            antidote: pick(t, plan, 0, &[(17, 1), (36, 2)]),
+            antidote: first(t, plan, 0, &[(36, 2), (17, 1)]),
+            engine_warp: engine,
             ground_bonus,
-            engine_warp,
             armor_tier,
         }
     }
@@ -348,7 +389,8 @@ mod tests {
         assert_eq!(a.fuel_range, 6);
         assert_eq!(a.planet_shield, 10);
         assert_eq!(a.terraform, 30);
-        assert_eq!(a.engine_warp, 2);
+        // 1oom `have_engine`: nuclear engines (tech 6) still give 1.
+        assert_eq!(a.engine_warp, 1);
         assert_eq!(a.armor_tier, 1);
         assert_eq!(a.ground_bonus, 5 + 10 + 5);
     }

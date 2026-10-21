@@ -1,4 +1,29 @@
+use std::cell::RefCell;
+use std::panic::Location;
+
 use serde::{Deserialize, Serialize};
+
+/// One random number drawn: the range, the result and where it was drawn.
+#[derive(Debug, Clone, Copy)]
+pub struct RngCall {
+    pub n: u16,
+    pub r: u16,
+    pub at: &'static Location<'static>,
+}
+
+thread_local! {
+    static TRACE: RefCell<Option<Vec<RngCall>>> = const { RefCell::new(None) };
+}
+
+/// Starts recording every random number drawn on this thread (comparison harness).
+pub fn trace_start() {
+    TRACE.with(|t| *t.borrow_mut() = Some(Vec::new()));
+}
+
+/// Stops recording and returns the calls.
+pub fn trace_take() -> Vec<RngCall> {
+    TRACE.with(|t| t.borrow_mut().take().unwrap_or_default())
+}
 
 /// The pseudo random generator of MOO1 (port of 1oom `rnd_0_nm1`): a 32-bit linear
 /// feedback shift register stepped 9 times per call. Keeping it identical makes galaxy
@@ -12,7 +37,19 @@ impl Rng {
     }
 
     /// Uniform-ish value in `0..n` (`n` > 0).
+    #[track_caller]
     pub fn below(&mut self, n: u16) -> u16 {
+        let r = self.below_raw(n);
+        let at = Location::caller();
+        TRACE.with(|t| {
+            if let Some(v) = t.borrow_mut().as_mut() {
+                v.push(RngCall { n, r, at });
+            }
+        });
+        r
+    }
+
+    fn below_raw(&mut self, n: u16) -> u16 {
         let mut r: u16 = 0;
         let mut di_si = self.0;
         for _ in 0..9 {
@@ -50,10 +87,17 @@ impl Rng {
     }
 
     /// Value in `1..=n`.
+    #[track_caller]
     pub fn one_to(&mut self, n: u16) -> u16 {
         1 + self.below(n)
     }
 
+    /// `one_to` without recording it (1oom draws ground combat on a copy of its seed).
+    pub fn one_to_quiet(&mut self, n: u16) -> u16 {
+        1 + self.below_raw(n)
+    }
+
+    #[track_caller]
     pub fn chance(&mut self, percent: u16) -> bool {
         self.below(100) < percent
     }

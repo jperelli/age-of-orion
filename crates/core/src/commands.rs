@@ -204,11 +204,6 @@ pub fn fleet_range(st: &State, empire: EmpireId, ships: &[u32]) -> i32 {
     e.abilities().fuel_range + extra
 }
 
-fn gate(st: &State, empire: EmpireId, from: PlanetId, to: PlanetId) -> bool {
-    let (a, b) = (&st.planets[from], &st.planets[to]);
-    a.stargate && b.stargate && a.owner == Some(empire) && b.owner == Some(empire)
-}
-
 /// Removes ships of `design` everywhere and refunds a quarter of their cost.
 fn scrap_all(st: &mut State, empire: EmpireId, design: usize) {
     let cost = st.ship_cost(empire, design);
@@ -308,24 +303,13 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             if st.range_to(empire, to) > fleet_range(st, empire, ships) {
                 return err("out_of_range");
             }
-            let speed = st.fleet_speed(empire, ships);
-            let gate = gate(st, empire, from, to);
-            let o = &mut st.empires[empire as usize].orbit[from];
-            for (have, &c) in o.iter_mut().zip(ships) {
-                *have -= c;
-            }
-            let id = st.alloc_id();
-            let (x, y) = (st.planets[from].x as f64, st.planets[from].y as f64);
-            st.fleets.push(Fleet {
-                id,
-                owner: empire,
-                x,
-                y,
-                dest: to,
-                ships: ships.clone(),
-                speed,
-                gate,
-            });
+            let pairs: Vec<(usize, u32)> = ships
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|&(_, c)| c > 0)
+                .collect();
+            crate::fleet::send_from_orbit(st, empire, from, to, &pairs);
         }
         Command::RedirectFleet { fleet, to } => {
             check_planet(st, to)?;
@@ -336,14 +320,16 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             else {
                 return err("no_ships");
             };
-            if st.fleets[i].gate {
+            if st.fleets[i].speed == SPEED_STARGATE {
                 return err("in_stargate");
             }
             let ships = st.fleets[i].ships.clone();
             if st.range_to(empire, to) > fleet_range(st, empire, &ships) {
                 return err("out_of_range");
             }
-            st.fleets[i].dest = to;
+            let (fx, fy) = (st.fleets[i].x, st.fleets[i].y);
+            let from = st.planets.iter().position(|p| p.x == fx && p.y == fy);
+            crate::fleet::redirect(st, i, from, to);
         }
         Command::ScrapShips { planet, ref ships } => {
             check_planet(st, planet)?;
@@ -364,6 +350,10 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
                 *have -= c;
             }
             e.reserve += refund;
+        }
+        Command::SendTransport { from, pop: 0, .. } => {
+            own(st, empire, from)?;
+            st.planets[from].trans_num = 0;
         }
         Command::SendTransport { from, to, pop } => {
             own(st, empire, from)?;
@@ -392,18 +382,9 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             if st.range_to(empire, to) > a.fuel_range {
                 return err("out_of_range");
             }
-            let (x, y) = (p.x as f64, p.y as f64);
-            st.planets[from].pop -= pop;
-            let id = st.alloc_id();
-            st.transports.push(Transport {
-                id,
-                owner: empire,
-                x,
-                y,
-                dest: to,
-                pop,
-                speed: a.engine_warp,
-            });
+            let p = &mut st.planets[from];
+            p.trans_num = pop;
+            p.trans_dest = to;
         }
         Command::SetResearch { alloc } => {
             let Some(a) = normalize(alloc.map(|x| x as i64)) else {

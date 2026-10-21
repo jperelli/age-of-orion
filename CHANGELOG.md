@@ -6,8 +6,50 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-21
+
+The computer players of Master of Orion, and a harness that checks the rules against C 1oom.
+
+### Added
+
+- The classic AI's turn, ported line by line from 1oom `game_ai_classic.c`: scouts, colony
+  ships (including MOO1's way of conjuring one now and then), fronts against neighbours,
+  attacks on weak enemy planets (breaking pacts when it suits them), defence of threatened
+  colonies, idle fleets moved to the front, invasions with transports, colonists moved to
+  under-populated planets, reserve spent on threatened and young colonies, taxes
+  (`turn_p1`); ship design with MOO1's part choices, scrapping old designs and choosing what
+  each planet builds (`turn_p2`); production sliders by personality and race, research
+  focus, security and spy missions (`turn_p3`); the opening sliders and research.
+- A choice of computer players on the new game screen: Classic (MOO1's behaviour, bugs
+  included) or Classic+ (1oom's fixes).
+- Comparison harness against C 1oom (`crates/harness`, `tools/harness`, docs/HARNESS.md):
+  decodes 1oom saves, plays each year of a computer-only 1oom game in Age of Orion and
+  compares the state and every random number. The first 40 years of a three-opponent game
+  are identical turn by turn; about half the turns of longer games are.
+- Colonists to send leave at the end of the turn, as in MOO1; the colony panel shows them
+  and can cancel.
+
+### Changed
+
+- Turn processing follows 1oom `game_turn_process` step by step, with exact ports of
+  production and maintenance, waste and population growth, missile bases and shields, ship
+  building, factories and refits, research and breakthroughs, contact, fuel and scanner
+  ranges, visibility, fleet and transport movement, colonization, transports and ground
+  combat, and the end of turn bookkeeping.
+- Map positions, distances and movement use 1oom's integer geometry (`util_math.c`): fleets
+  move in steps of 5 and 6 map units, parsecs come from the same lookup tables.
+- 1oom's default rules: MOO1 v1.3a's fixes (the "4 colony ships" AI curse, factories up to
+  2700, the Oracle interface, orbital weapons, ship scanners, the Guardian's repairs) and
+  none of 1oom's optional fixes. Some numbers change accordingly, for example the starting
+  sliders (industry and ecology only) and transports, which move at the speed of your best
+  engine minus one level, as in MOO1.
+- Saves from 0.4 no longer load (positions are now integers).
+
 ### Fixed
 
+- Captured planets broke the save file (an event field clashed with the event's recipients).
+- Ground combat, the computer-against-computer battle resolution, design costs and ship
+  maintenance overflow and round exactly as in MOO1.
 - Cities and planets on the battle grid no longer cover the neighbouring squares.
 
 ## [0.4.0] - 2026-10-21

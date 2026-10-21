@@ -302,6 +302,9 @@ pub struct NewGameOptions {
     pub banner: Option<u8>,
     /// No human player: every empire is run by the AI (simulations, tests).
     pub all_ai: bool,
+    /// 1oom AI: 0 classic (as MOO1, the default), 1 classic+.
+    #[serde(default)]
+    pub ai_id: u8,
     pub star_names: Vec<String>,
     /// Home world name per race (10 entries).
     pub home_names: Vec<String>,
@@ -326,6 +329,7 @@ impl Default for NewGameOptions {
             race: None,
             banner: None,
             all_ai: false,
+            ai_id: 0,
             star_names: Vec::new(),
             home_names: Vec::new(),
             leader_names: Vec::new(),
@@ -386,7 +390,30 @@ fn empty_planet(x: i32, y: i32) -> Planet {
         unrest_reported: false,
         claim: None,
         rocks: 0,
+        look: 0,
+        frame: 0,
+        battlebg: 1,
+        prev_owner: None,
+        pop_prev: 0,
+        total_prod: 0,
+        slider_lock: [false; NUM_SLIDERS],
+        bc_upgrade_base: 0,
+        trans_num: 0,
+        trans_dest: 0,
+        within_frange: vec![0; PLAYER_NUM],
+        within_srange: vec![false; PLAYER_NUM],
+        unrefuel: vec![false; PLAYER_NUM],
+        finished: [false; FINISHED_NUM],
+        inbound: vec![0; PLAYER_NUM],
+        total_inbound: vec![0; PLAYER_NUM],
+        artifact_looter: None,
     }
+}
+
+/// Straight-line distance between two planets (home placement only).
+fn edist(st: &State, a: PlanetId, b: PlanetId) -> f64 {
+    let (p, q) = (&st.planets[a], &st.planets[b]);
+    (((p.x - q.x).pow(2) + (p.y - q.y).pow(2)) as f64).sqrt()
 }
 
 /// 1oom `tbl_nebula_data`: per nebula type, the x0, y0, x1 and y1 of four rectangles.
@@ -753,7 +780,7 @@ fn pick_homes(st: &mut State, n: usize) -> Vec<PlanetId> {
                     .chain(std::iter::once(&st.orion))
                     .map(|&h| {
                         let w = if h == st.orion { 0.6 } else { 1.0 };
-                        (st.dist(i, h) * w) as i64
+                        (edist(st, i, h) * w) as i64
                     })
                     .min()
                     .unwrap_or(0);
@@ -780,15 +807,19 @@ fn ensure_neighbours(st: &mut State, home: PlanetId, reserved: &mut Vec<PlanetId
     let mut near: Vec<PlanetId> = (0..st.planets.len())
         .filter(|&i| i != st.orion && st.planets[i].owner.is_none() && !reserved.contains(&i))
         .collect();
-    near.sort_by_key(|&i| (st.dist(home, i) as i64, i));
+    near.sort_by_key(|&i| (edist(st, home, i) as i64, i));
     if let Some(&i) = near.first() {
-        let d = st.dist(home, i);
-        let max = st.rules.parsec * 3.0 - 3.0;
-        if d > max {
-            let (hx, hy) = (st.planets[home].x as f64, st.planets[home].y as f64);
-            let p = &mut st.planets[i];
-            p.x = (hx + (p.x as f64 - hx) * max / d).round() as i32;
-            p.y = (hy + (p.y as f64 - hy) * max / d).round() as i32;
+        let (hx, hy) = (st.planets[home].x, st.planets[home].y);
+        let p = &mut st.planets[i];
+        let mut d = 29;
+        while d > 0 && crate::umath::dist_steps(hx, hy, p.x, p.y) > 3 {
+            let (mut x, mut y) = (hx, hy);
+            crate::umath::go_line_dist(&mut x, &mut y, p.x, p.y, d);
+            if crate::umath::dist_steps(hx, hy, x, y) <= 3 {
+                p.x = x;
+                p.y = y;
+            }
+            d -= 2;
         }
     }
     for &i in near.iter().take(2) {
@@ -887,6 +918,13 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         pending: Default::default(),
         battle: None,
         progress: None,
+        ai_id: opts.ai_id,
+        galaxy_seed: opts.seed,
+        galaxy_w: 0,
+        galaxy_h: 0,
+        copyprot_status: 0,
+        guardian_killer: None,
+        star_dist: Vec::new(),
     };
 
     let mut races: Vec<Race> = Vec::new();
@@ -926,6 +964,7 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         }
         for d in designs.iter_mut() {
             d.update();
+            d.look += banners[i] * 24;
         }
         let ship_names = opts
             .ship_names
@@ -972,6 +1011,28 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
             tax: 0,
             total_trade: 0,
             spying_maint: 0,
+            ab: Default::default(),
+            base_shield: 1,
+            base_comp: 1,
+            base_weapon: 3,
+            ship_maint: 0,
+            bases_maint: 0,
+            percent_prod_total_to_actual: 100,
+            ai_p2_countdown: 0,
+            ai_p3_countdown: 0,
+            shipi_colony: -1,
+            shipi_bomber: -1,
+            design_year: vec![0; MAX_DESIGNS],
+            shipcount: st
+                .rules
+                .start_ships
+                .iter()
+                .copied()
+                .chain(std::iter::repeat(0))
+                .take(MAX_DESIGNS)
+                .collect(),
+            have_reserve_fuel: vec![false; MAX_DESIGNS],
+            seen: Vec::new(),
         });
         let rules = st.rules.clone();
         let p = &mut st.planets[home];
@@ -990,30 +1051,32 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
     for &home in &homes {
         ensure_neighbours(&mut st, home, &mut reserved);
     }
-    // First research projects (1oom `game_ai_classic_new_game_tech`; humans get the first
-    // tech of each list and can change it at no cost before any investment).
+    // Sliders of the homes (1oom `game_generate_home_etc`, `game_ai_classic_new_game_init`).
+    for (i, &home) in homes.iter().enumerate() {
+        if st.empires[i].ai {
+            crate::ai::new_game_init(&mut st, i, home);
+        } else {
+            st.planets[home].sliders = [0, 0, 100, 0, 0];
+            st.empires[i].tech.alloc = [20, 10, 15, 15, 20, 20];
+        }
+    }
+    // First research projects: computers pick at random (1oom
+    // `game_ai_classic_new_game_tech`); humans get the first tech of each list and can
+    // change it at no cost before any investment.
+    crate::ai::new_game_tech(&mut st);
     for i in 0..st.empires.len() {
+        if st.empires[i].ai {
+            continue;
+        }
         for f in 0..NUM_FIELDS {
-            let row = st.empires[i].tech.list[f][0];
-            let tech = if st.empires[i].ai {
-                loop {
-                    let t = row[st.rng.below(3) as usize];
-                    if t != 0 {
-                        break t;
-                    }
-                }
-            } else {
-                row[0]
-            };
+            let tech = st.empires[i].tech.list[f][0][0];
             crate::tech::start_project(&mut st, i as u8, f, tech);
         }
     }
-    crate::turn::update_exploration(&mut st);
-    crate::turn::update_production(&mut st);
     for (i, &home) in homes.iter().enumerate() {
-        let eco = crate::turn::clean_eco_percent(&st.planets[home], &st.empires[i]);
-        st.planets[home].sliders = [0, 0, 75 - eco, eco, 25];
+        st.empires[i].explored[home] = true;
     }
+    st.init_star_dist();
     Ok(st)
 }
 
