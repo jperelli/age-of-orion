@@ -108,6 +108,20 @@ export class Theme {
     }
   }
 
+  /** Fonts converted from FONTS.LBX ("MOO1 0" .. "MOO1 5"). */
+  fonts = new Set<string>();
+
+  async addFont(n: string, blob: Blob): Promise<void> {
+    try {
+      const face = new FontFace(`MOO1 ${n}`, await blob.arrayBuffer());
+      await face.load();
+      document.fonts.add(face);
+      this.fonts.add(n);
+    } catch {
+      // A font the browser rejects: the theme's own font stays.
+    }
+  }
+
   dispose(): void {
     for (const u of this.urls.values()) URL.revokeObjectURL(u);
   }
@@ -132,9 +146,11 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
   if (def.use_lbx) {
     const manifest = await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json");
     for (const [alias, path] of Object.entries(manifest?.aliases ?? {})) {
-      if (alias.startsWith("music/")) continue;
+      if (alias.startsWith("music/") || alias.startsWith("sfx/")) continue;
       const blob = await store.get<Blob>("assets", path);
-      if (blob) await theme.addImage(alias, blob);
+      if (!blob) continue;
+      if (alias.startsWith("font/")) await theme.addFont(alias.slice(5), blob);
+      else await theme.addImage(alias, blob);
     }
     // EVENTMSG.LBX: entry (type - 1) * 7 + stage is the news of 1oom `game_news_get_msg`.
     const events = await store.get<Blob>("assets", "text/lbx/eventmsg.json");
@@ -168,7 +184,7 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
 }
 
 /** News kinds in the order of MOO1's EVENTMSG.LBX (1oom `GAME_NEWS_*` minus one). */
-const NEWS_KINDS = ["plague", "quake", "nova", "accident", "assassin", "virus", "comet", "pirates", "derelict", "rebellion", "crystal", "amoeba", "enviro", "rich", "support", "poor", "", "coup", "stars"];
+const NEWS_KINDS = ["plague", "quake", "nova", "accident", "assassin", "virus", "comet", "pirates", "derelict", "rebellion", "crystal", "amoeba", "enviro", "rich", "support", "poor", "orion", "coup", "stars", "stats", "genocide", "guardian"];
 
 /** Reads a mod folder chosen with `<input webkitdirectory>`. */
 export async function readModFolder(files: File[]): Promise<ModData> {

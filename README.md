@@ -54,7 +54,10 @@ device, and the **Classic** theme then shows the original planet pictures and ra
 - Two themes: **Age** (medieval world map, the default) and **Classic** (starfield, with
   your original MOO1 art when imported). Every text and picture can be replaced by a mod.
 - The MOO1 soundtrack from your own MUSIC.LBX, converted to MIDI and played by a built-in
-  synthesizer; tech descriptions from RESEARCH.LBX; sound effects.
+  synthesizer; MOO1's sound effects (SOUNDFX.LBX) and fonts (FONTS.LBX, converted to
+  TrueType); tech descriptions from RESEARCH.LBX.
+- The ground battle screen and the GNN newscast, with MOO1's landing and newscast art when
+  imported.
 - Autosave every turn, save/load to a file, keyboard shortcuts (Enter ends the turn).
 
 See [docs/PLAN.md](docs/PLAN.md) for what is ported, what is simplified and what comes next.

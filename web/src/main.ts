@@ -20,8 +20,17 @@ async function applyTheme(): Promise<void> {
   theme?.dispose();
   theme = await loadTheme(settings);
   document.documentElement.dataset.theme = theme.def.id;
+  // MOO1's own fonts, when imported (FONTS.LBX).
+  if (theme.fonts.has("3") && theme.fonts.has("4")) document.documentElement.dataset.moofonts = "1";
+  else delete document.documentElement.dataset.moofonts;
+  audio.useSamples(theme.def.use_lbx);
   document.title = t("app.title");
 }
+
+// MOO1 clicks every button (1oom `ui_sound_play_sfx_24`), with the imported samples.
+document.addEventListener("click", (e) => {
+  if ((e.target as Element | null)?.closest?.("button")) audio.sample(0x24);
+});
 
 function show(el: HTMLElement): void {
   screen?.destroy();

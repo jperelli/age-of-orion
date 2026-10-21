@@ -63,7 +63,8 @@ flowchart LR
 | `game_spy.c` | `spy.rs` | Ported; tech groups and tiers (in RESEARCH.LBX in MOO1) are derived from the tech names |
 | `game_event.c`, `game_turn_coup` | `events.rs` | Ported: all 16 events, monsters, rebellions, coups; some events still differ from 1oom in harness turns; texts are our own, or MOO1's from an imported EVENTMSG.LBX |
 | `game_election.c` | `council.rs` | Ported, with the vote and the acceptance as player commands |
-| `game_news.c` | `web/src/game.ts` | Event reports in the turn summary; the GNN newscast and its statistics are not shown |
+| `game_news.c`, `game_stat.c` | `events.rs`, `misc.rs`, `web/src/news.ts` | The GNN newscast with the statistics news; other reports in the turn summary |
+| `lbxfont.c`, `fmt_sfx.c` | `crates/lbx/src/font.rs`, `sfx.rs` | MOO1 fonts to TrueType, sound effects to WAV |
 | `game_save.c` | `serde` JSON; `crates/harness/src/oom.rs` | New format; 1oom saves are read by the harness (not yet by the game) |
 
 ## Milestones
@@ -108,8 +109,10 @@ import, mods, CI/CD, releases, website.
 - Comparison harness against C 1oom ([HARNESS.md](HARNESS.md)): the first 40 years of a
   computer-only game are identical turn by turn; about half the turns of longer games.
 
-### 0.6.0: presentation
-- MOO1 fonts, the ground battle and GNN newscast screens, sound effects from SOUNDFX.LBX.
+### 0.6.0: presentation (done)
+- MOO1 fonts (FONTS.LBX to TrueType), the ground battle screen (`uiground.c`) and the GNN
+  newscast (`uinews.c`) with LANDING.LBX and NEWSCAST.LBX art, sound effects from
+  SOUNDFX.LBX (`fmt_sfx.c`).
 
 ### 0.7.0: exact rules
 - Drive the remaining subsystems to 1oom parity with the harness: random events, orbital

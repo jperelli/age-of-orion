@@ -18,6 +18,7 @@ export const TUNE = {
   ending_lose: 3,
   battle: 8,
   news: 9,
+  ground: 0x26,
   ground_win: 0xc,
   ground_lose: 0xb,
   council: 0x27,
@@ -329,6 +330,7 @@ class AudioOut {
       this.sfxGain.connect(this.ctx.destination);
       this.synth = new Synth(this.ctx, this.musicGain);
       if (this.wanted >= 0) void this.play(this.wanted);
+      this.preloadSamples([0x24, 2, 0x11, 0x13, 0x25, 6]);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
   }
@@ -336,6 +338,7 @@ class AudioOut {
   /** Forgets the cached asset list (after an import). */
   reload(): void {
     this.manifest = undefined;
+    this.samples.clear();
   }
 
   async hasMusic(): Promise<boolean> {
@@ -437,7 +440,64 @@ class AudioOut {
     src.start();
   }
 
-  sfx(kind: "beam" | "heavy_beam" | "missile" | "explosion" | "hit" | "bomb" | "special" | "click" | "arrow" | "clash"): void {
+  // ------------------------------------------------------ MOO1 samples
+
+  private samplesOn = false;
+  private samples = new Map<number, AudioBuffer | null>();
+
+  /** Plays the imported SOUNDFX.LBX samples instead of synthesized effects (Classic theme). */
+  useSamples(on: boolean): void {
+    this.samplesOn = on;
+    this.samples.clear();
+  }
+
+  /** Plays SOUNDFX.LBX sample `n` (1oom `ui_sound_play_sfx`); false if not available. */
+  sample(n: number): boolean {
+    if (!this.samplesOn || !this.ctx || !this.sfxGain || this.prefs.sfx === 0) return false;
+    const buf = this.samples.get(n);
+    if (buf === undefined) {
+      this.samples.set(n, null);
+      void this.loadSample(n);
+      return false;
+    }
+    if (!buf) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.sfxGain);
+    src.start();
+    return true;
+  }
+
+  private async loadSample(n: number): Promise<void> {
+    this.manifest ??= (await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json")) ?? null;
+    const path = this.manifest?.aliases[`sfx/${n}`];
+    const blob = path ? await store.get<Blob>("assets", path) : null;
+    if (!blob || !this.ctx) return;
+    try {
+      this.samples.set(n, await this.ctx.decodeAudioData(await blob.arrayBuffer()));
+    } catch {
+      this.samples.set(n, null);
+    }
+  }
+
+  /** Preloads the samples the game uses, so the first effect is not silent. */
+  preloadSamples(ns: number[]): void {
+    if (!this.samplesOn || !this.ctx) return;
+    for (const n of ns) if (!this.samples.has(n)) {
+      this.samples.set(n, null);
+      void this.loadSample(n);
+    }
+  }
+
+  /**
+   * A sound effect: MOO1's sample `sample` when imported (Classic theme), otherwise a
+   * synthesized one. 1oom numbers: 0x24 click, 2 hit, 0x11 explosion, 0x13 special,
+   * weapons their own (`tbl_shiptech_weap[].sound`).
+   */
+  sfx(kind: "beam" | "heavy_beam" | "missile" | "explosion" | "hit" | "bomb" | "special" | "click" | "arrow" | "clash", sample?: number): void {
+    const def: Partial<Record<typeof kind, number>> = { click: 0x24, hit: 2, explosion: 0x11, special: 0x13, bomb: 0x25 };
+    const n = sample ?? def[kind];
+    if (n !== undefined && this.sample(n)) return;
     switch (kind) {
       case "beam":
         return this.tone("sawtooth", 1400, 300, 0.18, 0.12);

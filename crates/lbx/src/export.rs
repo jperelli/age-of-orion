@@ -4,8 +4,10 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+use crate::font::{self, FontInfo};
 use crate::gfx::{decode, encode_png, GfxHeader};
 use crate::music;
+use crate::sfx;
 use crate::{Archive, Kind, Palette, Table};
 
 /// One file of the generated asset tree.
@@ -32,6 +34,9 @@ pub struct EntryInfo {
     pub midi: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub loops: bool,
+    /// WAV file converted from a sound effect.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wav: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -54,6 +59,8 @@ pub struct Manifest {
     pub text: Vec<String>,
     /// Tunes that loop (aliases `music/<n>`).
     pub looping: Vec<String>,
+    /// MOO1 fonts converted to TrueType (aliases `font/<n>`).
+    pub fonts: Vec<FontInfo>,
     pub warnings: Vec<String>,
 }
 
@@ -119,6 +126,12 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
     for (name, archive) in &parsed {
         let dir = name.to_ascii_lowercase();
         let mut entries = Vec::new();
+        // The landing and ground battle screens use FONTS.LBX palette 6 (1oom `uilanding.c`).
+        let archive_palette = (name == "LANDING")
+            .then(|| parsed.iter().find(|(n, _)| n == "FONTS"))
+            .flatten()
+            .and_then(|(_, a)| Palette::from_fonts(a, 6).ok());
+        let base_palette = archive_palette.as_ref().unwrap_or(&base_palette);
         for (index, d) in archive.entries().enumerate() {
             let mut info = EntryInfo {
                 index,
@@ -128,8 +141,22 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
                 png0: None,
                 midi: None,
                 loops: false,
+                wav: None,
                 error: None,
             };
+            if sfx::is_voc(d) {
+                match sfx::voc_to_wav(d) {
+                    Some(wav) => {
+                        let path = format!("audio/{dir}/{index:03}.wav");
+                        out.push(AssetFile {
+                            path: path.clone(),
+                            bytes: wav,
+                        });
+                        info.wav = Some(path);
+                    }
+                    None => info.error = Some("invalid VOC".into()),
+                }
+            }
             if music::is_xmid(d) {
                 match music::convert_xmid(d) {
                     Some((midi, loops)) => {
@@ -147,13 +174,22 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
             if archive.kind == Kind::Graphics && d.len() >= 0x16 {
                 match decode(d) {
                     Ok(img) => {
-                        let pal = img.palette(&base_palette);
+                        let pal = img.palette(base_palette);
                         let (w, h, px) = img.sheet_rgba(&pal);
                         let path = format!("gfx/{dir}/{index:03}.png");
                         out.push(AssetFile {
                             path: path.clone(),
                             bytes: encode_png(w, h, &px),
                         });
+                        // The GNN logo is shown at its last frame (1oom `uinews.c`).
+                        if name == "NEWSCAST" && index == 1 && img.frames.len() > 1 {
+                            let last = img.frames.len() - 1;
+                            let (w, h) = (img.header.width as u32, img.header.height as u32);
+                            out.push(AssetFile {
+                                path: format!("gfx/{dir}/{index:03}-last.png"),
+                                bytes: encode_png(w, h, &img.frame_rgba(last, &pal)),
+                            });
+                        }
                         if img.frames.len() > 1 {
                             let path0 = format!("gfx/{dir}/{index:03}-0.png");
                             let (w, h) = (img.header.width as u32, img.header.height as u32);
@@ -188,7 +224,30 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
         );
     }
 
-    let aliases = aliases(&archives);
+    let mut fonts = Vec::new();
+    if let Some(d) = parsed
+        .iter()
+        .find(|(n, _)| n == "FONTS")
+        .and_then(|(_, a)| a.entry(0))
+    {
+        for (i, f) in font::parse(d).iter().enumerate() {
+            let path = format!("fonts/moo1-{i}.ttf");
+            out.push(AssetFile {
+                path: path.clone(),
+                bytes: font::to_ttf(f, &format!("MOO1 Font {i}")),
+            });
+            fonts.push(FontInfo {
+                index: i,
+                path,
+                height: f.height,
+                gap_h: f.gap_h,
+            });
+        }
+    }
+    let mut aliases = aliases(&archives);
+    for f in &fonts {
+        aliases.insert(format!("font/{}", f.index), f.path.clone());
+    }
     let looping = archives
         .get("MUSIC")
         .map(|m| {
@@ -207,6 +266,7 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
         archives,
         text,
         looping,
+        fonts,
         warnings,
     };
     out.push(AssetFile {
@@ -310,6 +370,56 @@ fn aliases(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, String>
     }
     if let Some(p) = png("STARMAP", 0x2d) {
         a.insert("stargate".into(), p);
+    }
+    // LANDING.LBX (1oom `uilanding.c`, `uiground.c`): the transport 0, colonization scenes
+    // 6 + planet type, invasion scenes 0x24 + planet type, the fallen soldier 0x14, the
+    // walking colonists 0x15 + banner, soldiers 0x1b + race.
+    if let Some(p) = png0("LANDING", 0) {
+        a.insert("landing/transport".into(), p);
+    }
+    for t in 1..14 {
+        if let Some(p) = png0("LANDING", 6 + t) {
+            a.insert(format!("landing/colonize/{t}"), p);
+        }
+        if let Some(p) = png0("LANDING", 0x24 + t) {
+            a.insert(format!("landing/invade/{t}"), p);
+        }
+    }
+    if let Some(p) = png("LANDING", 0x14) {
+        a.insert("ground/death".into(), p);
+    }
+    for r in 0..10 {
+        if let Some(p) = png0("LANDING", 0x1b + r) {
+            a.insert(format!("ground/soldier/{r}"), p);
+        }
+    }
+    // NEWSCAST.LBX (1oom `uinews.c`): the TV 0, the GNN logo 1, the newscaster 2, the
+    // globe 3 and an icon per news type at 3 + type.
+    for (i, k) in ["news/tv", "news/gnn", "news/anchor", "news/world"]
+        .iter()
+        .enumerate()
+    {
+        if let Some(p) = png0("NEWSCAST", i) {
+            let p = if i == 1 {
+                p.replace("-0.png", "-last.png")
+            } else {
+                p
+            };
+            a.insert(k.to_string(), p);
+        }
+    }
+    for t in 1..23 {
+        if let Some(p) = png0("NEWSCAST", 3 + t) {
+            a.insert(format!("news/icon/{t}"), p);
+        }
+    }
+    // SOUNDFX.LBX (1oom `ui_sound_play_sfx`).
+    if let Some(f) = archives.get("SOUNDFX") {
+        for e in &f.entries {
+            if let Some(p) = &e.wav {
+                a.insert(format!("sfx/{}", e.index), p.clone());
+            }
+        }
     }
     a
 }

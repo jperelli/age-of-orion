@@ -321,18 +321,35 @@ pub fn resolve_all(st: &mut State) {
                 let fact = st.planets[pli].factories;
                 let mut seed = st.rng;
                 if s[0].pop1 != 0 && s[1].pop1 != 0 {
+                    let human = s[0].human || s[1].human;
+                    let att_side = usize::from(flag_swap);
+                    let start = if flag_swap {
+                        [s[1].pop1, s[0].pop1]
+                    } else {
+                        [s[0].pop1, s[1].pop1]
+                    };
+                    let mut deaths = Vec::new();
                     while s[0].pop1 != 0 && s[1].pop1 != 0 {
                         // 1oom rolls on a copy of the seed (not in its random number log).
                         let v1 = seed.one_to_quiet(100) as i32 + s[0].force;
                         let v2 = seed.one_to_quiet(100) as i32 + s[1].force;
                         let death = if v1 <= v2 { 0 } else { 1 };
                         s[death].pop1 -= 1;
+                        if human {
+                            deaths.push(u8::from(death != att_side));
+                        }
                     }
                     if flag_swap {
                         s.swap(0, 1);
                     }
                     st.rng = seed;
-                    finish(st, pli, &s, flag_rebel, fact);
+                    let p = &st.planets[pli];
+                    let info = Report {
+                        start,
+                        deaths,
+                        landed_of: p.total_inbound.get(i).copied().unwrap_or(0),
+                    };
+                    finish(st, pli, &s, flag_rebel, fact, info);
                     let mut pop_planet = pop_planet0 - s[1].pop1;
                     pop_planet = pop_planet.max(1);
                     let changed = st.planets[pli].owner != powner;
@@ -344,8 +361,29 @@ pub fn resolve_all(st: &mut State) {
     }
 }
 
+/// What the ground battle screen shows.
+struct Report {
+    start: [i32; 2],
+    deaths: Vec<u8>,
+    landed_of: i32,
+}
+
+/// Battle suit, personal shield and hand weapon of an empire's troops, tech 0 for none
+/// (1oom `game_ground_resolve_init`, for the ground battle screen).
+fn gear(st: &State, e: EmpireId) -> Vec<(u8, u8)> {
+    let t = &st.empires[e as usize].tech;
+    [
+        (FIELD_CONSTRUCTION, GROUP_PERSONAL_ARMOR),
+        (FIELD_FORCE_FIELD, GROUP_PERSONAL_SHIELD),
+        (FIELD_WEAPON, GROUP_PERSONAL_WEAPONS),
+    ]
+    .into_iter()
+    .map(|(f, g)| (f as u8, group_tier(t, f, g).1))
+    .collect()
+}
+
 /// 1oom `game_ground_finish`.
-fn finish(st: &mut State, pli: PlanetId, s: &[Side; 2], flag_rebel: bool, fact: i32) {
+fn finish(st: &mut State, pli: PlanetId, s: &[Side; 2], flag_rebel: bool, fact: i32, info: Report) {
     let (att, def) = (s[0].player, s[1].player);
     let won = s[0].pop1 > 0;
     let mut captured = Vec::new();
@@ -403,7 +441,15 @@ fn finish(st: &mut State, pli: PlanetId, s: &[Side; 2], flag_rebel: bool, fact: 
     }
     let p = &mut st.planets[pli];
     p.pop = p.pop.min(p.max_pop);
-    let _ = captured;
+    let g = [gear(st, att), gear(st, def)];
+    let armor = [att, def].map(|e| {
+        group_tier(
+            &st.empires[e as usize].tech,
+            FIELD_CONSTRUCTION,
+            GROUP_ARMOR,
+        )
+        .0 as u8
+    });
     st.push_event(
         vec![att, def],
         EventKind::GroundBattle {
@@ -413,6 +459,15 @@ fn finish(st: &mut State, pli: PlanetId, s: &[Side; 2], flag_rebel: bool, fact: 
             won,
             attackers_left: s[0].pop1,
             defenders_left: s[1].pop1,
+            attackers: info.start[0],
+            defenders: info.start[1],
+            landed_of: info.landed_of,
+            rebels: flag_rebel,
+            deaths: info.deaths,
+            gear: g,
+            armor,
+            captured,
+            factories: if won && !flag_rebel { fact } else { 0 },
         },
     );
 }

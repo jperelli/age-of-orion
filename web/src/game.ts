@@ -4,7 +4,9 @@ import type { Ctx } from "./ctx";
 import { designDialog } from "./designer";
 import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefName } from "./diplomacy";
 import type { Game } from "./engine";
+import { groundScreen, isGroundScreen } from "./ground";
 import { MapView } from "./map";
+import { newscast, newsType } from "./news";
 import { needsChoice, researchDialog } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
@@ -469,7 +471,18 @@ export class GameScreen {
     }
     await store.put("kv", AUTOSAVE, this.game.save());
     const v = this.view;
-    const events = v.events.filter((e) => !["ships_built", "factories_complete"].includes(e.type) || e.to.includes(v.player));
+    for (const e of v.events) if (isGroundScreen(e, v.player)) await groundScreen(this.ctx, e);
+    const visible = (e: GameEvent) => e.to.length === 0 || e.to.includes(v.player);
+    const news = v.events.filter((e) => newsType(e) !== null && visible(e));
+    await newscast(
+      this.ctx,
+      news.map((e) => ({
+        type: newsType(e)!,
+        text: this.eventText(e),
+        ranking: ((e.ranking as number[] | undefined) ?? []).map((i) => this.t(`race.${v.empires[i].race}.plural`)),
+      })),
+    );
+    const events = v.events.filter((e) => (!["ships_built", "factories_complete"].includes(e.type) || e.to.includes(v.player)) && !news.includes(e));
     if (events.length) {
       const list = h("ul", { class: "events" }, ...events.map((e) => h("li", { class: `ev-${e.type}`, onclick: () => this.focusEvent(e) }, this.eventText(e))));
       await modal(this.t("report.title", { year: v.year }), list, [this.t("btn.ok")], "report");

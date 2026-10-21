@@ -34,6 +34,21 @@
   --warn: #ff9a6b;
 }
 
+/* MOO1's bitmap fonts (FONTS.LBX, imported): font 3 for text, 4 for titles, 5 for buttons.
+   Sizes are multiples of the glyph cell (9, 10 and 9 pixels) to keep the pixels square. */
+:root[data-moofonts] {
+  --font: "MOO1 3", "Trebuchet MS", Verdana, sans-serif;
+  --title-font: "MOO1 4", "Trebuchet MS", sans-serif;
+  --button-font: "MOO1 5", "Trebuchet MS", sans-serif;
+  font-size: 18px;
+}
+:root[data-moofonts] body { -webkit-font-smoothing: none; font-smooth: never; }
+:root[data-moofonts] h1, :root[data-moofonts] h2, :root[data-moofonts] h3 { font-family: var(--title-font); font-weight: normal; }
+:root[data-moofonts] .menu-card h1 { font-size: 40px; }
+:root[data-moofonts] .dialog h2, :root[data-moofonts] .panel h2 { font-size: 20px; }
+:root[data-moofonts] button { font-family: var(--button-font); font-size: 18px; }
+:root[data-moofonts] .small, :root[data-moofonts] button.mini { font-size: 18px; }
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); }
 #app { height: 100%; }
@@ -123,6 +138,9 @@ input[type="range"] { accent-color: var(--accent); }
 :root[data-theme="classic"] .topbar { color: var(--ink); }
 .topbar .stats { display: flex; gap: 1.2em; flex-wrap: wrap; flex: 1; align-items: baseline; }
 .topbar .stats b { color: var(--gold); font-size: 1.15em; }
+.topbar .stats span { white-space: nowrap; }
+:root[data-moofonts] .topbar .stats { font-size: 18px; gap: 0.2em 1em; }
+:root[data-moofonts] .topbar .stats b { font-family: var(--title-font); font-size: 20px; }
 .topbar nav { display: flex; gap: 0.4em; flex-wrap: wrap; }
 .crest { width: 26px; height: 32px; background: var(--banner); clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%); border: 2px solid #000; flex: none; }
 .crest.big { width: 48px; height: 60px; }
@@ -277,3 +295,27 @@ label.checkbox { display: block; margin-top: 0.8em; }
   .battle-main { flex-direction: column; }
   .battle-side { width: 100%; }
 }
+
+/* Ground battle screen (1oom uiground.c). */
+.dialog.ground { width: min(680px, 96vw); }
+.ground-canvas { display: block; width: 640px; max-width: 100%; image-rendering: pixelated; border: 2px solid var(--border); background: #000; }
+.ground-sides { display: flex; justify-content: space-between; gap: 1em; margin-top: 0.4em; }
+.ground-sides > div:last-child { text-align: right; }
+.ground-stage { position: relative; }
+.ground-status { position: absolute; left: 0; right: 0; top: 0.4em; padding: 0 1em; text-align: center; color: #fff; text-shadow: 0 0 3px #000, 0 2px 2px #000; pointer-events: none; }
+.ground-sides .small { font-size: 0.85em; }
+
+/* GNN newscast (1oom uinews.c). */
+.dialog.news-dialog { width: min(680px, 96vw); }
+.news { position: relative; }
+.news-tv { width: 640px; max-width: 100%; aspect-ratio: 320 / 200; background-size: 100% 100%; image-rendering: pixelated; }
+.news-tv .news-screen { position: absolute; left: 4.375%; top: 7%; width: 91.25%; height: 52.5%; overflow: hidden; background: #000; }
+.news-tv .news-gnn, .news-tv .news-anchor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; image-rendering: pixelated; object-fit: cover; }
+.news-tv .news-icon { position: absolute; left: 66.4%; top: 22.9%; width: 14%; image-rendering: pixelated; }
+.news-tv .news-text { position: absolute; left: 10%; top: 71%; width: 79.7%; height: 24.5%; overflow-y: auto; color: #e8f0ff; background: #000; padding: 0.2em 0.5em; font-size: 0.95em; }
+.news-tv .news-text p { margin: 0; }
+.news-herald { background: var(--parchment); border: 3px double var(--border); padding: 1em; min-height: 12em; display: flex; gap: 1em; align-items: flex-start; }
+.news-herald .news-screen { flex: none; }
+.news-herald .news-masthead { font-size: 1.6em; font-weight: bold; color: var(--accent); letter-spacing: 0.08em; border-bottom: 2px solid var(--border); margin-bottom: 0.4em; }
+.news-herald .news-icon { width: 64px; image-rendering: pixelated; }
+.news-ranking { columns: 2; margin: 0.3em 0 0; }

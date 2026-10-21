@@ -445,7 +445,7 @@ class BattleScreen {
         const [x1, y1] = this.center(a.to);
         const w = parts.weapons[a.weapon];
         const heavy = w.damage_max >= 15;
-        audio.sfx(this.world ? (heavy ? "clash" : "arrow") : heavy ? "heavy_beam" : "beam");
+        audio.sfx(this.world ? (heavy ? "clash" : "arrow") : heavy ? "heavy_beam" : "beam", this.world ? undefined : w.sound);
         const color = beamColor(w.tech, this.world);
         if (this.world) {
           // A volley: several projectiles flying to the target.
@@ -515,7 +515,7 @@ class BattleScreen {
         return this.wait(120);
       }
       case "missile_launch": {
-        audio.sfx(this.world ? "arrow" : "missile");
+        audio.sfx(this.world ? "arrow" : "missile", this.world ? undefined : parts.weapons[a.weapon].sound);
         this.missiles.set(a.id, { x: a.x, y: a.y, w: a.weapon, dx: 1, dy: 0 });
         return this.wait(60);
       }

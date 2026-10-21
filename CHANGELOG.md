@@ -6,7 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-10-21
+## [0.6.0] - 2026-10-21
+
+Presentation: MOO1's own fonts, the ground battle screen, the GNN newscast and MOO1's sound
+effects.
+
+### Added
+
+- MOO1 fonts: the importer turns the six bitmap fonts of FONTS.LBX (1oom `lbxfont.c`) into
+  TrueType fonts made of square pixels, and the Classic theme uses them for all text
+  (font 3 for text, 4 for titles, 5 for buttons).
+- The ground battle screen (1oom `uiground.c`): when your transports land on an enemy
+  planet or the enemy lands on yours, the troops face each other and fall one by one in the
+  order the fight was resolved, then the screen tells who holds the planet, how many
+  factories were captured and which technologies were found. In the Classic theme it uses
+  the invasion scenes and soldiers of LANDING.LBX; the Age theme draws a siege before the
+  city walls.
+- The GNN newscast (1oom `uinews.c`): the turn's news (random events, the Orion colony, the
+  fall of the Guardian, empires destroyed, the largest empire) is shown one item at a time on
+  MOO1's TV with the GNN newscaster and the icon of each news type from NEWSCAST.LBX, or as
+  the herald's proclamations in the Age theme. The galaxy statistics newscast ranks the
+  empires by production, population, technology or fleet strength.
+- Sound effects: the importer converts the Creative Voice samples of SOUNDFX.LBX (and other
+  sound LBX files) to WAV (1oom `fmt_sfx.c`); in the Classic theme buttons, weapons, hits,
+  explosions and ground combat play MOO1's samples instead of the synthesized effects.
+- New imported pictures: LANDING.LBX (invasion and colonization scenes, transports,
+  soldiers) and NEWSCAST.LBX, drawn with the right palette.
+
+### Changed
+
+- The galaxy statistics news is a real event of the turn (1oom `game_event_run`), with its
+  ranking.
+ - 2026-10-21
 
 The computer players of Master of Orion, and a harness that checks the rules against C 1oom.
 

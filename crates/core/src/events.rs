@@ -119,6 +119,7 @@ fn news(
             other: None,
             n1,
             n2,
+            ranking: Vec::new(),
         },
     );
 }
@@ -387,6 +388,7 @@ pub fn new_event(st: &mut State) {
                         other: Some(p2),
                         n1: 0,
                         n2: 0,
+                        ranking: Vec::new(),
                     },
                 );
             }
@@ -542,8 +544,21 @@ pub fn run(st: &mut State) {
         > news_before;
     // 1oom: a newscast with galaxy statistics when nothing else happened.
     if !any_news && st.rng.below(40) == 0 && year_n(st) > 25 && !st.council.final_war {
-        let sub = st.rng.below(4);
-        news(st, vec![], "stats", sub as u8, None, None, 0, 0);
+        let sub = st.rng.below(4) as u8;
+        let ranking = crate::misc::stats_ranking(st, sub);
+        st.push_event(
+            vec![],
+            EventKind::News {
+                news: "stats".into(),
+                stage: sub,
+                planet: None,
+                empire: None,
+                other: None,
+                n1: 0,
+                n2: 0,
+                ranking,
+            },
+        );
     }
 }
 
@@ -954,6 +969,7 @@ pub fn coup(st: &mut State) {
                     other: None,
                     n1: 0,
                     n2: 0,
+                    ranking: Vec::new(),
                 },
             );
         } else {
@@ -969,6 +985,7 @@ pub fn coup(st: &mut State) {
                     other: None,
                     n1: t1,
                     n2: t2,
+                    ranking: Vec::new(),
                 },
             );
         }

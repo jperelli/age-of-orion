@@ -391,6 +391,9 @@ pub enum EventKind {
         other: Option<EmpireId>,
         n1: i32,
         n2: i32,
+        /// Galaxy statistics newscast: empires from first to last (1oom `game_news_get_msg`).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        ranking: Vec<EmpireId>,
     },
     Council {
         candidates: Vec<EmpireId>,
@@ -433,6 +436,31 @@ pub enum EventKind {
         won: bool,
         attackers_left: i32,
         defenders_left: i32,
+        /// Troops at the start (transports landed / sent for the attacker).
+        #[serde(default)]
+        attackers: i32,
+        #[serde(default)]
+        defenders: i32,
+        #[serde(default)]
+        landed_of: i32,
+        /// Invaders against rebels on one's own planet.
+        #[serde(default)]
+        rebels: bool,
+        /// Who fell, in order (0 an attacker, 1 a defender), for the ground battle screen
+        /// (only when a human player takes part).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        deaths: Vec<u8>,
+        /// Battle suit, personal shield and hand weapon techs of each side (0: none).
+        #[serde(default)]
+        gear: [Vec<(u8, u8)>; 2],
+        /// Armor tier of each side (the armor part is `ARMOR[tier * 2]`).
+        #[serde(default)]
+        armor: [u8; 2],
+        /// Techs found in the captured factories.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        captured: Vec<(u8, u8)>,
+        #[serde(default)]
+        factories: i32,
     },
     PlanetCaptured {
         planet: PlanetId,

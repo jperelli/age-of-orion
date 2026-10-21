@@ -79,6 +79,17 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `nebula/<n>` | Nebula of type `n` (0 to 9), drawn at half its size in map units (STARMAP.LBX 0x0f..) |
 | `stargate` | Stargate next to a planet (STARMAP.LBX 0x2d) |
 | `map/background` | Whole map background (stretched to the map size) |
+| `landing/invade/<type>` | Ground battle background for a planet type 1..13 (LANDING.LBX 0x24 + type) |
+| `landing/colonize/<type>`, `landing/transport` | Colonization scenes and the landing transport (LANDING.LBX) |
+| `ground/soldier/<race>` | A soldier of race 0..9 on the ground battle screen, facing right (LANDING.LBX 0x1b + race) |
+| `ground/death` | A soldier falling (LANDING.LBX 0x14) |
+| `news/tv`, `news/anchor`, `news/gnn` | The GNN newscast: the TV, the newscaster, the logo (NEWSCAST.LBX 0..2) |
+| `news/icon/<type>` | The newscast picture of news type 1..22 (1oom `GAME_NEWS_*`; NEWSCAST.LBX 3 + type) |
+
+Fonts and sounds: `font/<n>` (n = 0..5) are TrueType fonts the Classic theme uses when fonts
+3 and 4 are present (`--font`, `--title-font`, `--button-font` in `style.css`), and `sfx/<n>`
+are WAV sound effects played instead of the synthesized ones in the Classic theme (1oom
+numbers: 0x24 button, 2 hit, 0x11 explosion, 0x13 special, weapons their `sound`).
 
 ## Rules
 
@@ -120,6 +131,8 @@ manifest.json        format, aliases, looping tunes, every archive and entry, wa
 gfx/<lbx>/NNN.png    every graphics entry; animations as horizontal sheets (frame width in manifest)
 gfx/<lbx>/NNN-0.png  first frame of animations
 audio/music/NNN.mid  MUSIC.LBX tunes as standard MIDI files (alias music/<n>)
+audio/<lbx>/NNN.wav  sound effects (SOUNDFX.LBX entries have the alias sfx/<n>)
+fonts/moo1-N.ttf     FONTS.LBX fonts as TrueType (alias font/<n>; heights in manifest.fonts)
 text/lbx/names.json  NAMES.LBX leader names
 text/lbx/eventmsg.json  EVENTMSG.LBX texts, placeholders as {planet}, {race}, {n1}, {n2}, {leader}...
 text/lbx/research.json  RESEARCH.LBX tech descriptions (field * 50 + tech - 1)

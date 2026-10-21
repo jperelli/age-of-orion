@@ -7,9 +7,11 @@
 
 mod cp437;
 mod export;
+pub mod font;
 mod gfx;
 pub mod music;
 mod palette;
+pub mod sfx;
 mod table;
 
 pub use export::{import, AssetFile, ImportResult, Manifest};

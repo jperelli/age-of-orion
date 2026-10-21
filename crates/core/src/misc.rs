@@ -646,3 +646,92 @@ pub fn update_home(st: &mut State) {
         }
     }
 }
+
+/// 1oom `game_stat_prod`: production on a doubling scale.
+pub fn stat_prod(st: &State, pi: usize) -> i32 {
+    let mut prod = st.empires[pi].total_prod.max(0) as u32;
+    let (mut va, mut ve, mut si) = (100u32, 0u32, 0i32);
+    while prod > va {
+        prod -= va;
+        si += 1;
+        ve = va;
+        va <<= 1;
+    }
+    ((prod * 10) / (va - ve)) as i32 + si * 10
+}
+
+/// 1oom `game_stat_pop`.
+pub fn stat_pop(st: &State, pi: usize) -> i32 {
+    let num = st.planets.len() as i32;
+    let sum: i32 = st
+        .planets
+        .iter()
+        .filter(|p| p.owner == Some(pi as u8))
+        .map(|p| p.pop)
+        .sum();
+    sum / ((num * 3) / 2 + 1)
+}
+
+/// 1oom `game_stat_tech`.
+pub fn stat_tech(st: &State, pi: usize) -> i32 {
+    st.empires[pi].tech.level.iter().sum::<u32>() as i32
+}
+
+/// The empires from first to last in production (0), population (1), technology (2) or
+/// fleet strength (3), for the GNN statistics newscast (1oom `game_news_get_msg`).
+pub fn stats_ranking(st: &State, kind: u8) -> Vec<EmpireId> {
+    let mut tbl: Vec<(EmpireId, i32)> = Vec::new();
+    for i in 0..st.empires.len() {
+        if !st.empires[i].alive {
+            continue;
+        }
+        let v = match kind {
+            0 => stat_prod(st, i),
+            1 => stat_pop(st, i),
+            2 => stat_tech(st, i),
+            _ => crate::diplo::stat_fleet(st, i as u8),
+        }
+        .max(1);
+        tbl.push((i as u8, v));
+    }
+    let num = tbl.len();
+    for _ in 0..num {
+        for i in 0..num.saturating_sub(1) {
+            if tbl[i].1 < tbl[i + 1].1 {
+                tbl.swap(i, i + 1);
+            }
+        }
+    }
+    tbl.into_iter().map(|(e, _)| e).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Game, NewGameOptions};
+
+    #[test]
+    fn stats_rank_every_living_empire() {
+        let mut g = Game::new(&NewGameOptions {
+            seed: 9,
+            players: 4,
+            all_ai: true,
+            ..Default::default()
+        })
+        .unwrap();
+        for _ in 0..30 {
+            g.end_turn_auto();
+        }
+        let st = g.state();
+        for kind in 0..4 {
+            let r = super::stats_ranking(st, kind);
+            assert_eq!(r.len(), 4);
+            if kind == 1 {
+                let v: Vec<i32> = r
+                    .iter()
+                    .map(|&e| super::stat_pop(st, e as usize).max(1))
+                    .collect();
+                assert!(v.windows(2).all(|w| w[0] >= w[1]));
+            }
+        }
+    }
+}
