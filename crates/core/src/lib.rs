@@ -973,4 +973,62 @@ mod tests {
             .iter()
             .all(|f| f.choices.iter().all(|c| !c.effects.is_empty())));
     }
+    #[test]
+    fn redirecting_needs_hyperspace_communications() {
+        let mut g = Game::new(&opts(4)).unwrap();
+        let home = g.state().empires[0].home;
+        let st = g.state();
+        let mut scout = vec![0; 6];
+        scout[0] = 1;
+        let range = crate::commands::fleet_range(st, 0, &scout);
+        let mut near: Vec<usize> = (0..st.planets.len())
+            .filter(|&p| p != home && st.range_to(0, p) <= range)
+            .collect();
+        near.sort_by_key(|&p| (std::cmp::Reverse(st.parsecs(home, p)), p));
+        let (a, b) = (near[0], near[1]);
+        let mut ships = vec![0; 6];
+        ships[0] = 1;
+        g.command(
+            0,
+            &Command::SendFleet {
+                from: home,
+                to: a,
+                ships,
+            },
+        )
+        .unwrap();
+        let id = g.state().fleets[0].id;
+        // Still at its planet: it can change destination.
+        assert!(g
+            .view(0)
+            .fleets
+            .iter()
+            .any(|f| f.id == Some(id) && f.redirect));
+        g.command(0, &Command::RedirectFleet { fleet: id, to: b })
+            .unwrap();
+        g.end_turn_auto();
+        let Some(f) = g.state().fleets.iter().find(|f| f.id == id) else {
+            return;
+        };
+        if g.state().planets.iter().any(|p| p.x == f.x && p.y == f.y) {
+            return;
+        }
+        // On its way: only with Hyperspace Communications (Computers 34).
+        let err = g
+            .command(0, &Command::RedirectFleet { fleet: id, to: a })
+            .unwrap_err();
+        assert_eq!(err.code, "no_hyperspace_comm");
+        assert!(!g
+            .view(0)
+            .fleets
+            .iter()
+            .any(|f| f.id == Some(id) && f.redirect));
+        g.state_mut().empires[0].ab.hyperspace_comm = true;
+        g.command(0, &Command::RedirectFleet { fleet: id, to: a })
+            .unwrap();
+        assert_eq!(
+            g.state().fleets.iter().find(|f| f.id == id).unwrap().dest,
+            a
+        );
+    }
 }

@@ -11,7 +11,7 @@ import { adjustGroup, slider, sliders } from "./sliders";
 import { needsChoice, researchDialog } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
-import { BUILD_STARGATE, FIELDS, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type View } from "./types";
+import { BUILD_STARGATE, FIELDS, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
 import { append, clear, download, h, modal, pickFiles, toast } from "./ui";
 
 export const AUTOSAVE = "autosave";
@@ -144,6 +144,10 @@ export class GameScreen {
     else if (s?.kind === "fleet") {
       const f = this.view.fleets.find((f) => f.id === s.id);
       if (f) this.fleetPanel(f);
+      else this.overviewPanel();
+    } else if (s?.kind === "transport") {
+      const tr = this.view.transports.find((t) => t.id === s.id);
+      if (tr) this.transportPanel(tr);
       else this.overviewPanel();
     } else this.overviewPanel();
   }
@@ -384,9 +388,11 @@ export class GameScreen {
       h("h2", {}, this.t("fleet.title")),
       h("p", {}, this.shipsLine(f)),
       dest ? h("p", {}, this.t("fleet.heading", { planet: dest.name, turns: f.eta ?? 0 })) : null,
+      f.redirect ? null : h("p", { class: "muted small" }, this.t("fleet.no_redirect")),
       h(
         "button",
         {
+          disabled: !f.redirect,
           onclick: () => {
             this.map.targeting = {
               from: f,
@@ -396,6 +402,38 @@ export class GameScreen {
               pick: (to) => {
                 this.map.targeting = null;
                 this.command({ type: "redirect_fleet", fleet: f.id!, to });
+              },
+            };
+            this.renderPanel();
+          },
+        },
+        this.t("fleet.redirect"),
+      ),
+    );
+  }
+
+  /** Transports in flight: where they go; with Hyperspace Communications, a new destination. */
+  private transportPanel(tr: TransportView): void {
+    const v = this.view;
+    const range = v.abilities.fuel_range;
+    append(
+      this.panel,
+      h("h2", {}, this.t("transport.panel_title")),
+      h("p", {}, this.t("transport.heading", { pop: tr.pop ?? 0, planet: v.planets[tr.dest].name, turns: Math.max(1, tr.eta) })),
+      tr.redirect ? null : h("p", { class: "muted small" }, this.t("transport.no_redirect")),
+      h(
+        "button",
+        {
+          disabled: !tr.redirect,
+          onclick: () => {
+            this.map.targeting = {
+              from: { x: tr.x, y: tr.y },
+              range,
+              speed: v.abilities.engine_warp,
+              ok: (id) => v.planets[id].range <= range,
+              pick: (to) => {
+                this.map.targeting = null;
+                this.command({ type: "redirect_transport", transport: tr.id, to });
               },
             };
             this.renderPanel();

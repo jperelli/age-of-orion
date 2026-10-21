@@ -35,9 +35,16 @@ pub enum Command {
         to: PlanetId,
         ships: Vec<u32>,
     },
-    /// Changes the destination of a fleet in flight.
+    /// Changes the destination of a fleet in flight. As in MOO1, a fleet that has left its
+    /// planet needs Hyperspace Communications; one still at the planet it leaves does not.
     RedirectFleet {
         fleet: u32,
+        to: PlanetId,
+    },
+    /// Changes the destination of transports in flight (needs Hyperspace Communications;
+    /// the new planet must be within fuel range, 1oom `ui_starmap_transport`).
+    RedirectTransport {
+        transport: u32,
         to: PlanetId,
     },
     /// Scraps ships in orbit; a quarter of their cost goes to the reserve.
@@ -178,6 +185,12 @@ fn check_planet(st: &State, p: PlanetId) -> Result<(), CommandError> {
     } else {
         err("invalid_planet")
     }
+}
+
+/// The planet a fleet in flight is still at (it left this turn), if any.
+pub fn fleet_at_planet(st: &State, fleet: usize) -> Option<PlanetId> {
+    let f = &st.fleets[fleet];
+    st.planets.iter().position(|p| p.x == f.x && p.y == f.y)
 }
 
 fn own(st: &State, empire: EmpireId, p: PlanetId) -> Result<(), CommandError> {
@@ -335,13 +348,41 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             if st.fleets[i].speed == SPEED_STARGATE {
                 return err("in_stargate");
             }
+            let from = fleet_at_planet(st, i);
+            // 1oom `ui_starmap_enroute`: `controllable` needs Hyperspace Communications
+            // unless the fleet is still at a planet.
+            if from.is_none() && !st.empires[empire as usize].ab.hyperspace_comm {
+                return err("no_hyperspace_comm");
+            }
             let ships = st.fleets[i].ships.clone();
             if st.range_to(empire, to) > fleet_range(st, empire, &ships) {
                 return err("out_of_range");
             }
-            let (fx, fy) = (st.fleets[i].x, st.fleets[i].y);
-            let from = st.planets.iter().position(|p| p.x == fx && p.y == fy);
             crate::fleet::redirect(st, i, from, to);
+        }
+        Command::RedirectTransport { transport, to } => {
+            check_planet(st, to)?;
+            let Some(i) = st
+                .transports
+                .iter()
+                .position(|t| t.id == transport && t.owner == empire)
+            else {
+                return err("no_ships");
+            };
+            if !st.empires[empire as usize].ab.hyperspace_comm {
+                return err("no_hyperspace_comm");
+            }
+            let in_range = st.planets[to]
+                .within_frange
+                .get(empire as usize)
+                .copied()
+                .unwrap_or(0)
+                != 0
+                || st.planets[to].owner == Some(empire);
+            if !in_range {
+                return err("out_of_range");
+            }
+            st.transports[i].dest = to;
         }
         Command::ScrapShips { planet, ref ships } => {
             check_planet(st, planet)?;

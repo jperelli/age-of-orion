@@ -86,6 +86,8 @@ export interface FleetView {
   names: string[];
   speed: number;
   range: number;
+  /** The player can change its destination (still at its planet, or Hyperspace Communications). */
+  redirect: boolean;
 }
 
 export interface TransportView {
@@ -96,6 +98,8 @@ export interface TransportView {
   dest: number;
   eta: number;
   pop: number | null;
+  /** The player can change its destination (Hyperspace Communications). */
+  redirect: boolean;
 }
 
 export interface EmpireView {
@@ -531,6 +535,7 @@ export type Command =
   | { type: "set_build"; planet: number; design: number }
   | { type: "send_fleet"; from: number; to: number; ships: number[] }
   | { type: "redirect_fleet"; fleet: number; to: number }
+  | { type: "redirect_transport"; transport: number; to: number }
   | { type: "send_transport"; from: number; to: number; pop: number }
   | { type: "set_research"; alloc: number[] }
   | { type: "set_research_project"; field: number; tech: number }

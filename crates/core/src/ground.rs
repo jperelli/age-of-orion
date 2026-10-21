@@ -161,7 +161,9 @@ pub fn land(st: &mut State) {
                 .owner
                 .is_some_and(|o| st.empires[o as usize].ab.sub_space_interdictor);
             if interdictor {
-                // MOO1 bug: transporters only work when the planet owner has an interdictor.
+                // MOO1 bug kept (1oom `game_num_combat_trans_fix` off): transporters only
+                // work when the planet owner has an interdictor, then save 62.5% of the
+                // transports shot down. See docs/MOO1_QUIRKS.md.
                 for _ in 0..lost {
                     if st.rng.below(4) == 0 || st.rng.below(2) == 0 {
                         pop3 += 1;

@@ -3,7 +3,7 @@
 import type { Theme } from "./theme";
 import type { FleetView, MonsterView, PlanetType, StarType, TransportView, View } from "./types";
 
-export type Selection = { kind: "planet"; id: number } | { kind: "fleet"; id: number } | null;
+export type Selection = { kind: "planet"; id: number } | { kind: "fleet"; id: number } | { kind: "transport"; id: number } | null;
 
 export interface Targeting {
   from: { x: number; y: number };
@@ -160,6 +160,8 @@ export class MapView {
     const near = (x: number, y: number, px: number) => Math.hypot(x - mx, y - my) * this.zoom < px;
     const f = v.fleets.find((f) => f.id !== null && f.owner === v.player && near(f.x, f.y, 10));
     if (f && f.id !== null && !this.targeting) return { kind: "fleet", id: f.id };
+    const tr = v.transports.find((t) => t.owner === v.player && near(t.x, t.y, 10));
+    if (tr && !this.targeting) return { kind: "transport", id: tr.id };
     let best: number | null = null;
     let bd = Infinity;
     for (const p of v.planets) {
@@ -757,7 +759,7 @@ export class MapView {
     let x: number, y: number;
     if (s.kind === "planet") ({ x, y } = v.planets[s.id]);
     else {
-      const f = v.fleets.find((f) => f.id === s.id);
+      const f = s.kind === "fleet" ? v.fleets.find((f) => f.id === s.id) : v.transports.find((t) => t.id === s.id);
       if (!f) return;
       ({ x, y } = f);
     }

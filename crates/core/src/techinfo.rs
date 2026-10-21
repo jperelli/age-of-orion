@@ -1,6 +1,8 @@
 //! What each technology gives, for the research screen: the abilities it changes (with the
 //! numbers before and after, from 1oom `game_update_tech_util`), the ship parts it unlocks
 //! and the field level it brings (parts of a field get cheaper and smaller with its level).
+//! Techs whose effect is a MOO1 bug (Combat Transporters, Sub-Space Interdictor) are
+//! described as they really work: see docs/MOO1_QUIRKS.md.
 
 use serde::Serialize;
 

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-21
+
 ### Added
 
 - MOO1's slider control everywhere (colony spending, research, taxes, security, spies,
@@ -20,6 +22,17 @@ All notable changes to this project are documented here. The format follows
   space, what it makes possible (stargates, soil enrichment...), the new tech level of the
   field, and when a better known tech already gives more. Shown for the current project,
   the other choices and the known techs, in both themes and both languages.
+- Transports in flight can be selected on the map, and redirected with Hyperspace
+  Communications (to a planet within fuel range), as in MOO1.
+- `docs/MOO1_QUIRKS.md`: the MOO1 bugs the game keeps on purpose, with their 1oom source.
+
+### Changed
+
+- Hyperspace Communications works as in MOO1: a fleet can change destination while it is
+  still at the planet it leaves; once on its way, only with that tech.
+- The research screen describes Combat Transporters and the Sub-Space Interdictor as MOO1
+  really plays them: transports shot down land 62.5% of the time, but only against planets
+  whose owner has the Interdictor.
 
 ## [0.8.0] - 2026-10-21
 

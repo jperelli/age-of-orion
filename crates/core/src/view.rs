@@ -89,6 +89,9 @@ pub struct FleetView {
     pub names: Vec<String>,
     pub speed: i32,
     pub range: i32,
+    /// The player can change its destination (own fleet still at its planet, or
+    /// Hyperspace Communications).
+    pub redirect: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -101,6 +104,8 @@ pub struct TransportView {
     pub eta: u32,
     /// Only known for own transports.
     pub pop: Option<i32>,
+    /// The player can change its destination (Hyperspace Communications).
+    pub redirect: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -352,11 +357,12 @@ pub fn view(st: &State, me: EmpireId) -> View {
                     names: names(other),
                     speed: st.fleet_speed(ei as u8, o),
                     range: crate::commands::fleet_range(st, ei as u8, o),
+                    redirect: false,
                 });
             }
         }
     }
-    for f in &st.fleets {
+    for (fi, f) in st.fleets.iter().enumerate() {
         if f.owner == me || sees(st, me, f.x, f.y) {
             fleets.push(FleetView {
                 id: Some(f.id),
@@ -374,6 +380,9 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 names: names(&st.empires[f.owner as usize]),
                 speed: f.speed,
                 range: crate::commands::fleet_range(st, f.owner, &f.ships),
+                redirect: f.owner == me
+                    && f.speed != SPEED_STARGATE
+                    && (a.hyperspace_comm || crate::commands::fleet_at_planet(st, fi).is_some()),
             });
         }
     }
@@ -399,6 +408,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 ) as u32
             },
             pop: (t.owner == me).then_some(t.pop),
+            redirect: t.owner == me && a.hyperspace_comm,
         })
         .collect();
     let empires = st
