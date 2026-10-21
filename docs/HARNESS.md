@@ -68,17 +68,18 @@ RESEARCH.LBX described above.
 
 ## Status
 
-On a small three-opponent game (1oom `-new 410:0:0:12345:0`), every one of the first 39 turns
-is identical: production, waste, population growth, research and breakthroughs, the computer
-players' scouts, colony ships, attacks, defence, transports, taxes, production sliders, ship
-designs and scrapping, battles between computer empires, invasions, events, diplomacy.
+Five computer-only games (small, medium and large galaxies, 3 to 6 empires, 100 to 250
+years) agree turn by turn on 613 of 710 turns (86%): every one of the first 39 turns of the
+small game, 188 of 199 turns of a 200-year game. Production, waste, population growth,
+research and breakthroughs, the computer players' scouts, colony ships, attacks, defence,
+transports, taxes, production sliders, ship designs and scrapping, battles between computer
+empires, invasions, orbital bombing, random events and most of the diplomacy are identical.
 
-Longer games (200 years, 3 to 5 empires, other galaxy sizes) agree on about half of the
-turns. The first differences found there are in parts not yet compared rule by rule: some
-random events, orbital bombing damage and a branch of the computer players' diplomacy. Once
-one turn differs the games drift apart, so each year is compared starting from 1oom's own
-save.
+The remaining differences are in a few rules not yet matched: some relation changes, the
+computer-against-computer battle resolution in rare cases, and long chains after a first
+difference (each year is compared starting from 1oom's own save, so one differing turn does
+not spoil the next ones).
 
 Not covered yet: generating the same galaxy as 1oom from the same seed (the harness starts
-from 1oom's saves), human players' screens, and tactical battles (the harness games have no
-human player).
+from 1oom's saves), human players' screens and audiences, and tactical battles (the harness
+games have no human player).

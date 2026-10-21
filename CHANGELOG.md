@@ -6,7 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-10-21
+## [0.7.0] - 2026-10-21
+
+Exact rules: the comparison harness now agrees with 1oom on 86% of the turns of five
+computer-only test games (613 of 710; the first 40 years of the small game, all of them).
+
+### Fixed
+
+- Battles: a planet's missile bases fought the same attacker again and again in one turn
+  (up to 50 times); now, as in 1oom, the loser of a battle is out of that planet's fights.
+- Orbital bombing as in 1oom: the best computer of every design counts, only the first three
+  weapon slots bomb, biological weapons hurt even when the planet is spared, bombing kills
+  rebels too, and a destroyed colony keeps its factories.
+- Comets and pirates: damage rolled as in MOO1; the computer players react to plagues, novas,
+  comets and pirates with 1oom's slider changes instead of ones of our own.
+- Diplomacy: big empires worry their allies on 1oom's years (the year counter starts at 1
+  in 2300); breaking a treaty follows MOO1 in Classic (and 1oom's fixes in Classic+); the
+  "leave both alliances" rule that never fires in MOO1 no longer fires; computers judge
+  fleet strength from the last maintenance count; MOO1's use of the last audience message
+  when deciding on peace.
+- The computer players read the "expansionist" objective correctly (it was another one).
+- Random events: the galaxy statistics newscast no longer follows turns with news.
+ - 2026-10-21
 
 Presentation: MOO1's own fonts, the ground battle screen, the GNN newscast and MOO1's sound
 effects.

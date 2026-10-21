@@ -265,7 +265,11 @@ pub fn state(g: &oom::Game) -> State {
                 spymode: spymode(e.spymode[j]),
                 spymode_next: spymode(e.spymode_next[j]),
                 spies: e.spies[j] as i32,
-                spy_report_year: e.spyreportyear[j] as u32,
+                spy_report_year: if e.spyreportyear[j] > 0 {
+                    e.spyreportyear[j] as u32 + 2299
+                } else {
+                    0
+                },
                 spy_report: {
                     let mut r = [0u8; 6];
                     r.copy_from_slice(&e.spyreportfield[j]);
@@ -313,6 +317,7 @@ pub fn state(g: &oom::Game) -> State {
     evn.last_year = ev.year as i32;
     evn.done = ev.done.clone();
     evn.report_stars = ev.report_stars;
+    evn.diplo_msg_subtype = ev.diplo_msg_subtype as i32;
     if ev.have_plague != 0 {
         evn.plague = Some(lasting(
             ev.plague_planet_i,

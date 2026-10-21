@@ -824,8 +824,9 @@ fn after_battles(st: &mut State, old_contact: Vec<Vec<bool>>) {
     if check_end(st) {
         return finish_year(st);
     }
+    let since = st.events.len();
     events::new_event(st);
-    events::run(st);
+    events::run(st, since);
     if check_end(st) {
         return finish_year(st);
     }

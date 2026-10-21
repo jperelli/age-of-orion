@@ -384,17 +384,22 @@ fn set_moods(r: &mut Relation, v: i32) {
     r.mood_peace = v;
 }
 
-/// 1oom `game_diplo_break_treaty` (with the Classic+ fixes).
+/// 1oom `game_diplo_break_treaty`. In Classic (MOO1) breaking a treaty raises the
+/// breaker's trust and blames both parties; Classic+ fixes both.
 pub fn break_treaty(st: &mut State, breaker: EmpireId, victim: EmpireId) {
     if rel(st, victim, breaker).treaty >= Treaty::War {
         return;
     }
     let t = rel(st, breaker, victim).treaty;
     let mut w = match t {
-        Treaty::NonAggression => 10,
-        Treaty::Alliance => 20,
+        Treaty::NonAggression => -10,
+        Treaty::Alliance => -20,
         _ => 0,
     };
+    let classic = st.ai_id == 0;
+    if !classic {
+        w = -w;
+    }
     if st.empires[breaker as usize].trait1 == HONORABLE {
         w *= 2;
     }
@@ -406,6 +411,9 @@ pub fn break_treaty(st: &mut State, breaker: EmpireId, victim: EmpireId) {
     }
     if w != 0 {
         rel_mut(st, breaker, victim).broken_treaty = t;
+        if classic {
+            rel_mut(st, victim, breaker).broken_treaty = t;
+        }
         let v = (rel(st, breaker, victim).relation - st.rng.one_to(20) as i32).max(-100);
         rel_mut(st, breaker, victim).relation = v;
         rel_mut(st, victim, breaker).relation = v;
@@ -722,12 +730,15 @@ pub fn update_trade(st: &mut State) {
 /// Fleet strength statistic, 0..100 (1oom `game_stat_fleet`).
 pub fn stat_fleet(st: &State, e: EmpireId) -> i32 {
     const HULL_W: [i64; 4] = [1, 5, 25, 125];
-    let totals = crate::misc::ship_totals(st, e as usize);
-    let mut sum: i64 = st.empires[e as usize]
+    // 1oom counts `srd->shipcount`, the totals of the last maintenance update.
+    let em = &st.empires[e as usize];
+    let mut sum: i64 = em
         .designs
         .iter()
         .enumerate()
-        .map(|(d, sd)| totals[d] as i64 * HULL_W[sd.hull.min(3) as usize])
+        .map(|(d, sd)| {
+            em.shipcount.get(d).copied().unwrap_or(0) as i64 * HULL_W[sd.hull.min(3) as usize]
+        })
         .sum();
     sum = sum.min(0x31_9750);
     let (mut v4, mut va, mut ve) = (0i64, 125i64, 0i64);
@@ -784,7 +795,8 @@ pub fn diplo_adjust(st: &mut State) {
             }
         }
     }
-    if st.year % 2 == 0 {
+    // 1oom's year counter starts at 1 in 2300.
+    if crate::turn::year_n(st) % 2 == 0 {
         let mut big = vec![0i32; n as usize];
         for p in &st.planets {
             if let Some(o) = p.owner {
@@ -1003,12 +1015,20 @@ mod tests {
     fn breaking_a_treaty_costs_trust() {
         let mut g = game();
         let st = g.state_mut();
+        // Classic+: the breaker loses trust.
+        st.ai_id = 1;
         set_treaty(st, 0, 2, Treaty::NonAggression);
         break_treaty(st, 0, 2);
         assert_eq!(treaty(st, 0, 2), Treaty::None);
         assert!(rel(st, 0, 2).trust < 0);
         assert_eq!(rel(st, 0, 2).broken_treaty, Treaty::NonAggression);
         assert_eq!(mood(st, 0, 2), -200);
+        // Classic, as MOO1: trust goes up and both are blamed.
+        st.ai_id = 0;
+        set_treaty(st, 1, 2, Treaty::NonAggression);
+        break_treaty(st, 1, 2);
+        assert!(rel(st, 1, 2).trust > 0);
+        assert_eq!(rel(st, 2, 1).broken_treaty, Treaty::NonAggression);
     }
 
     #[test]

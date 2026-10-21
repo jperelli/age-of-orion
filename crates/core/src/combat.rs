@@ -139,7 +139,9 @@ pub fn battles(st: &mut State) -> bool {
                 }
             }
             if !is_human(st, def) && !is_human(st, att) {
-                resolve_ai(st, att, def, pli);
+                // 1oom `game_battle_handle_all`: the loser is out of this planet's fights.
+                let loser = resolve_ai(st, att, def, pli);
+                skipped.push(loser);
                 continue;
             }
             if att >= 0 && !is_human(st, att) && diplo::rel(st, def as u8, att as u8).ceasefire > 0
@@ -197,7 +199,7 @@ fn weights(st: &State, party: i32) -> Vec<i32> {
 /// 1oom `game_ai_classic_battle_ai_ai_resolve`: computer against computer (or a monster),
 /// resolved from the strength of both sides (32-bit, as MOO1), then `game_battle_finish`
 /// and `_post`.
-fn resolve_ai(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) {
+fn resolve_ai(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) -> i32 {
     let mut bt = Battle::new(st, party_r, party_l, planet);
     let wl_tbl = weights(st, party_l);
     let wr_tbl = weights(st, party_r);
@@ -284,6 +286,11 @@ fn resolve_ai(st: &mut State, party_r: i32, party_l: i32, planet: PlanetId) {
         battle::Side::L
     });
     apply(st, &bt);
+    if r_won {
+        party_l
+    } else {
+        party_r
+    }
 }
 
 /// 1oom `game_battle_finish` and `game_battle_post`: puts the result of a finished battle
@@ -407,6 +414,14 @@ pub fn finish_battle(st: &mut State) {
         }
         apply(st, &bt);
         bt.applied = true;
+        let loser = if bt.winner == Some(battle::Side::R) {
+            bt.s[0].party
+        } else {
+            bt.s[1].party
+        };
+        if let Some(p) = st.progress.as_mut() {
+            p.skipped.push(loser);
+        }
     }
     st.battle = Some(bt);
 }
@@ -422,15 +437,15 @@ fn bomb_damage(st: &mut State, planet: PlanetId, attacker: EmpireId) -> (i32, i3
     let mut maxcomp = 0;
     for (d, sd) in e.designs.iter().enumerate() {
         let n = e.orbit[planet][d];
-        if n == 0 {
-            continue;
-        }
+        // MOO1: the best computer of every design counts, even without ships here, and
+        // the fourth weapon slot does not bomb.
         maxcomp = maxcomp.max(sd.comp as i32);
-        for s in 0..WEAPON_SLOTS {
-            let v = n * sd.weapon_counts[s] as u32;
+        for s in 0..WEAPON_SLOTS - 1 {
+            let v = n.wrapping_mul(sd.weapon_counts[s] as u32);
             if v != 0 {
                 let ns = WEAPONS[sd.weapons[s] as usize].shots;
-                tbl[sd.weapons[s] as usize] += v * if ns == -1 { 30 } else { ns as u32 };
+                tbl[sd.weapons[s] as usize] = tbl[sd.weapons[s] as usize]
+                    .wrapping_add(v.wrapping_mul(if ns == -1 { 30 } else { ns as u32 }));
             }
         }
     }
@@ -518,31 +533,32 @@ pub fn bomb(st: &mut State) {
             if t == Treaty::Alliance || (t == Treaty::NonAggression && st.empires[ei].ai) {
                 continue;
             }
-            let (pop_dmg, fact_dmg, bio) = bomb_damage(st, planet, ei as u8);
-            if pop_dmg == 0 && fact_dmg == 0 {
-                continue;
-            }
-            let e = &st.empires[ei];
             let inbound: i32 = st
                 .transports
                 .iter()
                 .filter(|t| t.owner as usize == ei && t.dest == planet)
                 .map(|t| t.pop)
                 .sum();
-            let go = if e.ai {
+            let (pop_dmg, fact_dmg, bio) = bomb_damage(st, planet, ei as u8);
+            let go = if pop_dmg == 0 && fact_dmg == 0 {
+                false
+            } else if st.empires[ei].ai {
                 crate::ai::bomb(st, ei as u8, planet, inbound)
             } else {
-                e.bombard
+                st.empires[ei].bombard
             };
+            // MOO1 applies biological damage even when the planet is not bombed.
+            if bio > 0 {
+                let p = &mut st.planets[planet];
+                p.max_pop = (p.max_pop - bio).max(10);
+            }
             if !go {
                 continue;
             }
             let p = &mut st.planets[planet];
-            if bio > 0 {
-                p.max_pop = (p.max_pop - bio).max(10);
-            }
             p.pop -= pop_dmg;
             p.factories -= fact_dmg;
+            p.rebels = (p.rebels - (pop_dmg / 2 + 1)).max(0);
             st.push_event(
                 vec![ei as u8, owner],
                 EventKind::Bombed {
@@ -558,7 +574,12 @@ pub fn bomb(st: &mut State) {
             }
             if destroyed && !st.empires[ei].ai {
                 let dv = if diplo::treaty(st, ei as u8, owner) < Treaty::War {
-                    diplo::start_war(st, owner, ei as u8);
+                    // 1oom `game_diplo_start_war_swap`.
+                    if st.ai_id == 0 {
+                        diplo::start_war(st, owner, ei as u8);
+                    } else {
+                        diplo::start_war(st, ei as u8, owner);
+                    }
                     13
                 } else {
                     10
@@ -572,14 +593,11 @@ pub fn bomb(st: &mut State) {
     }
 }
 
+/// 1oom `game_planet_destroy`, with the news for the players.
 fn destroy_colony(st: &mut State, planet: PlanetId) {
-    let p = &mut st.planets[planet];
-    let Some(owner) = p.owner.take() else { return };
-    p.pop = 0;
-    p.factories = 0;
-    p.bases = 0;
-    p.shield = 0;
-    p.waste = 0;
-    p.stargate = false;
+    let Some(owner) = st.planets[planet].owner else {
+        return;
+    };
+    crate::misc::planet_destroy(st, planet, None);
     st.push_event(vec![], EventKind::ColonyDestroyed { planet, owner });
 }

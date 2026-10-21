@@ -114,10 +114,11 @@ import, mods, CI/CD, releases, website.
   newscast (`uinews.c`) with LANDING.LBX and NEWSCAST.LBX art, sound effects from
   SOUNDFX.LBX (`fmt_sfx.c`).
 
-### 0.7.0: exact rules
-- Drive the remaining subsystems to 1oom parity with the harness: random events, orbital
-  bombing, diplomacy, espionage, the council, battles; the same galaxy from the same seed;
-  long freeruns.
+### 0.7.0: exact rules (done)
+- Random events, orbital bombing, battle sequencing, diplomacy and the AI's reactions driven
+  to 1oom parity with the harness: 86% of the turns of five 100-250 year games identical.
+- Still open: the same galaxy from the same seed, the last relation and battle differences,
+  audiences and human-only screens.
 
 ### 0.8.0: Spanish
 - Spanish translation of both themes and a language selector.

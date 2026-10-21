@@ -73,6 +73,9 @@ pub struct EventState {
     pub pirates: Option<Lasting>,
     pub monsters: Vec<Monster>,
     pub report_stars: u8,
+    /// Variant of the last audience message, -1 none (1oom `evn.diplo_msg_subtype`; MOO1's
+    /// computers use it when deciding on peace).
+    pub diplo_msg_subtype: i32,
 }
 
 impl EventState {
@@ -80,6 +83,7 @@ impl EventState {
         EventState {
             last_year: 40,
             done: vec![false; EVENT_NUM],
+            diplo_msg_subtype: -1,
             ..Default::default()
         }
     }
@@ -524,9 +528,10 @@ pub fn blocked_research(st: &State, planet: PlanetId) -> bool {
 }
 
 /// 1oom `game_event_run`: lasting events, monsters, rebellions.
-pub fn run(st: &mut State) {
-    let news_before = st
-        .events
+/// 1oom `game_event_run`. `since` is the length of the event list before 1oom
+/// `game_event_new`: news our port reports when an event starts count as news of the run.
+pub fn run(st: &mut State, since: usize) {
+    let news_before = st.events[..since.min(st.events.len())]
         .iter()
         .filter(|e| matches!(e.kind, EventKind::News { .. }))
         .count();
@@ -593,14 +598,7 @@ fn run_events(st: &mut State) {
                 );
             }
             if st.empires[l.player as usize].ai {
-                let pl = &mut st.planets[l.planet];
-                pl.sliders = [
-                    0,
-                    0,
-                    0,
-                    pl.sliders[SLIDER_ECO].min(30),
-                    100 - pl.sliders[SLIDER_ECO].min(30),
-                ];
+                crate::ai::crank_tech(st, l.planet);
             }
             if !done {
                 l.stage = 2;
@@ -652,10 +650,8 @@ fn run_events(st: &mut State) {
         if let Some(s) = stage {
             news(st, vec![], "nova", s, Some(l.planet), owner, l.years, l.val);
         }
-        if let Some(o) = owner.filter(|&o| st.empires[o as usize].ai) {
-            let _ = o;
-            let pl = &mut st.planets[l.planet];
-            pl.sliders = [0, 0, 0, 0, 100];
+        if st.empires[l.player as usize].ai {
+            crate::ai::crank_tech(st, l.planet);
         }
         if !finished {
             l.stage = 2;
@@ -703,12 +699,12 @@ fn run_events(st: &mut State) {
         const HULL_W: [u16; 4] = [1, 5, 25, 125];
         let mut dmg = 0;
         if let Some(o) = owner {
-            let designs = st.empires[o as usize].designs.clone();
-            for (d, sd) in designs.iter().enumerate() {
+            // MOO1 rolls for every design with the hull of the first one.
+            let e = &st.empires[o as usize];
+            let (hull, nd) = (e.designs[0].hull.min(3) as usize, e.designs.len());
+            for d in 0..nd {
                 let n = st.empires[o as usize].orbit[l.planet][d] as i32;
-                if n > 0 {
-                    dmg += st.rng.one_to(HULL_W[sd.hull.min(3) as usize]) as i32 * n;
-                }
+                dmg += st.rng.one_to(HULL_W[hull]) as i32 * n;
             }
         }
         let mut finished = false;
@@ -743,10 +739,8 @@ fn run_events(st: &mut State) {
             let pct = l.damage * 100 / l.val.max(1);
             news(st, vec![], "comet", s, Some(l.planet), owner, l.years, pct);
         }
-        if let Some(o) = owner.filter(|&o| st.empires[o as usize].ai) {
-            let _ = o;
-            st.planets[l.planet].sliders = [100, 0, 0, 0, 0];
-        }
+        // 1oom `game_ai->comet`.
+        crate::ai::crank_ship(st, l.planet);
         if !finished {
             l.stage = 2;
             st.evn.comet = Some(l);
@@ -755,13 +749,21 @@ fn run_events(st: &mut State) {
     if let Some(mut l) = st.evn.pirates.take() {
         const HULL_W: [u16; 4] = [1, 5, 25, 125];
         let mut dmg = 0;
+        let (px, py) = (st.planets[l.planet].x, st.planets[l.planet].y);
+        if st
+            .evn
+            .monsters
+            .iter()
+            .any(|m| m.x == px && m.y == py && m.killer.is_none())
+        {
+            dmg = 32000;
+        }
         for o in 0..st.empires.len() {
-            let designs = st.empires[o].designs.clone();
-            for (d, sd) in designs.iter().enumerate() {
+            let e = &st.empires[o];
+            let (hull, nd) = (e.designs[0].hull.min(3) as usize, e.designs.len());
+            for d in 0..nd {
                 let n = st.empires[o].orbit[l.planet][d] as i32;
-                if n > 0 {
-                    dmg += st.rng.one_to(HULL_W[sd.hull.min(3) as usize]) as i32 * n;
-                }
+                dmg += st.rng.one_to(HULL_W[hull]) as i32 * n;
             }
             dmg = dmg.min(32000);
         }
@@ -770,7 +772,13 @@ fn run_events(st: &mut State) {
         let finished = l.val == 0;
         let n = st.empires.len();
         for a in 0..n {
-            if st.range_to(a as u8, l.planet) > st.empires[a].abilities().fuel_range {
+            if st.planets[l.planet]
+                .within_frange
+                .get(a)
+                .copied()
+                .unwrap_or(0)
+                != 1
+            {
                 continue;
             }
             for b in 0..n {
@@ -793,6 +801,7 @@ fn run_events(st: &mut State) {
         if let Some(s) = stage {
             news(st, vec![], "pirates", s, Some(l.planet), None, setback, 0);
         }
+        crate::ai::crank_ship(st, l.planet);
         if !finished {
             l.stage = 2;
             st.evn.pirates = Some(l);

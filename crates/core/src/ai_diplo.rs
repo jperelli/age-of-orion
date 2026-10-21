@@ -34,15 +34,15 @@ fn ratio_roll(st: &mut State, a: i64, b: i64) -> i32 {
 /// 1oom `game_ai_classic_diplo_wage_war_fleet_w`.
 fn fleet_w(st: &mut State, p1: EmpireId, p2: EmpireId) -> i32 {
     const HULL_W: [i64; 4] = [1, 5, 25, 125];
+    // 1oom counts `srd->shipcount`, the totals of the last maintenance update.
     let w = |st: &State, e: EmpireId| -> i64 {
-        let t = crate::misc::ship_totals(st, e as usize);
-        st.empires[e as usize]
-            .designs
-            .iter()
-            .enumerate()
-            .map(|(d, sd)| t[d] as i64 * HULL_W[sd.hull.min(3) as usize])
-            .sum::<i64>()
-            .clamp(1, 3_250_000)
+        let em = &st.empires[e as usize];
+        let mut sum: i64 = 0;
+        for (d, sd) in em.designs.iter().enumerate() {
+            let n = em.shipcount.get(d).copied().unwrap_or(0) as i64;
+            sum = (sum + n * HULL_W[sd.hull.min(3) as usize]).min(3_250_000);
+        }
+        sum.max(1)
     };
     let (a, b) = (w(st, p1), w(st, p2));
     ratio_roll(st, a, b)
@@ -224,6 +224,12 @@ pub fn turn_p1(st: &mut State) {
                 let d = st.rng.one_to(5) as i32;
                 diplo::act(st, d, p1, p2, 1, 0, 0);
             }
+            // MOO1 uses the variant of the last audience message here (Classic).
+            let v = if st.ai_id == 0 {
+                st.evn.diplo_msg_subtype
+            } else {
+                v
+            };
             if rel(st, p1, p2).treaty == Treaty::War && v + rel(st, p1, p2).mood_peace > 100 {
                 diplo::stop_war(st, p1, p2);
             }
@@ -254,33 +260,10 @@ pub fn turn_p1(st: &mut State) {
     }
 }
 
-/// 1oom `game_ai_classic_turn_diplo_p1_sub1` (with its loop fixed): an empire allied with
-/// two empires at war with each other leaves both alliances.
-fn break_double_alliances(st: &mut State) {
-    let n = st.empires.len() as u8;
-    for p1 in 0..n {
-        if !is_ai(st, p1) {
-            continue;
-        }
-        for p2 in p1 + 1..n {
-            if !is_ai(st, p2) {
-                continue;
-            }
-            for p3 in p2 + 1..n {
-                if !is_ai(st, p3) {
-                    continue;
-                }
-                if rel(st, p2, p3).treaty == Treaty::War
-                    && rel(st, p1, p2).treaty == Treaty::Alliance
-                    && rel(st, p1, p3).treaty == Treaty::Alliance
-                {
-                    diplo::break_treaty(st, p1, p2);
-                    diplo::break_treaty(st, p1, p3);
-                }
-            }
-        }
-    }
-}
+/// 1oom `game_ai_classic_turn_diplo_p1_sub1` was meant to make an empire allied with two
+/// empires at war with each other leave both alliances; its loop compares an empire's
+/// treaty with itself, so it never does anything (in Classic and Classic+ alike).
+fn break_double_alliances(_st: &mut State) {}
 
 fn any_fleet_to(st: &State, owner: EmpireId, target: EmpireId) -> bool {
     st.fleets

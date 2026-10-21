@@ -18,8 +18,7 @@ const AI_CLASSIC: u8 = 0;
 const PLANET_NONE: usize = usize::MAX;
 /// 1oom `game_num_tbl_hull_w`.
 const HULL_W: [u64; 4] = [1, 5, 25, 125];
-/// 1oom `TRAIT2_EXPANSIONIST`.
-const EXPANSIONIST: u8 = 3;
+use crate::diplo::EXPANSIONIST;
 
 const SP_FUEL: u8 = 1;
 const SP_COLONY_FIRST: u8 = 2;
@@ -2170,4 +2169,38 @@ pub fn bomb(st: &State, player: EmpireId, planet: PlanetId, pop_inbound: i32) ->
         }
     }
     flag
+}
+
+/// 1oom `game_ai_classic_crank_tech` (plague, nova): everything into research.
+pub fn crank_tech(st: &mut State, planet: PlanetId) {
+    let Some(o) = st.planets[planet]
+        .owner
+        .filter(|&o| st.empires[o as usize].ai)
+    else {
+        return;
+    };
+    let sl = &mut st.planets[planet].sliders;
+    let v = sl[SLIDER_SHIP] + sl[SLIDER_IND] + sl[SLIDER_DEF];
+    sl[SLIDER_TECH] += v;
+    sl[SLIDER_SHIP] = 0;
+    sl[SLIDER_IND] = 0;
+    sl[SLIDER_DEF] = 0;
+    add_reserve(st, planet, o as usize);
+}
+
+/// 1oom `game_ai_classic_crank_ship` (comet, pirates): everything into ships.
+pub fn crank_ship(st: &mut State, planet: PlanetId) {
+    let Some(o) = st.planets[planet]
+        .owner
+        .filter(|&o| st.empires[o as usize].ai)
+    else {
+        return;
+    };
+    let sl = &mut st.planets[planet].sliders;
+    let v = sl[SLIDER_TECH] + sl[SLIDER_IND] + sl[SLIDER_DEF];
+    sl[SLIDER_SHIP] += v;
+    sl[SLIDER_TECH] = 0;
+    sl[SLIDER_IND] = 0;
+    sl[SLIDER_DEF] = 0;
+    add_reserve(st, planet, o as usize);
 }
