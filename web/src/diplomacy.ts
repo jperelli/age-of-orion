@@ -36,9 +36,10 @@ export function attitude(rel: number): string {
 
 function portrait(ctx: Ctx, id: number): HTMLElement {
   const e = ctx.view().empires[id];
-  const url = ctx.theme.url(`race/${RACES.indexOf(e.race)}`);
+  const alias = `race/${RACES.indexOf(e.race)}`;
+  const url = ctx.theme.url(alias);
   return url
-    ? h("img", { class: "portrait pixel", src: url, alt: "" })
+    ? h("img", { class: ctx.theme.pixel.has(alias) ? "portrait pixel" : "portrait painted", src: url, alt: "" })
     : h("div", { class: "crest big", style: `--banner:${ctx.theme.banner(e.banner)}` });
 }
 

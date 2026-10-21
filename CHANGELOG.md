@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Painted portraits for the ten races in both themes (shown in the Races screen, audiences
+  and messages), generated locally with Stable Diffusion; the Classic theme still shows
+  MOO1's own portraits when LBX files are imported. How they were made and their licences:
+  `docs/ART.md`; scripts in `tools/art/`.
+- Themes can ship their own pictures (`images` in `theme.json`).
+
 ## [0.9.0] - 2026-10-21
 
 ### Added

@@ -61,7 +61,8 @@ device, and the **Classic** theme then shows the original planet pictures and ra
 - English and Spanish.
 - Autosave every turn, save/load to a file, keyboard shortcuts (Enter ends the turn).
 
-See [docs/PLAN.md](docs/PLAN.md) for what is ported, what is simplified and what comes next.
+See [docs/PLAN.md](docs/PLAN.md) for what is ported, what is simplified and what comes next,
+and [docs/MOO1_QUIRKS.md](docs/MOO1_QUIRKS.md) for the MOO1 bugs kept on purpose.
 
 ## Modding
 
@@ -113,7 +114,8 @@ aoo sim --seed 7 --size medium --players 4 --turns 300 --save end.json
 | `tools/gen_1oom_tables.py` | Generates the ship part and tech tables (`crates/core/src/data.rs`) from a 1oom checkout |
 | `web/` | HTML/CSS/canvas UI (TypeScript, Vite), themes and texts in `web/public/` |
 | `desktop/` | Tauri shell that packages `web/dist` as a native app |
-| `docs/` | Plan, modding guide, comparison harness |
+| `docs/` | Plan, modding guide, comparison harness, MOO1 quirks, art |
+| `tools/art/` | Scripts that generate the theme pictures |
 
 ## Releases
 

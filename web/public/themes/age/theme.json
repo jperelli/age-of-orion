@@ -11,5 +11,17 @@
   "#c8322a",
   "#f2f2f2",
   "#e6b823"
- ]
+ ],
+ "images": {
+  "race/0": "images/race/0.webp",
+  "race/1": "images/race/1.webp",
+  "race/2": "images/race/2.webp",
+  "race/3": "images/race/3.webp",
+  "race/4": "images/race/4.webp",
+  "race/5": "images/race/5.webp",
+  "race/6": "images/race/6.webp",
+  "race/7": "images/race/7.webp",
+  "race/8": "images/race/8.webp",
+  "race/9": "images/race/9.webp"
+ }
 }

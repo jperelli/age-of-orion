@@ -14,7 +14,9 @@ A missing key in a language falls back to English. A new language is a new
 `web/src/theme.ts` and a `lang.<code>` name in every text file.
 
 Images are looked up by **alias**: the active mod's `images/<alias>.png` first, then images
-converted from the player's LBX files (Classic theme), then procedural art drawn by the map.
+converted from the player's LBX files (Classic theme), then the theme's own pictures
+(`images` in `web/public/themes/<theme>/theme.json`, alias -> file in the theme folder), then
+procedural art drawn by the map.
 
 ## Mod folder
 

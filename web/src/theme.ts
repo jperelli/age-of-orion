@@ -1,5 +1,6 @@
 // Themes, texts, images and mods. Every word and picture the UI shows comes from here:
-// base texts < theme texts < mod texts, and mod images < imported LBX images < procedural art.
+// base texts < theme texts < mod texts, and mod images < imported LBX images < the theme's
+// own pictures < procedural art.
 import * as store from "./storage";
 
 export type Text = string | string[];
@@ -13,6 +14,8 @@ export interface ThemeDef {
   /** Use images converted from the player's LBX files when available. */
   use_lbx: boolean;
   banners: string[];
+  /** Pictures shipped with the theme: alias -> path inside the theme folder. */
+  images?: Record<string, string>;
 }
 
 export interface ModData {
@@ -108,12 +111,27 @@ export class Theme {
     return this.def.banners[i % this.def.banners.length];
   }
 
-  async addImage(alias: string, blob: Blob): Promise<void> {
+  /** Aliases whose picture is pixel art (from LBX files), drawn without smoothing. */
+  readonly pixel = new Set<string>();
+
+  async addImage(alias: string, blob: Blob, pixel = false): Promise<void> {
     const url = URL.createObjectURL(blob);
     const img = await loadImage(url);
     if (img) {
       this.urls.set(alias, url);
       this.images.set(alias, img);
+      if (pixel) this.pixel.add(alias);
+      else this.pixel.delete(alias);
+    }
+  }
+
+  /** A picture shipped with the theme (not a blob: no URL to revoke). */
+  async addImageUrl(alias: string, url: string): Promise<void> {
+    const img = await loadImage(url);
+    if (img) {
+      this.images.set(alias, img);
+      this.urls.set(alias, img.src);
+      this.pixel.delete(alias);
     }
   }
 
@@ -132,7 +150,7 @@ export class Theme {
   }
 
   dispose(): void {
-    for (const u of this.urls.values()) URL.revokeObjectURL(u);
+    for (const u of this.urls.values()) if (u.startsWith("blob:")) URL.revokeObjectURL(u);
   }
 }
 
@@ -151,6 +169,7 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
   }
   if (mod) Object.assign(text, mod.text);
   const theme = new Theme(def, text, mod);
+  await Promise.all(Object.entries(def.images ?? {}).map(([alias, path]) => theme.addImageUrl(alias, `themes/${def.id}/${path}`)));
 
   if (def.use_lbx) {
     const manifest = await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json");
@@ -159,7 +178,7 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
       const blob = await store.get<Blob>("assets", path);
       if (!blob) continue;
       if (alias.startsWith("font/")) await theme.addFont(alias.slice(5), blob);
-      else await theme.addImage(alias, blob);
+      else await theme.addImage(alias, blob, true);
     }
     // EVENTMSG.LBX: entry (type - 1) * 7 + stage is the news of 1oom `game_news_get_msg`.
     // MOO1's own texts are English: other languages keep their translations.
