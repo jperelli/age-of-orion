@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-21
+
+### Added
+
+- Spanish: every text of the game in Spanish, for both themes (`text/es.json`,
+  `themes/age/text/es.json`), and a language selector on the main menu. The language
+  follows the browser's on the first start.
+- The converted MOO1 fonts gain the Spanish letters (á é í ó ú ü ñ ¡ ¿), drawn from the
+  original glyphs; import the LBX files again to get them.
+
+### Changed
+
+- MOO1's own news texts and tech descriptions (EVENTMSG.LBX, RESEARCH.LBX), which are in
+  English, are only used when the game is in English.
+
 ## [0.7.0] - 2026-10-21
 
 Exact rules: the comparison harness now agrees with 1oom on 86% of the turns of five

@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aoo-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aoo-core",
  "aoo-lbx",
@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "aoo-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "aoo-harness"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aoo-core",
  "serde",
@@ -36,7 +36,7 @@ dependencies = [
 
 [[package]]
 name = "aoo-lbx"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "png",
  "serde",
@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "aoo-wasm"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aoo-core",
  "aoo-lbx",

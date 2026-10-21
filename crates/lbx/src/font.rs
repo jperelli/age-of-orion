@@ -126,7 +126,102 @@ fn baseline(f: &BitmapFont) -> usize {
         .map_or(f.height, |r| r + 1)
 }
 
-/// A TrueType font with the glyphs of `f` mapped to U+0020..U+007E.
+/// Top row with ink in a glyph.
+fn top(cols: &[Vec<bool>]) -> Option<usize> {
+    cols.iter().filter_map(|c| c.iter().position(|&p| p)).min()
+}
+
+/// The Spanish letters MOO1's fonts lack (á é í ó ú ü ñ, the capitals, ¡ ¿), composed
+/// from the base glyphs with accents drawn above them.
+fn spanish(f: &BitmapFont) -> Vec<(u32, Vec<Vec<bool>>)> {
+    let g = |c: char| f.glyphs[(c as usize).saturating_sub(0x20).min(95)].clone();
+    let mut out = Vec::new();
+    let mark = |mut cols: Vec<Vec<bool>>, kind: char| -> Vec<Vec<bool>> {
+        if cols.is_empty() {
+            return cols;
+        }
+        let w = cols.len();
+        let t = top(&cols).unwrap_or(0);
+        // Row of the accent: two rows above the letter when there is room.
+        let r = t.saturating_sub(2);
+        let r2 = t.saturating_sub(3);
+        let mut set = |x: usize, y: usize| {
+            if x < w && y < f.height {
+                cols[x][y] = true;
+            }
+        };
+        let cx = w / 2;
+        match kind {
+            '\'' => {
+                if t >= 3 {
+                    set(cx, r);
+                    set(cx + 1, r2);
+                } else {
+                    set(cx, r);
+                }
+            }
+            '"' => {
+                set(cx.saturating_sub(1), r);
+                set((cx + 1).min(w - 1), r);
+            }
+            _ => {
+                for x in 0..w {
+                    set(
+                        x,
+                        if x % 2 == 1 {
+                            r2.max(r.saturating_sub(1))
+                        } else {
+                            r
+                        },
+                    );
+                }
+            }
+        }
+        cols
+    };
+    // A dotless i: the stem without the dot above the first gap.
+    let mut dotless = g('i');
+    for col in dotless.iter_mut() {
+        if let Some(first) = col.iter().position(|&p| p) {
+            if let Some(gap) = col[first..].iter().position(|&p| !p) {
+                if col[first + gap..].iter().any(|&p| p) {
+                    for p in col.iter_mut().take(first + gap) {
+                        *p = false;
+                    }
+                }
+            }
+        }
+    }
+    let flip = |cols: Vec<Vec<bool>>| -> Vec<Vec<bool>> {
+        cols.into_iter()
+            .map(|c| c.into_iter().rev().collect())
+            .collect()
+    };
+    for (code, base, kind) in [
+        (0xe1, g('a'), '\''),
+        (0xe9, g('e'), '\''),
+        (0xed, dotless, '\''),
+        (0xf3, g('o'), '\''),
+        (0xfa, g('u'), '\''),
+        (0xfc, g('u'), '"'),
+        (0xf1, g('n'), '~'),
+        (0xc1, g('A'), '\''),
+        (0xc9, g('E'), '\''),
+        (0xcd, g('I'), '\''),
+        (0xd3, g('O'), '\''),
+        (0xda, g('U'), '\''),
+        (0xdc, g('U'), '"'),
+        (0xd1, g('N'), '~'),
+    ] {
+        out.push((code, mark(base, kind)));
+    }
+    out.push((0xa1, flip(g('!'))));
+    out.push((0xbf, flip(g('?'))));
+    out
+}
+
+/// A TrueType font with the glyphs of `f` mapped to U+0020..U+007E, plus the Spanish
+/// letters.
 pub fn to_ttf(f: &BitmapFont, family: &str) -> Vec<u8> {
     let base = baseline(f) as i32;
     let descent = (f.height as i32 - base) * PX;
@@ -135,8 +230,11 @@ pub fn to_ttf(f: &BitmapFont, family: &str) -> Vec<u8> {
         advance: (f.gap_w as i32 * PX + 3 * PX) as u16,
         contours: Vec::new(),
     }];
-    for c in 0..95 {
-        let cols = &f.glyphs[c];
+    let mut all: Vec<(u32, Vec<Vec<bool>>)> = (0..95)
+        .map(|c| (0x20 + c as u32, f.glyphs[c].clone()))
+        .collect();
+    all.extend(spanish(f));
+    for (_, cols) in &all {
         let mut contours = Vec::new();
         for (x, col) in cols.iter().enumerate() {
             let mut y = 0;
@@ -291,7 +389,7 @@ pub fn to_ttf(f: &BitmapFont, family: &str) -> Vec<u8> {
     os2.extend(b"AOO ");
     be16(&mut os2, 0x40);
     be16(&mut os2, 0x20);
-    be16(&mut os2, 0x7e);
+    be16(&mut os2, 0xfc);
     be16(&mut os2, ascent as u16);
     be16(&mut os2, (-descent) as u16);
     be16(&mut os2, (f.gap_h as i32 * PX) as u16);
@@ -304,24 +402,47 @@ pub fn to_ttf(f: &BitmapFont, family: &str) -> Vec<u8> {
     be16(&mut os2, 0);
     be16(&mut os2, 0x20);
     be16(&mut os2, 0);
-    // cmap: format 4, U+0020..U+007E -> glyphs 1..=95
+    // cmap: format 4, one segment per run of consecutive characters and glyphs.
+    let mut map: Vec<(u32, u16)> = all
+        .iter()
+        .enumerate()
+        .map(|(i, (c, _))| (*c, i as u16 + 1))
+        .collect();
+    map.sort();
+    let mut segs: Vec<(u16, u16, u16)> = Vec::new();
+    for (c, g) in map {
+        match segs.last_mut() {
+            Some((start, end, g0)) if c as u16 == *end + 1 && g == *g0 + (*end - *start) + 1 => {
+                *end = c as u16
+            }
+            _ => segs.push((c as u16, c as u16, g)),
+        }
+    }
+    segs.push((0xffff, 0xffff, 1));
+    let n_seg = segs.len() as u16;
+    let es_c = 15 - n_seg.leading_zeros() as u16;
+    let sr_c = 2 * (1u16 << es_c);
     let mut sub = Vec::new();
     be16(&mut sub, 4);
-    be16(&mut sub, 32);
+    be16(&mut sub, 16 + 8 * n_seg);
     be16(&mut sub, 0);
-    be16(&mut sub, 4);
-    be16(&mut sub, 4);
-    be16(&mut sub, 1);
+    be16(&mut sub, 2 * n_seg);
+    be16(&mut sub, sr_c);
+    be16(&mut sub, es_c);
+    be16(&mut sub, 2 * n_seg - sr_c);
+    for (_, end, _) in &segs {
+        be16(&mut sub, *end);
+    }
     be16(&mut sub, 0);
-    be16(&mut sub, 0x7e);
-    be16(&mut sub, 0xffff);
-    be16(&mut sub, 0);
-    be16(&mut sub, 0x20);
-    be16(&mut sub, 0xffff);
-    be16(&mut sub, (1i16 - 0x20) as u16);
-    be16(&mut sub, 1);
-    be16(&mut sub, 0);
-    be16(&mut sub, 0);
+    for (start, _, _) in &segs {
+        be16(&mut sub, *start);
+    }
+    for (start, _, g) in &segs {
+        be16(&mut sub, g.wrapping_sub(*start));
+    }
+    for _ in &segs {
+        be16(&mut sub, 0);
+    }
     let mut cmap = Vec::new();
     be16(&mut cmap, 0);
     be16(&mut cmap, 1);

@@ -3,10 +3,15 @@
 Everything the player reads or sees comes from data files, layered in this order (later
 wins):
 
-1. `web/public/text/en.json`: base texts (Master of Orion wording).
+1. `web/public/text/en.json`: base texts (Master of Orion wording), then the chosen
+   language's `web/public/text/<lang>.json` (`es` for Spanish).
 2. `web/public/themes/<theme>/text/en.json`: the theme's texts (`age` renames planets to
-   cities, ships to units, and so on).
+   cities, ships to units, and so on), then `themes/<theme>/text/<lang>.json`.
 3. The active mod's `text/*.json`.
+
+A missing key in a language falls back to English. A new language is a new
+`text/<lang>.json` (and `themes/age/text/<lang>.json`) plus its code in `LANGS` in
+`web/src/theme.ts` and a `lang.<code>` name in every text file.
 
 Images are looked up by **alias**: the active mod's `images/<alias>.png` first, then images
 converted from the player's LBX files (Classic theme), then procedural art drawn by the map.

@@ -35,7 +35,16 @@ export interface Settings {
 }
 
 export const THEMES = ["age", "classic"];
-const DEFAULT_SETTINGS: Settings = { theme: "age", mod: null, lang: "en", music: 0.5, sfx: 0.5 };
+/** Languages with a text file (`text/<lang>.json`). */
+export const LANGS = ["en", "es"];
+
+const DEFAULT_SETTINGS: Settings = {
+  theme: "age",
+  mod: null,
+  lang: LANGS.find((l) => navigator.language?.toLowerCase().startsWith(l)) ?? "en",
+  music: 0.5,
+  sfx: 0.5,
+};
 
 export async function loadSettings(): Promise<Settings> {
   return { ...DEFAULT_SETTINGS, ...((await store.get<Settings>("kv", "settings")) ?? {}) };
@@ -153,7 +162,9 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
       else await theme.addImage(alias, blob);
     }
     // EVENTMSG.LBX: entry (type - 1) * 7 + stage is the news of 1oom `game_news_get_msg`.
-    const events = await store.get<Blob>("assets", "text/lbx/eventmsg.json");
+    // MOO1's own texts are English: other languages keep their translations.
+    const english = settings.lang === "en";
+    const events = english ? await store.get<Blob>("assets", "text/lbx/eventmsg.json") : null;
     if (events) {
       const all = JSON.parse(await events.text()) as string[];
       const raw: [string, string][] = [["â", "{s}"], ["à", "{other_race}"], ["å", "{field}"], ["ç", "{tech}"], ["ê", "{personality}"], ["ë", "{objective}"], ["î", "{leader}"], ["ì", "{s1}"], ["Ä", "{an}"]];
@@ -165,7 +176,7 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
       });
     }
     // RESEARCH.LBX: tech descriptions, field * 50 + tech - 1.
-    const research = await store.get<Blob>("assets", "text/lbx/research.json");
+    const research = english ? await store.get<Blob>("assets", "text/lbx/research.json") : null;
     if (research) {
       const all = JSON.parse(await research.text()) as string[];
       all.forEach((d, i) => {

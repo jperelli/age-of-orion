@@ -3,7 +3,7 @@ import { TUNE, audio } from "./audio";
 import { Game, engineVersion, importLbxAsync, loadEngine } from "./engine";
 import { AUTOSAVE, GameScreen } from "./game";
 import * as store from "./storage";
-import { THEMES, loadSettings, loadTheme, readModFolder, saveSettings, type ModData, type Settings, type Theme } from "./theme";
+import { LANGS, THEMES, loadSettings, loadTheme, readModFolder, saveSettings, type ModData, type Settings, type Theme } from "./theme";
 import { RACES, type Difficulty, type GalaxySize, type NewGameOptions, type Race } from "./types";
 import { clear, h, modal, pickFiles, toast } from "./ui";
 
@@ -20,6 +20,7 @@ async function applyTheme(): Promise<void> {
   theme?.dispose();
   theme = await loadTheme(settings);
   document.documentElement.dataset.theme = theme.def.id;
+  document.documentElement.lang = settings.lang;
   // MOO1's own fonts, when imported (FONTS.LBX).
   if (theme.fonts.has("3") && theme.fonts.has("4")) document.documentElement.dataset.moofonts = "1";
   else delete document.documentElement.dataset.moofonts;
@@ -71,6 +72,18 @@ async function menu(): Promise<void> {
     ...THEMES.map((id) => h("option", { value: id, selected: id === theme.def.id }, t(`theme.${id}`))),
   );
   themeSelect.disabled = !!theme.mod?.theme;
+  const langSelect = h(
+    "select",
+    {
+      onchange: async (e: Event) => {
+        settings.lang = (e.target as HTMLSelectElement).value;
+        await saveSettings(settings);
+        await applyTheme();
+        void menu();
+      },
+    },
+    ...LANGS.map((l) => h("option", { value: l, selected: l === settings.lang }, t(`lang.${l}`))),
+  );
   const modSelect = h(
     "select",
     {
@@ -117,6 +130,7 @@ async function menu(): Promise<void> {
           { class: "menu-options" },
           h("label", {}, t("menu.theme"), themeSelect),
           h("label", {}, t("menu.mod"), modSelect),
+          h("label", {}, t("menu.language"), langSelect),
           volume("menu.music", "music"),
           volume("menu.sfx", "sfx"),
         ),

@@ -58,6 +58,7 @@ device, and the **Classic** theme then shows the original planet pictures and ra
   TrueType); tech descriptions from RESEARCH.LBX.
 - The ground battle screen and the GNN newscast, with MOO1's landing and newscast art when
   imported.
+- English and Spanish.
 - Autosave every turn, save/load to a file, keyboard shortcuts (Enter ends the turn).
 
 See [docs/PLAN.md](docs/PLAN.md) for what is ported, what is simplified and what comes next.
