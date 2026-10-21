@@ -13,12 +13,15 @@ use crate::rules::Abilities;
 use crate::spy::SpyChance;
 use crate::state::*;
 use crate::tech;
+use crate::techinfo::{self, TechEffect};
 use crate::turn::clean_eco_percent;
 use crate::types::*;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Colony {
     pub sliders: [i32; NUM_SLIDERS],
+    /// Sliders locked by the player.
+    pub locks: [bool; NUM_SLIDERS],
     /// BC per turn going to each slider.
     pub spending: [i32; NUM_SLIDERS],
     /// Design index, or 6 for a stargate.
@@ -160,6 +163,8 @@ pub struct TechChoice {
     pub tech: u8,
     pub key: String,
     pub cost: u32,
+    /// What the tech gives.
+    pub effects: Vec<TechEffect>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -171,6 +176,8 @@ pub struct FieldView {
     pub cost: u32,
     pub invested: u32,
     pub alloc: u32,
+    /// Research slider locked by the player.
+    pub locked: bool,
     pub choices: Vec<TechChoice>,
     pub completed: Vec<TechChoice>,
 }
@@ -234,10 +241,12 @@ fn sees(st: &State, me: EmpireId, x: i32, y: i32) -> bool {
 
 fn field_view(st: &State, me: EmpireId, f: usize) -> FieldView {
     let t = &st.empires[me as usize].tech;
+    let race = st.empires[me as usize].race;
     let choice = |n: u8| TechChoice {
         tech: n,
         key: tech::key(f, n),
         cost: tech::cost_of(st, me, f, n),
+        effects: techinfo::effects(t, race, &st.rules, f, n),
     };
     FieldView {
         field: TechField::ALL[f],
@@ -247,6 +256,7 @@ fn field_view(st: &State, me: EmpireId, f: usize) -> FieldView {
         cost: t.cost[f],
         invested: t.invested[f],
         alloc: t.alloc[f],
+        locked: t.slider_lock[f],
         choices: tech::next_techs(t, f).into_iter().map(choice).collect(),
         completed: t.completed[f].iter().map(|&n| choice(n)).collect(),
     }
@@ -264,6 +274,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
             let mine = p.owner == Some(me);
             let colony = mine.then(|| Colony {
                 sliders: p.sliders,
+                locks: p.slider_lock,
                 spending: std::array::from_fn(|s| p.sliders[s] * p.prod / 100),
                 build: p.build,
                 build_cost: if p.build == design::BUILD_STARGATE {

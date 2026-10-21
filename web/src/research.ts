@@ -2,7 +2,9 @@
 // what is already known (1oom research rules: investment earns interest and a breakthrough
 // becomes likely once it exceeds the cost).
 import type { Ctx } from "./ctx";
-import { FIELDS, type FieldView } from "./types";
+import { sliders } from "./sliders";
+import { effectLines } from "./techinfo";
+import { FIELDS, type FieldView, type TechChoice } from "./types";
 import { clear, h, keepScroll, modal } from "./ui";
 
 export function techName(ctx: Ctx, f: FieldView | string, key: string, tech?: number): string {
@@ -21,6 +23,19 @@ function techInfo(ctx: Ctx, field: number, tech: number): HTMLElement | null {
   return d ? h("p", { class: "muted small techinfo" }, d) : null;
 }
 
+/** A tech with its cost and what it gives. */
+function techCard(ctx: Ctx, f: FieldView, c: TechChoice, cost: boolean, cls = ""): HTMLElement {
+  const t = (k: string, p?: Record<string, string | number>) => ctx.theme.t(k, p);
+  const lines = effectLines(ctx, f.field, c.effects);
+  return h(
+    "div",
+    { class: `tech-card ${cls}` },
+    h("div", { class: "tech-head" }, h("b", {}, techName(ctx, f, c.key, c.tech)), cost ? h("span", { class: "muted" }, ` ${c.cost} ${t("unit.rp")}`) : null),
+    lines.length ? h("ul", { class: "effects" }, ...lines.map((l) => h("li", {}, l))) : null,
+    techInfo(ctx, FIELDS.indexOf(f.field), c.tech),
+  );
+}
+
 export function needsChoice(ctx: Ctx): boolean {
   return ctx.view().tech.some((f) => f.project === 0 && f.choices.length > 0);
 }
@@ -32,8 +47,20 @@ export function researchDialog(ctx: Ctx): Promise<number> {
   const render = () => keepScroll(body, () => draw());
   const draw = () => {
     const v = ctx.view();
-    const alloc = v.tech.map((f) => f.alloc);
     clear(body).append(h("p", { class: "muted" }, t("research.text", { rp: v.research })));
+    body.append(
+      sliders({
+        specs: v.tech.map((f, i) => ({ label: t(`field.${FIELDS[i]}`), value: f.alloc, locked: f.locked })),
+        total: 100,
+        lockTitle: t("slider.lock_hint"),
+        format: (i, a) => `${a[i]}% · ${Math.floor((v.research * a[i]) / 100)} ${t("unit.rp")}`,
+        onCommit: (a) => {
+          ctx.command({ type: "set_research", alloc: a });
+          render();
+        },
+        onLock: (i, locked) => ctx.command({ type: "lock_research", field: i, locked }),
+      }),
+    );
     if (v.tech.some((f) => f.project === 0 && f.choices.length > 0)) {
       body.append(
         h(
@@ -66,31 +93,27 @@ export function researchDialog(ctx: Ctx): Promise<number> {
         f.project === 0 ? h("option", { value: "", selected: true }, t("research.choose")) : null,
         ...f.choices.map((c) => h("option", { value: c.tech, selected: c.tech === f.project }, `${techName(ctx, f, c.key, c.tech)} (${c.cost} ${t("unit.rp")})`)),
       );
-      const slider = h("input", { type: "range", min: 0, max: 100, value: alloc[i] });
-      const val = h("span", { class: "bc" }, `${alloc[i]}%`);
-      slider.addEventListener("input", () => {
-        alloc[i] = Number(slider.value);
-        val.textContent = `${alloc[i]}%`;
-      });
-      slider.addEventListener("change", () => {
-        ctx.command({ type: "set_research", alloc });
-        render();
-      });
+      const project = f.choices.find((c) => c.tech === f.project);
+      const others = f.choices.filter((c) => c.tech !== f.project);
+      const choices = others.length
+        ? h("details", { class: "known" }, h("summary", {}, t("research.compare", { n: others.length })), ...others.map((c) => techCard(ctx, f, c, true)))
+        : null;
       const known = h(
         "details",
         { class: "known" },
         h("summary", {}, t("research.known", { n: f.completed.length })),
-        h("ul", {}, ...f.completed.map((c) => h("li", { title: info(ctx, i, c.tech) ?? "" }, techName(ctx, f, c.key, c.tech)))),
+        ...[...f.completed].reverse().map((c) => techCard(ctx, f, c, false, "known-tech")),
       );
       body.append(
         h(
           "div",
           { class: "research-field" },
-          h("div", { class: "research-row" }, h("label", {}, t(`field.${FIELDS[i]}`), h("small", {}, t("research.level", { n: f.level }))), select, slider, val),
+          h("div", { class: "research-row" }, h("label", {}, t(`field.${FIELDS[i]}`), h("small", {}, t("research.level", { n: f.level }))), select),
           f.project !== 0
             ? h("div", { class: "progress", title: `${f.invested} / ${f.cost} ${t("unit.rp")}` }, h("div", { style: `width:${pct}%` }))
             : h("p", { class: "warn small" }, t("research.saved", { rp: f.invested })),
-          techInfo(ctx, i, f.project),
+          project ? techCard(ctx, f, project, true, "current") : null,
+          choices,
           known,
         ),
       );

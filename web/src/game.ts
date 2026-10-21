@@ -7,6 +7,7 @@ import type { Game } from "./engine";
 import { groundScreen, isGroundScreen } from "./ground";
 import { MapView } from "./map";
 import { newscast, newsType } from "./news";
+import { adjustGroup, slider, sliders } from "./sliders";
 import { needsChoice, researchDialog } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
@@ -207,26 +208,13 @@ export class GameScreen {
   private colonyControls(p: PlanetView): void {
     const c = p.colony!;
     const v = this.view;
-    const sliders = [...c.sliders];
-    const rows = SLIDERS.map((name, i) => {
-      const val = h("span", { class: "bc" }, `${c.spending[i]} ${this.t("unit.bc")}`);
-      const input = h("input", { type: "range", min: 0, max: 100, value: sliders[i] });
-      input.addEventListener("input", () => {
-        const nv = Number(input.value);
-        const others = sliders.map((x, j) => (j === i ? 0 : x));
-        const total = others.reduce((a, b) => a + b, 0);
-        const rest = 100 - nv;
-        for (let j = 0; j < sliders.length; j++) {
-          if (j !== i) sliders[j] = total > 0 ? Math.round((others[j] * rest) / total) : Math.round(rest / (sliders.length - 1));
-        }
-        sliders[i] = nv;
-        rows.forEach((r, j) => {
-          (r.querySelector("input") as HTMLInputElement).value = String(sliders[j]);
-          r.querySelector(".bc")!.textContent = `${Math.floor(((p.prod ?? 0) * sliders[j]) / 100)} ${this.t("unit.bc")}`;
-        });
-      });
-      input.addEventListener("change", () => this.command({ type: "set_sliders", planet: p.id, sliders }));
-      return h("div", { class: "slider-row" }, h("label", {}, this.t(`slider.${name}`)), input, val);
+    const rows = sliders({
+      specs: SLIDERS.map((name, i) => ({ label: this.t(`slider.short.${name}`), title: this.t(`slider.${name}`), value: c.sliders[i], locked: c.locks[i] })),
+      total: 100,
+      lockTitle: this.t("slider.lock_hint"),
+      format: (i, s) => `${Math.floor(((p.prod ?? 0) * s[i]) / 100)} ${this.t("unit.bc")}`,
+      onCommit: (s) => this.command({ type: "set_sliders", planet: p.id, sliders: s }),
+      onLock: (i, locked) => this.command({ type: "lock_slider", planet: p.id, slider: i, locked }),
     });
     const turns = Math.ceil(Math.max(0, c.build_cost - c.bc_to_ship) / Math.max(1, c.spending[0]));
     const gate = v.abilities.stargates && !p.stargate;
@@ -241,7 +229,7 @@ export class GameScreen {
     const rally = c.rally !== null ? v.planets[c.rally] : null;
     append(this.panel, 
       h("h3", {}, this.t("colony.spending", { bc: p.prod ?? 0 })),
-      ...rows,
+      rows,
       h(
         "p",
         { class: c.sliders[3] < c.clean_eco ? "warn small" : "muted small" },
@@ -293,11 +281,8 @@ export class GameScreen {
   /** Sets ecology to the clean level and rescales the other sliders. */
   private setClean(p: PlanetView): void {
     const c = p.colony!;
-    const eco = c.clean_eco;
-    const others = c.sliders.map((x, i) => (i === 3 ? 0 : x));
-    const total = others.reduce((a, b) => a + b, 0) || 1;
-    const sliders = others.map((x, i) => (i === 3 ? eco : Math.round((x * (100 - eco)) / total)));
-    this.command({ type: "set_sliders", planet: p.id, sliders });
+    const locks = c.locks.map((l, i) => l && i !== 3);
+    this.command({ type: "set_sliders", planet: p.id, sliders: adjustGroup(c.sliders, 3, c.clean_eco, locks) });
   }
 
   private chooseRally(p: PlanetView): void {
@@ -643,17 +628,21 @@ export class GameScreen {
     );
     const bombard = h("input", { type: "checkbox", checked: v.bombard });
     bombard.addEventListener("change", () => this.command({ type: "set_bombard", enabled: bombard.checked }));
-    const tax = h("input", { type: "range", min: 0, max: 200, step: 5, value: v.tax });
-    const taxVal = h("span", { class: "bc" });
-    const showTax = () => (taxVal.textContent = this.t("empire.tax_value", { pct: (Number(tax.value) / 10).toFixed(1), bc: Math.floor((v.total_prod * Number(tax.value)) / 2000) }));
-    showTax();
-    tax.addEventListener("input", showTax);
-    tax.addEventListener("change", () => this.command({ type: "set_tax", tenths: Number(tax.value) }));
+    const tax = slider({
+      label: this.t("empire.tax"),
+      title: this.t("empire.tax_hint"),
+      value: v.tax,
+      max: 200,
+      step: 5,
+      plusStep: 5,
+      format: (x) => this.t("empire.tax_value", { pct: (x / 10).toFixed(1), bc: Math.floor((v.total_prod * x) / 2000) }),
+      onCommit: (x) => this.command({ type: "set_tax", tenths: x }),
+    });
     void modal(
       this.t("empire.title", { n: mine.length }),
       [
         table,
-        h("div", { class: "slider-row" }, h("label", { title: this.t("empire.tax_hint") }, this.t("empire.tax")), tax, taxVal),
+        tax,
         h("p", { class: "muted small" }, this.t("empire.income", { trade: v.total_trade, spies: v.spying_maint, reserve: v.reserve })),
         h("label", { class: "checkbox" }, bombard, " ", this.t("empire.bombard")),
       ],

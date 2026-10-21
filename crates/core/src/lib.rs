@@ -34,6 +34,7 @@ mod rules;
 pub mod spy;
 mod state;
 pub mod tech;
+pub mod techinfo;
 mod turn;
 mod types;
 mod umath;
@@ -926,5 +927,50 @@ mod tests {
         let again = Game::load(&g.save()).unwrap();
         let save = again.save();
         assert_eq!(Game::load(&save).unwrap().save(), save);
+    }
+    #[test]
+    fn slider_locks_are_kept() {
+        let mut g = Game::new(&NewGameOptions::default()).unwrap();
+        let home = g
+            .view(0)
+            .planets
+            .iter()
+            .position(|p| p.colony.is_some())
+            .unwrap();
+        g.command(
+            0,
+            &Command::LockSlider {
+                planet: home,
+                slider: 2,
+                locked: true,
+            },
+        )
+        .unwrap();
+        g.command(
+            0,
+            &Command::LockResearch {
+                field: 5,
+                locked: true,
+            },
+        )
+        .unwrap();
+        let v = g.view(0);
+        assert!(v.planets[home].colony.as_ref().unwrap().locks[2]);
+        assert!(v.tech[5].locked && !v.tech[0].locked);
+        assert!(g
+            .command(
+                0,
+                &Command::LockSlider {
+                    planet: home,
+                    slider: 9,
+                    locked: true
+                }
+            )
+            .is_err());
+        // What a tech gives is part of the research view.
+        assert!(v
+            .tech
+            .iter()
+            .all(|f| f.choices.iter().all(|c| !c.effects.is_empty())));
     }
 }

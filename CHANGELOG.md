@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- MOO1's slider control everywhere (colony spending, research, taxes, security, spies,
+  volume): a − and a + on each side move the slider in steps of 4 (Shift or Ctrl: 1), and
+  clicking a slider's name locks it (shown in red). In colony spending and research, moving
+  a slider moves the others but never the locked ones, as 1oom `game_adjust_slider_group`.
+  Locks are saved with the game.
+- The research screen tells exactly what each technology gives: its cost, the numbers it
+  changes with the value before and after (factory cost, colonists per factory, pollution,
+  fuel and scanner range, terraforming, planetary shields, ground combat, transport and
+  missile base hit points...), the ship parts it unlocks with their combat figures, cost and
+  space, what it makes possible (stargates, soil enrichment...), the new tech level of the
+  field, and when a better known tech already gives more. Shown for the current project,
+  the other choices and the known techs, in both themes and both languages.
+
 ## [0.8.0] - 2026-10-21
 
 ### Added

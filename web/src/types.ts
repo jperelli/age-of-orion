@@ -27,6 +27,8 @@ export const BUILD_STARGATE = 6;
 
 export interface Colony {
   sliders: number[];
+  /** Sliders locked by the player (clicking their name). */
+  locks: boolean[];
   spending: number[];
   build: number;
   build_cost: number;
@@ -155,10 +157,19 @@ export interface KnownParts {
   specials: number[];
 }
 
+export type TechEffect =
+  | { type: "level"; from: number; to: number }
+  | { type: "value"; what: string; from: number; to: number; superseded: boolean }
+  | { type: "gain"; what: string; cost: number }
+  | { type: "colonize"; kind: PlanetType; superseded: boolean }
+  | { type: "part"; kind: "weapon" | "comp" | "jammer" | "shield" | "armor" | "engine" | "special"; index: number };
+
 export interface TechChoice {
   tech: number;
   key: string;
   cost: number;
+  /** What the tech gives. */
+  effects: TechEffect[];
 }
 
 export interface FieldView {
@@ -169,6 +180,8 @@ export interface FieldView {
   cost: number;
   invested: number;
   alloc: number;
+  /** Research slider locked by the player. */
+  locked: boolean;
   choices: TechChoice[];
   completed: TechChoice[];
 }
@@ -521,6 +534,8 @@ export type Command =
   | { type: "send_transport"; from: number; to: number; pop: number }
   | { type: "set_research"; alloc: number[] }
   | { type: "set_research_project"; field: number; tech: number }
+  | { type: "lock_slider"; planet: number; slider: number; locked: boolean }
+  | { type: "lock_research"; field: number; locked: boolean }
   | { type: "set_rally"; planet: number; to: number | null }
   | { type: "scrap_ships"; planet: number; ships: number[] }
   | { type: "save_design"; slot: number | null; design: ShipDesign }

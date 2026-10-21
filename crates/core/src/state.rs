@@ -172,6 +172,9 @@ pub struct Tech {
     pub level: [u32; NUM_FIELDS],
     /// Techs this empire can research: per field, tiers of up to 3 (1oom `researchlist`).
     pub list: Vec<[[u8; 3]; TIERS]>,
+    /// Research sliders the player locked (1oom `slider_lock`, an interface aid).
+    #[serde(default)]
+    pub slider_lock: [bool; NUM_FIELDS],
 }
 
 impl Default for Tech {
@@ -191,6 +194,7 @@ impl Tech {
             alloc: [17, 17, 16, 17, 17, 16],
             level: [1; NUM_FIELDS],
             list: vec![[[0; 3]; TIERS]; NUM_FIELDS],
+            slider_lock: [false; NUM_FIELDS],
         }
     }
 

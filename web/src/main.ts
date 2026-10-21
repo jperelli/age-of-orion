@@ -5,6 +5,7 @@ import { AUTOSAVE, GameScreen } from "./game";
 import * as store from "./storage";
 import { LANGS, THEMES, loadSettings, loadTheme, readModFolder, saveSettings, type ModData, type Settings, type Theme } from "./theme";
 import { RACES, type Difficulty, type GalaxySize, type NewGameOptions, type Race } from "./types";
+import { slider } from "./sliders";
 import { clear, h, modal, pickFiles, toast } from "./ui";
 
 const root = document.getElementById("app")!;
@@ -212,14 +213,18 @@ function newGame(): void {
 
 /** A volume slider stored in the settings. */
 function volume(label: string, key: "music" | "sfx"): HTMLElement {
-  const input = h("input", { type: "range", min: 0, max: 100, value: Math.round(settings[key] * 100) });
-  input.addEventListener("change", async () => {
-    settings[key] = Number(input.value) / 100;
-    audio.setPrefs({ music: settings.music, sfx: settings.sfx });
-    if (key === "sfx") audio.sfx("explosion");
-    await saveSettings(settings);
+  return slider({
+    label: t(label),
+    value: Math.round(settings[key] * 100),
+    plusStep: 10,
+    format: (x) => `${x}%`,
+    onCommit: async (x) => {
+      settings[key] = x / 100;
+      audio.setPrefs({ music: settings.music, sfx: settings.sfx });
+      if (key === "sfx") audio.sfx("explosion");
+      await saveSettings(settings);
+    },
   });
-  return h("label", {}, t(label), input);
 }
 
 async function importer(): Promise<void> {

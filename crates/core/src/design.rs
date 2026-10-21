@@ -110,7 +110,8 @@ fn above(level: &[u32; NUM_FIELDS], field: usize, tech: u8) -> usize {
     (level[field] as i32 - tech as i32).clamp(0, 50) as usize
 }
 
-fn weapon_field(i: usize) -> usize {
+/// Field whose tech unlocks weapon `i` (biological weapons come from Planetology).
+pub fn weapon_field(i: usize) -> usize {
     if WEAPONS[i].bio {
         FIELD_PLANETOLOGY
     } else {

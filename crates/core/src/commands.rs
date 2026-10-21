@@ -55,6 +55,18 @@ pub enum Command {
     SetResearch {
         alloc: [u32; NUM_FIELDS],
     },
+    /// Locks or unlocks a colony's spending slider (MOO1: click on its name). Locked
+    /// sliders keep their value when the others move; the rules ignore locks (as 1oom).
+    LockSlider {
+        planet: PlanetId,
+        slider: usize,
+        locked: bool,
+    },
+    /// Locks or unlocks the research slider of a field.
+    LockResearch {
+        field: usize,
+        locked: bool,
+    },
     /// Chooses the tech researched in a field (an ongoing project loses its investment).
     SetResearchProject {
         field: usize,
@@ -391,6 +403,23 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
                 return err("invalid_sliders");
             };
             st.empires[empire as usize].tech.alloc = a.map(|x| x as u32);
+        }
+        Command::LockSlider {
+            planet,
+            slider,
+            locked,
+        } => {
+            own(st, empire, planet)?;
+            if slider >= NUM_SLIDERS {
+                return err("invalid_sliders");
+            }
+            st.planets[planet].slider_lock[slider] = locked;
+        }
+        Command::LockResearch { field, locked } => {
+            if field >= NUM_FIELDS {
+                return err("invalid_sliders");
+            }
+            st.empires[empire as usize].tech.slider_lock[field] = locked;
         }
         Command::SetResearchProject { field, tech } => {
             if field >= NUM_FIELDS

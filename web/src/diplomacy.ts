@@ -4,6 +4,7 @@ import { TUNE, audienceTune, audio } from "./audio";
 import type { Ctx } from "./ctx";
 import { shipParts } from "./engine";
 import { techName } from "./research";
+import { slider } from "./sliders";
 import { FIELDS, RACES, type AudienceOptions, type Incoming, type MsgParams, type RelationView, type Reply, type SabotageKind, type Talk, type TechRef } from "./types";
 import { append, clear, h, keepScroll, modal, toast } from "./ui";
 
@@ -77,17 +78,23 @@ export function diplomacyDialog(ctx: Ctx): Promise<number> {
   const render = () => keepScroll(body, draw);
   const draw = () => {
     const v = ctx.view();
-    const sec = h("input", { type: "range", min: 0, max: 200, step: 5, value: v.security });
-    const secVal = h("span", { class: "bc" }, `${(v.security / 10).toFixed(1)}%`);
-    sec.addEventListener("input", () => (secVal.textContent = `${(Number(sec.value) / 10).toFixed(1)}%`));
-    sec.addEventListener("change", () => (ctx.command({ type: "set_security", tenths: Number(sec.value) }), render()));
+    const sec = slider({
+      label: t("diplomacy.security"),
+      title: t("diplomacy.security_hint"),
+      value: v.security,
+      max: 200,
+      step: 5,
+      plusStep: 5,
+      format: (x) => `${(x / 10).toFixed(1)}%`,
+      onCommit: (x) => (ctx.command({ type: "set_security", tenths: x }), render()),
+    });
     clear(body);
     append(
       body,
       h(
         "div",
         { class: "diplo-top" },
-        h("div", { class: "slider-row" }, h("label", { title: t("diplomacy.security_hint") }, t("diplomacy.security")), sec, secVal),
+        sec,
         h("p", { class: "muted small" }, t("diplomacy.upkeep", { spies: v.spying_maint, trade: v.total_trade })),
         v.final_war ? h("p", { class: "warn" }, t("diplomacy.final_war")) : null,
       ),
@@ -146,10 +153,13 @@ function card(ctx: Ctx, id: number, r: RelationView | null, render: () => void):
 
 function spyBox(ctx: Ctx, r: RelationView, render: () => void): HTMLElement {
   const t = tr(ctx);
-  const slider = h("input", { type: "range", min: 0, max: 100, step: 1, value: r.spying, disabled: !r.contact });
-  const val = h("span", { class: "bc" }, `${(r.spying / 10).toFixed(1)}%`);
-  slider.addEventListener("input", () => (val.textContent = `${(Number(slider.value) / 10).toFixed(1)}%`));
-  slider.addEventListener("change", () => (ctx.command({ type: "set_spying", target: r.empire, tenths: Number(slider.value) }), render()));
+  const budget = slider({
+    label: t("spy.spending"),
+    value: r.spying,
+    disabled: !r.contact,
+    format: (x) => `${(x / 10).toFixed(1)}%`,
+    onCommit: (x) => (ctx.command({ type: "set_spying", target: r.empire, tenths: x }), render()),
+  });
   const mode = h(
     "select",
     { onchange: (ev: Event) => (ctx.command({ type: "set_spy_mode", target: r.empire, mode: (ev.target as HTMLSelectElement).value as RelationView["spy_mode"] }), render()) },
@@ -162,7 +172,7 @@ function spyBox(ctx: Ctx, r: RelationView, render: () => void): HTMLElement {
     "div",
     { class: "spy-box" },
     h("div", {}, t("spy.count", { n: r.spies })),
-    h("div", { class: "slider-row" }, h("label", {}, t("spy.spending")), slider, val),
+    budget,
     h("label", { class: "field" }, h("span", {}, t("spy.mission")), mode),
     report,
   );
