@@ -5,7 +5,7 @@
 A web and desktop remake of Master of Orion 1 whose rules come from the 1oom engine,
 rewritten in Rust and compiled to WebAssembly, with every text, picture and number in open
 files so the game can be reskinned (the default theme turns planets into cities, fleets into
-armies and empires into kingdoms) and modded without touching code.
+armies and alien empires into the medieval empires of history) and modded without touching code.
 
 ## Decisions
 

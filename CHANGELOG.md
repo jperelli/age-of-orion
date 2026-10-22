@@ -14,6 +14,16 @@ All notable changes to this project are documented here. The format follows
   `docs/ART.md`; scripts in `tools/art/`.
 - Themes can ship their own pictures (`images` in `theme.json`).
 
+### Changed
+
+- The Age theme is historical: instead of fantasy races, the ten players are medieval
+  empires, each matched to the MOO1 race whose abilities it takes: the Holy Roman Empire
+  (Humans), the Mongols (Mrrshan), the Ghurids (Silicoids), the Khmer (Sakkra), the Abbasid
+  Caliphate (Psilons), Cnut's North Sea Empire (Alkari), the Song (Klackons), the First
+  Bulgarian Empire (Bulrathi), Byzantium (Meklar) and Venice (Darloks). Their rulers,
+  capitals, unit names and portraits come from history, and the cities of the map are
+  real medieval cities, in English and Spanish.
+
 ## [0.9.0] - 2026-10-21
 
 ### Added

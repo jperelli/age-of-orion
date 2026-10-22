@@ -1,7 +1,7 @@
 {
  "id": "age",
  "name": "Age",
- "description": "Cities, armies and kingdoms on a world map",
+ "description": "Medieval empires, their cities and armies on a world map",
  "map": "world",
  "use_lbx": false,
  "banners": [

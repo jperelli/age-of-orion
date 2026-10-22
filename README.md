@@ -1,7 +1,8 @@
 # Age of Orion
 
 A 4X strategy game on the rules of **Master of Orion** (SimTex, 1993), with an Age of
-Empires look: cities, armies and kingdoms on a hand-drawn world map. The rules are a
+Empires look: the medieval empires of history (the Mongols, Byzantium, the Song, Venice…)
+with their cities and armies on a hand-drawn world map. The rules are a
 Rust port of [1oom](https://github.com/1oom-fork/1oom), the open-source engine of MOO1, compiled
 to **WebAssembly** so the same game runs in the browser and as a desktop app.
 
