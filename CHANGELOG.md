@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-22
+
+The Age theme becomes the medieval world of history, with its own pictures: painted rulers,
+landscapes, battlefields, troops, map tokens and coats of arms.
+
 ### Added
 
 - Age theme pictures for the map, the city panel and battles, made with Google's Nano Banana
@@ -116,6 +121,8 @@ computer-only test games (613 of 710; the first 40 years of the small game, all 
 - Random events: the galaxy statistics newscast no longer follows turns with news.
  - 2026-10-21
 
+## [0.6.0] - 2026-10-21
+
 Presentation: MOO1's own fonts, the ground battle screen, the GNN newscast and MOO1's sound
 effects.
 
@@ -146,6 +153,8 @@ effects.
 - The galaxy statistics news is a real event of the turn (1oom `game_event_run`), with its
   ranking.
  - 2026-10-21
+
+## [0.5.0] - 2026-10-21
 
 The computer players of Master of Orion, and a harness that checks the rules against C 1oom.
 
@@ -364,7 +373,13 @@ First playable version.
 - CI (fmt, clippy, tests, web and desktop builds), tag-driven releases and GitHub Pages
   deployment.
 
-[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/jperelli/age-of-orion/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/jperelli/age-of-orion/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/jperelli/age-of-orion/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/jperelli/age-of-orion/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/jperelli/age-of-orion/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/jperelli/age-of-orion/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jperelli/age-of-orion/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jperelli/age-of-orion/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jperelli/age-of-orion/compare/v0.1.0...v0.2.0
