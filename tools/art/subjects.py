@@ -87,3 +87,41 @@ ARMS_P = {
     "meklar": "a golden double-headed eagle on a purple field",
     "darlok": "a golden winged lion on a red field",
 }
+
+RACES = ["human", "mrrshan", "silicoid", "sakkra", "psilon", "alkari", "klackon", "bulrathi", "meklar", "darlok"]
+# Race portraits (gen_portraits.py, gen_gemini.py): the Age theme's rulers, each with a hint of
+# the MOO1 race its empire stands for, and the Classic theme's aliens.
+PORTRAITS_AGE = {
+    # Holy Roman Empire / Humans: diplomats and traders.
+    "human": "Holy Roman Emperor Frederick Barbarossa, red beard, jewelled imperial crown, ermine and gold brocade mantle, holding a sealed charter, gothic cathedral background",
+    # Mongol Empire / Mrrshan: feline warriors.
+    "mrrshan": "Mongol khan Genghis Khan, fierce amber eyes like a big cat, snow leopard fur collar, lamellar armor, fur-trimmed helmet, steppe background",
+    # Ghurid Empire / Silicoids: stone people who live anywhere.
+    "silicoid": "Ghurid sultan of the Afghan mountains, weathered grey skin like stone, stern unmoving face, white turban set with uncut crystals and lapis lazuli, chain mail, mountain fortress background",
+    # Khmer Empire / Sakkra: reptiles who multiply fast.
+    "sakkra": "Khmer king of Angkor, tall golden crown shaped like a seven-headed naga serpent, bronze skin, gold collar patterned like snake scales, jade jewelry, Angkor Wat temple background",
+    # Abbasid Caliphate / Psilons: scientists.
+    "psilon": "Abbasid caliph al-Mamun, very tall white turban, wise piercing eyes, holding a brass astrolabe, House of Wisdom library with manuscripts background",
+    # North Sea Empire / Alkari: bird people, swift and hard to hit.
+    "alkari": "Danish Viking king Cnut the Great, cloak of black raven feathers, a raven perched on his shoulder, gold crown, braided blond beard, longship sails background",
+    # Song Empire / Klackons: tireless insect workers.
+    "klackon": "Song dynasty Chinese emperor Shenzong wearing the black futou official's hat with two long, thin, straight horizontal flaps sticking out to the sides like antennae, glossy black lacquered lamellar armour like a beetle shell over a yellow silk robe, porcelain kilns in the background",
+    # First Bulgarian Empire / Bulrathi: bear warriors.
+    "bulrathi": "Bulgar khan Krum, huge broad shouldered warrior, thick brown bear fur cloak, iron conical helmet, heavy dark beard, wooden palisade fortress background",
+    # Byzantine Empire / Meklar: machines.
+    "meklar": "Byzantine emperor Theophilos, a slim man with olive skin and a short dark brown beard, a Byzantine stemma crown with strings of pearls hanging at the sides, purple and gold robes with jewelled loros, beside a golden mechanical automaton lion with gears, Constantinople palace background",
+    # Republic of Venice / Darloks: spies and shapeshifters.
+    "darlok": "Doge of Venice wearing the corno ducale cap, holding a white Venetian carnival mask, black cloak, secretive smile, candlelight, Venetian canal at night background",
+}
+PORTRAITS_CLASSIC = {
+    "human": "human space admiral in a dark blue uniform with gold insignia, grey temples",
+    "mrrshan": "lion-like feline alien admiral, orange fur and mane, sci-fi uniform, not human",
+    "silicoid": "crystalline rock alien made of glowing purple minerals and crystals, not human",
+    "sakkra": "reptilian lizard alien warlord, green scales, frilled crest, sci-fi armor, not human",
+    "psilon": "alien scientist with an enormous bald bulging cranium, huge black almond eyes, small mouth, pale blue-grey skin, purple robe, not human",
+    "alkari": "bird-like avian alien with a hawk head and grey feathers, sci-fi flight suit, not human",
+    "klackon": "giant ant alien, insect head with big mandibles, antennae and compound eyes, glossy red-brown chitin, not human, not a robot",
+    "bulrathi": "bear-like alien warrior in sci-fi power armor, brown fur, not human",
+    "meklar": "cyborg robot alien, metal face with glowing blue optics, cables, not human",
+    "darlok": "shapeshifter alien spy with dark grey skin, black hood, glowing white eyes, not human",
+}

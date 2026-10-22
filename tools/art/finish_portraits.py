@@ -18,13 +18,9 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 THEMES = {"age": "age", "classic": "classic"}
 # Seed chosen for a portrait when several were made (default: the lowest seed).
-PICK: dict[str, int] = {
-    "age-0": 7, "age-1": 11, "age-2": 7, "age-3": 11, "age-4": 7,
-    "age-5": 11, "age-6": 13, "age-7": 11, "age-8": 11, "age-9": 11,
-    "classic-4": 11, "classic-6": 11,
-}
+PICK: dict[str, int] = {"age-8": 2}
 # Portraits whose top corners got painted frame ornaments: darkened away.
-DARK_CORNERS = {"age-0"}
+DARK_CORNERS: set[str] = set()
 
 
 def darken_corners(im: Image.Image) -> Image.Image:

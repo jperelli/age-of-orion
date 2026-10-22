@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image
 
-from subjects import ARMS_P, FIELDS, MARKS, ROCKS, SPECIAL, UNITS, VIEWS
+from subjects import ARMS_P, FIELDS, MARKS, PORTRAITS_AGE, PORTRAITS_CLASSIC, RACES, ROCKS, SPECIAL, UNITS, VIEWS
 
 MODEL = os.environ.get("MODEL", "gemini-nano-banana-2.1")
 OUT = os.environ.get("OUT", "/tmp/art/gemini")
@@ -46,6 +46,14 @@ ARMS = ("A medieval coat of arms on a heater shield: {}. Flat heraldic illustrat
         "and a dark outline, the same shield shape and style as the reference image, centered. "
         "Isolated on a plain pure white background, no text, no letters, no crown, no supporters.")
 
+PORTRAIT_AGE = ("A painted head-and-shoulders portrait of {}. A historical court portrait in oils, historically "
+                "accurate costume, realistic, dramatic chiaroscuro lighting, dark background, in the same painting "
+                "style as the reference portrait (only its style, not its face). No text, no frame.")
+PORTRAIT_CLASSIC = ("A painted head-and-shoulders portrait of {}, the ruler of an alien empire in a space strategy game. "
+                    "Painted science fiction illustration, dramatic lighting, a starship bridge in the background, "
+                    "in the same painting style as the reference portrait (only its style, not its face). No text, no frame.")
+NOT_CHRISTIAN = {"mrrshan", "silicoid", "sakkra", "psilon", "klackon"}
+
 # name -> (prompt, aspect ratio, reference picture or None)
 jobs: dict[str, tuple[str, str, str | None]] = {}
 for k, p in VIEWS.items():
@@ -62,6 +70,13 @@ for k, p in MARKS.items():
     jobs[f"mark-{k}"] = (MARK.format(p[0].upper() + p[1:]), "1:1", None if k == "castle" else "mark-castle")
 for k, p in ARMS_P.items():
     jobs[f"arms-{k}"] = (ARMS.format(p), "1:1", None if k == "human" else "arms-human")
+
+
+# Race portraits go to OUT/portraits as <theme>-<n>-<race>-s<TRY>.png, for finish_portraits.py.
+for i, r in enumerate(RACES):
+    extra = " No Christian crosses." if r in NOT_CHRISTIAN else ""
+    jobs[f"portraits/age-{i}-{r}"] = (PORTRAIT_AGE.format(PORTRAITS_AGE[r]) + extra, "4:5", None if i == 0 else "portraits/age-0-human")
+    jobs[f"portraits/classic-{i}-{r}"] = (PORTRAIT_CLASSIC.format(PORTRAITS_CLASSIC[r].replace(", not human", "")), "4:5", None if i == 0 else "portraits/classic-0-human")
 
 
 def ref_path(name: str) -> str:
@@ -102,11 +117,11 @@ def generate(name: str) -> str:
 
 
 def main() -> None:
-    os.makedirs(OUT, exist_ok=True)
+    os.makedirs(f"{OUT}/portraits", exist_ok=True)
     only = sys.argv[1:]
     todo = [n for n in jobs if (not only or any(n.startswith(o) for o in only)) and not os.path.exists(f"{OUT}/{n}-s{TRY}.png")]
     # References first, then everything else in parallel.
-    for ref in ("unit-13", "mark-castle", "arms-human"):
+    for ref in ("unit-13", "mark-castle", "arms-human", "portraits/age-0-human", "portraits/classic-0-human"):
         if ref in todo:
             print(generate(ref), flush=True)
             todo.remove(ref)

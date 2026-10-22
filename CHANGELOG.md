@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The race portraits of both themes are painted again with Nano Banana: one consistent
+  style per theme, and each Age ruler shows the hint of his race (the Song emperor's winged
+  official's hat, the Byzantine golden automaton lion, Cnut's raven, the caliph's astrolabe).
+
 ## [0.10.0] - 2026-10-22
 
 The Age theme becomes the medieval world of history, with its own pictures: painted rulers,

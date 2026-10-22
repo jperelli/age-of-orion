@@ -102,15 +102,15 @@ hint of the race.
 | MOO1 race | Its ability | Age empire | Ruler | Why it fits | The race in the portrait |
 |---|---|---|---|---|---|
 | **Humans** | Cheap Force Fields, Planetology and Propulsion research. | **Holy Roman Empire** | Emperor Frederick Barbarossa | The best diplomats and traders: an empire of princes, electors and free trading cities. | A diplomat holding a sealed charter. |
-| **Mrrshans** | +25% weapon damage, cheap Weapons research. | **Mongol Empire** | Genghis Khan | Feline warriors with +25% damage: the horse archers who conquered most of Eurasia. | A helmet with cat's ears, snow-leopard fur. |
-| **Silicoids** | Can colonize any planet and ignore pollution, but grow slowly. | **Ghurid Empire** | Sultan Muhammad of Ghor | Rock beings who settle anywhere, never pollute and grow slowly: an empire of the harsh Afghan mountains. | A stern mountain sultan, as unmoving as stone. |
-| **Sakkras** | Double population growth, cheap Planetology. | **Khmer Empire** | King Suryavarman II | Reptiles whose population grows twice as fast: the rice fields and reservoirs of Angkor fed a huge people. | The gold crown and scale-like collar of the naga kings. |
-| **Psilons** | +50% research and every field is cheaper. | **Abbasid Caliphate** | Caliph al-Ma'mun | Scientists with +50% research: the caliphs of the House of Wisdom in Baghdad. | A scholar with a book, in a library. |
-| **Alkaris** | Ships take 20% less damage, cheap Propulsion. | **North Sea Empire** | King Cnut the Great | Bird people whose ships are fast and hard to hit: Cnut's longships ruled the North Sea. | A crown of raven wings. |
-| **Klackons** | Workers produce double, cheap Construction. | **Song Empire** | Emperor Shenzong | An insect hive whose workers produce double: the Song's mass workshops of iron and porcelain. | Black lacquered armour like a beetle's shell. |
+| **Mrrshans** | +25% weapon damage, cheap Weapons research. | **Mongol Empire** | Genghis Khan | Feline warriors with +25% damage: the horse archers who conquered most of Eurasia. | Amber cat's eyes and snow-leopard fur. |
+| **Silicoids** | Can colonize any planet and ignore pollution, but grow slowly. | **Ghurid Empire** | Sultan Muhammad of Ghor | Rock beings who settle anywhere, never pollute and grow slowly: an empire of the harsh Afghan mountains. | Stone-grey skin and a turban set with uncut stones. |
+| **Sakkras** | Double population growth, cheap Planetology. | **Khmer Empire** | King Suryavarman II | Reptiles whose population grows twice as fast: the rice fields and reservoirs of Angkor fed a huge people. | A crown of naga serpents and scale-patterned gold. |
+| **Psilons** | +50% research and every field is cheaper. | **Abbasid Caliphate** | Caliph al-Ma'mun | Scientists with +50% research: the caliphs of the House of Wisdom in Baghdad. | An astrolabe in the House of Wisdom. |
+| **Alkaris** | Ships take 20% less damage, cheap Propulsion. | **North Sea Empire** | King Cnut the Great | Bird people whose ships are fast and hard to hit: Cnut's longships ruled the North Sea. | A raven on his shoulder and a cloak of raven feathers. |
+| **Klackons** | Workers produce double, cheap Construction. | **Song Empire** | Emperor Shenzong | An insect hive whose workers produce double: the Song's mass workshops of iron and porcelain. | Lacquered armour like a beetle's shell, a hat with long antenna-like flaps. |
 | **Bulrathis** | +25 in ground combat. | **First Bulgarian Empire** | Khan Krum | Bears, +25 in ground combat: the Bulgar warriors who beat Byzantium on land. | Bear fur and an iron helmet. |
-| **Meklars** | Each colonist runs 2 extra factories, cheap Computers. | **Byzantine Empire** | Emperor Theophilos | Cyborgs whose colonists run extra factories: Byzantium, famous for its automata and Greek fire. | The purple and gold of the emperors. |
-| **Darloks** | +2 scanner range. | **Republic of Venice** | Doge Enrico Dandolo | Shapeshifting spies: Venice, whose Council of Ten ran the best spy network of its age. | A mask and a candle in the dark. |
+| **Meklars** | Each colonist runs 2 extra factories, cheap Computers. | **Byzantine Empire** | Emperor Theophilos | Cyborgs whose colonists run extra factories: Byzantium, famous for its automata and Greek fire. | A golden mechanical lion. |
+| **Darloks** | +2 scanner range. | **Republic of Venice** | Doge Enrico Dandolo | Shapeshifting spies: Venice, whose Council of Ten ran the best spy network of its age. | A carnival mask by candlelight. |
 <!-- end generated -->
 
 ### Words
