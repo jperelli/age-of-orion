@@ -23,6 +23,13 @@ All notable changes to this project are documented here. The format follows
   Bulgarian Empire (Bulrathi), Byzantium (Meklar) and Venice (Darloks). Their rulers,
   capitals, unit names and portraits come from history, and the cities of the map are
   real medieval cities, in English and Spanish.
+- The rest of the Age theme's fantasy is history too: the two roaming monsters are free
+  companies of mercenaries (the Catalan Company and the Great Company, under their
+  banners), the Guardian is the Immortals holding Persepolis and its ancient archives
+  (their golden eagle standard on the map), spells are stratagems (smoke pots, sappers'
+  mines, secret paths, the testudo, decoy banners, bribed captains), griffons, pegasi,
+  wyverns and dragons are Arabian and Turkmen horses, river galleys and relay horses,
+  mithril and dragonscale are Milanese and Gothic plate, and waygates are canals.
 
 ## [0.9.0] - 2026-10-21
 

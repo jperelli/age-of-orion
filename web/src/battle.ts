@@ -839,6 +839,11 @@ class BattleScreen {
   }
 
   private drawMonster(c: CanvasRenderingContext2D, it: BattleItem): void {
+    if (this.world) {
+      // Catalan Company (gold and red), Great Company (black), the Immortals (Persian purple).
+      drawTroop(c, 3, it.name === "crystal" ? "#d9a21f" : it.name === "amoeba" ? "#262626" : "#6a2c91");
+      return;
+    }
     if (it.name === "crystal") {
       c.fillStyle = "#7fd3ff";
       c.strokeStyle = "#e8f8ff";

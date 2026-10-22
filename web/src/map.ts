@@ -601,7 +601,18 @@ export class MapView {
       ctx.drawImage(img, x - u * 2, y - u * 2, u * 4, u * 4);
       return;
     }
-    ctx.fillStyle = "#8f1d14";
+    if (this.theme.def.map === "world") {
+      // The Immortals' standard: a golden eagle with spread wings on a lance.
+      ctx.strokeStyle = "#3b2a16";
+      ctx.lineWidth = this.px(1.5);
+      ctx.beginPath();
+      ctx.moveTo(x, y - u * 0.6);
+      ctx.lineTo(x, y + u * 1.6);
+      ctx.stroke();
+      ctx.fillStyle = "#e0b43a";
+      ctx.strokeStyle = "#5a3d0c";
+      ctx.lineWidth = this.px(0.8);
+    } else ctx.fillStyle = "#8f1d14";
     ctx.beginPath();
     ctx.moveTo(x - u * 2, y - u * 0.4);
     ctx.lineTo(x - u * 0.4, y - u * 0.2);
@@ -612,6 +623,44 @@ export class MapView {
     ctx.lineTo(x - u * 0.5, y + u * 0.5);
     ctx.closePath();
     ctx.fill();
+    if (this.theme.def.map === "world") ctx.stroke();
+  }
+
+  /** A mercenary company's banner on a pole (the Age theme's monsters). */
+  private drawCompany(kind: string, u: number): void {
+    const ctx = this.ctx;
+    ctx.strokeStyle = "#2b2219";
+    ctx.lineWidth = this.px(1.5);
+    ctx.beginPath();
+    ctx.moveTo(-u * 1.2, -u * 2);
+    ctx.lineTo(-u * 1.2, u * 1.8);
+    ctx.stroke();
+    const [w, h] = [u * 2.6, u * 1.8];
+    ctx.save();
+    ctx.translate(-u * 1.2, -u * 2);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(w, 0);
+    ctx.lineTo(w * 0.8, h / 2);
+    ctx.lineTo(w, h);
+    ctx.lineTo(0, h);
+    ctx.closePath();
+    ctx.clip();
+    if (kind === "crystal") {
+      // The Catalan Company: the four red bars on gold of the Crown of Aragon.
+      ctx.fillStyle = "#e3b528";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#b8231c";
+      for (let i = 0; i < 4; i++) ctx.fillRect(0, (h / 9) * (2 * i + 1), w, h / 9);
+    } else {
+      // The Great Company: black and white.
+      ctx.fillStyle = "#1c1c1c";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#eeeeee";
+      ctx.fillRect(0, 0, w / 2, h / 2);
+      ctx.fillRect(w / 2, h / 2, w / 2, h / 2);
+    }
+    ctx.restore();
   }
 
   /** Space monsters (1oom crystal and amoeba): a blue crystal and a green blob. */
@@ -625,7 +674,8 @@ export class MapView {
     }
     ctx.save();
     ctx.translate(m.x, m.y);
-    if (m.kind === "crystal") {
+    if (this.theme.def.map === "world") this.drawCompany(m.kind, u);
+    else if (m.kind === "crystal") {
       ctx.fillStyle = "#7fd3ff";
       ctx.strokeStyle = "#e8f8ff";
       ctx.lineWidth = this.px(1);
