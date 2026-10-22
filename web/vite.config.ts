@@ -5,5 +5,6 @@ export default defineConfig({
   base: "./",
   build: { target: "es2022", outDir: "dist", assetsInlineLimit: 0 },
   worker: { format: "es" },
-  server: { port: 5173 },
+  // The MOO1 comparison (`src/about.ts`) reads `../docs`.
+  server: { port: 5173, fs: { allow: [".."] } },
 });

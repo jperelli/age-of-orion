@@ -13,7 +13,7 @@ in each `theme.json`.
 In the Age theme each player is a real medieval empire, painted with a hint of the MOO1
 race it stands for:
 
-| Race | Empire | Ruler | The race in the picture |
+| Race | Empire | Ruler | Hint of the race asked of the model |
 | --- | --- | --- | --- |
 | Human | Holy Roman Empire | Frederick Barbarossa | diplomat with a sealed charter |
 | Mrrshan | Mongol Empire | Genghis Khan | amber cat's eyes, snow leopard fur |
@@ -26,7 +26,8 @@ race it stands for:
 | Meklar | Byzantine Empire | Theophilos | golden automaton lion |
 | Darlok | Republic of Venice | Enrico Dandolo | carnival mask |
 
-The Classic theme keeps MOO1's aliens.
+The Classic theme keeps MOO1's aliens. What each empire takes from its race:
+[MOO1.md](MOO1.md).
 
 They were generated on a CPU with Stable Diffusion 1.5:
 

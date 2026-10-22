@@ -5,6 +5,7 @@ import { AUTOSAVE, GameScreen } from "./game";
 import * as store from "./storage";
 import { LANGS, THEMES, loadSettings, loadTheme, readModFolder, saveSettings, type ModData, type Settings, type Theme } from "./theme";
 import { RACES, type Difficulty, type GalaxySize, type NewGameOptions, type Race } from "./types";
+import { moo1Dialog } from "./about";
 import { slider } from "./sliders";
 import { clear, h, modal, pickFiles, toast } from "./ui";
 
@@ -99,6 +100,10 @@ async function menu(): Promise<void> {
     h("option", { value: "", selected: !settings.mod }, t("menu.no_mod")),
     ...mods.map((id) => h("option", { value: id, selected: id === settings.mod }, id)),
   );
+  const about = (e: Event) => {
+    e.preventDefault();
+    void moo1Dialog(theme, settings.lang);
+  };
   show(
     h(
       "div",
@@ -107,7 +112,11 @@ async function menu(): Promise<void> {
         "div",
         { class: "menu-card" },
         h("h1", {}, t("app.title")),
-        h("p", { class: "subtitle" }, t("app.subtitle")),
+        h(
+          "p",
+          { class: "subtitle" },
+          theme.def.map === "space" ? h("a", { href: "#", class: "about-link", title: t("app.moo1_link"), onclick: about }, t("app.subtitle")) : t("app.subtitle"),
+        ),
         h(
           "div",
           { class: "menu-buttons" },
@@ -137,7 +146,15 @@ async function menu(): Promise<void> {
         ),
         h("p", { class: "muted small" }, t(`theme.${theme.def.id}.description`)),
         h("p", { class: "muted small" }, assets ? t("menu.assets_imported", { n: Object.keys(assets.archives).length }) : t("menu.assets_none")),
-        h("p", { class: "footer small" }, t("app.footer", { version: engineVersion() }), " ", h("a", { href: "https://github.com/jperelli/age-of-orion", target: "_blank", rel: "noopener" }, "GitHub")),
+        h(
+          "p",
+          { class: "footer small" },
+          t("app.footer", { version: engineVersion() }),
+          " ",
+          h("a", { href: "#", class: "about-link", onclick: about }, t("app.moo1_link")),
+          " · ",
+          h("a", { href: "https://github.com/jperelli/age-of-orion", target: "_blank", rel: "noopener" }, "GitHub"),
+        ),
       ),
     ),
   );

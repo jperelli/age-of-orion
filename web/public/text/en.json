@@ -1,7 +1,7 @@
 {
  "app.title": "Age of Orion",
  "app.subtitle": "A 4X strategy game on the rules of Master of Orion",
- "app.footer": "v{version} · Free software (GPLv2), based on 1oom.",
+ "app.footer": "v{version} · Free software (GPLv2) ·",
  "theme.age": "Age (cities of a world)",
  "theme.classic": "Classic (stars and planets)",
  "theme.age.description": "Medieval reskin: the empires of history, their cities and armies on a hand-drawn world map.",
@@ -1183,5 +1183,6 @@
  "battle.special.black_hole": "Black hole",
  "battle.special.tech_nullifier": "Technology nullifier",
  "battle.fighting": "The battle rages",
- "battle.skip": "Skip animation"
+ "battle.skip": "Skip animation",
+ "app.moo1_link": "A remake of Master of Orion based on 1oom: what is the same and what differs"
 }

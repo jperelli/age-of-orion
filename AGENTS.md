@@ -16,5 +16,6 @@
 - Everything crossing to the UI is JSON (`View`, `Command`, `Event` with `type` tags in snake_case).
 - Every user-visible string is a text key (`web/public/text/en.json`); themes override in `web/public/themes/<id>/text/en.json`. Add every new key to the Spanish files too (`text/es.json`, `themes/age/text/es.json`); missing keys fall back to English.
 - When porting from 1oom, name the source function in a doc comment (for example "1oom `game_turn_build_eco`"). Keep 1oom's integer types and order of operations (random numbers drawn in the same order, 16/32-bit wrapping where MOO1 overflows, list order of fleets): the harness compares them. 1oom always applies MOO1 v1.3a's fixes (`game_num_fix_bugs_1_3a`) and none of its optional ones.
+- After renaming anything in a theme's texts (races, techs, words), run `python3 tools/gen_moo1_doc.py`: it regenerates the tables of `docs/MOO1.md` and `docs/MOO1.es.md`, which the main menu also shows.
 - Never commit original MOO1 files or anything converted from them (`*.LBX` is git-ignored).
 - Update `CHANGELOG.md` under `[Unreleased]`; releases are cut by pushing a `vX.Y.Z` tag that matches the version in `Cargo.toml`, `web/package.json`, `desktop/package.json` and `desktop/src-tauri/tauri.conf.json`.

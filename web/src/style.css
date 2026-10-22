@@ -114,6 +114,19 @@ input[type="range"] { accent-color: var(--accent); }
 .menu-options { display: flex; gap: 1em; justify-content: center; flex-wrap: wrap; }
 .menu-options label { display: flex; flex-direction: column; gap: 0.2em; font-size: 0.9em; }
 .footer { margin-bottom: 0; color: var(--muted); }
+.about-link { color: inherit; text-decoration: underline dotted; cursor: pointer; }
+.about-link:hover { color: var(--accent); }
+.doc { line-height: 1.45; }
+.dialog .doc h2 { margin: 1.2em 0 0.4em; padding: 0 0 0.1em; font-size: 1.2em; background: none; color: inherit; border-bottom: 1px solid var(--parchment-dark); }
+.doc h3 { margin: 1em 0 0.3em; font-size: 1.05em; }
+.doc h4 { margin: 0.9em 0 0.3em; font-size: 0.95em; }
+.doc ul { padding-left: 1.3em; }
+.doc li { margin: 0.15em 0; }
+.doc code { font-size: 0.9em; background: rgba(0,0,0,0.08); padding: 0 0.2em; }
+.doc table { border-collapse: collapse; width: 100%; margin: 0.4em 0 0.8em; font-size: 0.9em; }
+.doc th, .doc td { border: 1px solid var(--parchment-dark); padding: 0.25em 0.45em; text-align: left; vertical-align: top; }
+.doc th { background: rgba(0,0,0,0.08); }
+.doc tr:nth-child(even) td { background: rgba(0,0,0,0.03); }
 .form { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8em 1.2em; }
 .field { display: flex; flex-direction: column; gap: 0.25em; }
 .field span { font-weight: bold; }

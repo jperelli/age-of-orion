@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- "What is the same as Master of Orion, and what differs": a link in the main menu opens
+  `docs/MOO1.md` (or `docs/MOO1.es.md`) in a dialog: the rules that are exactly MOO1's, the
+  ones that differ, and tables of the Age theme's empires, words and technologies against
+  MOO1's (generated from the texts by `tools/gen_moo1_doc.py`).
+
 - Painted portraits for the ten races in both themes (shown in the Races screen, audiences
   and messages), generated locally with Stable Diffusion; the Classic theme still shows
   MOO1's own portraits when LBX files are imported. How they were made and their licences:

@@ -14,10 +14,15 @@ No original game files are needed to play. If you own Master of Orion, you can i
 own `.LBX` files: they are converted to PNG/JSON inside your browser and never leave your
 device, and the **Classic** theme then shows the original planet pictures and race portraits.
 
+**How close is it to Master of Orion?** [docs/MOO1.md](docs/MOO1.md) lists what is exactly as
+in MOO1 and what differs, with tables of the Age theme's empires, words and technologies
+([en español](docs/MOO1.es.md)). The game shows the same text from its main menu.
+
 ## Features
 
 - Galaxy generation, planets, specials and the random number generator ported from 1oom
-  (`game_new.c`, `rnd.c`): the same seed gives the same star map layout as the original.
+  (`game_new.c`, `rnd.c`); home planets are placed in a simpler way, so the same seed does
+  not yet give 1oom's map.
 - MOO1 economy: the five colony sliders (ship, defense, industry, ecology, technology),
   factories and refits, pollution and cleanup, terraforming, population growth, ship and
   base maintenance (`game_turn.c`, `game_misc.c`).
@@ -115,7 +120,7 @@ aoo sim --seed 7 --size medium --players 4 --turns 300 --save end.json
 | `tools/gen_1oom_tables.py` | Generates the ship part and tech tables (`crates/core/src/data.rs`) from a 1oom checkout |
 | `web/` | HTML/CSS/canvas UI (TypeScript, Vite), themes and texts in `web/public/` |
 | `desktop/` | Tauri shell that packages `web/dist` as a native app |
-| `docs/` | Plan, modding guide, comparison harness, MOO1 quirks, art |
+| `docs/` | Plan, MOO1 comparison, modding guide, comparison harness, MOO1 quirks, art |
 | `tools/art/` | Scripts that generate the theme pictures |
 
 ## Releases
