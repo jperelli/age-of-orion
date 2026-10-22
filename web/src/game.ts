@@ -5,13 +5,13 @@ import { designDialog } from "./designer";
 import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefName } from "./diplomacy";
 import type { Game } from "./engine";
 import { groundScreen, isGroundScreen } from "./ground";
-import { MapView } from "./map";
+import { MapView, cityLevel } from "./map";
 import { newscast, newsType } from "./news";
 import { adjustGroup, slider, sliders } from "./sliders";
 import { needsChoice, researchDialog } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
-import { BUILD_STARGATE, FIELDS, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
+import { BUILD_STARGATE, FIELDS, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
 import { append, clear, download, h, modal, pickFiles, toast } from "./ui";
 
 export const AUTOSAVE = "autosave";
@@ -162,6 +162,20 @@ export class GameScreen {
     );
   }
 
+  /** The theme's painted view of a place, shown wide above its panel (the Age theme). */
+  private placeView(p: PlanetView): HTMLElement | null {
+    if (!p.explored || this.theme.def.use_lbx) return null;
+    const alias = p.owner !== null ? `view/city/${cityLevel(p.pop ?? 0)}` : p.orion ? "view/orion" : `view/${p.kind}`;
+    const url = this.theme.url(alias);
+    return url ? h("img", { class: "planet-view", src: url, alt: "" }) : null;
+  }
+
+  /** An empire's coat of arms, when the theme has one. */
+  private arms(owner: number): HTMLElement | null {
+    const url = this.theme.url(`arms/${RACES.indexOf(this.view.empires[owner].race)}`);
+    return url ? h("img", { class: "arms", src: url, alt: "" }) : null;
+  }
+
   private planetPicture(p: PlanetView): HTMLElement {
     const url = p.image !== null ? this.theme.url(`planet/${p.image}`) : null;
     if (url && this.theme.def.use_lbx) return h("img", { class: "planet-pic pixel", src: url, alt: "" });
@@ -173,7 +187,7 @@ export class GameScreen {
   private planetPanel(p: PlanetView): void {
     const v = this.view;
     const mine = p.owner === v.player;
-    const rows: [string, string | number][] = [];
+    const rows: [string, string | number | HTMLElement][] = [];
     if (p.explored && p.kind) {
       rows.push([this.t("planet.terrain"), this.t(`planet.${p.kind}`)]);
       rows.push([this.t("planet.region"), this.t(`star.${p.star}`)]);
@@ -184,7 +198,7 @@ export class GameScreen {
       rows.push([this.t("planet.region"), this.t(`star.${p.star}`)]);
     }
     if (p.owner !== null) {
-      rows.push([this.t("planet.owner"), this.empireName(p.owner)]);
+      rows.push([this.t("planet.owner"), h("span", { class: "owner" }, this.arms(p.owner), this.empireName(p.owner))]);
       rows.push([this.t("planet.pop"), `${p.pop}${mine ? ` / ${p.max_pop}` : ""}`]);
       rows.push([this.t("planet.factories"), `${p.factories}${mine && p.colony ? ` / ${p.colony.max_factories}` : ""}`]);
       rows.push([this.t("planet.bases"), p.bases ?? 0]);
@@ -196,8 +210,10 @@ export class GameScreen {
     if (p.nebula) rows.push([this.t("planet.nebula"), this.t("planet.nebula_effect")]);
     if (p.stargate) rows.push([this.t("planet.stargate"), this.t("planet.stargate_yes")]);
     if (!mine) rows.push([this.t("planet.distance"), p.range > 900 ? "-" : this.t("planet.parsecs", { n: p.range })]);
+    const view = this.placeView(p);
     append(this.panel, 
-      h("div", { class: "planet-head" }, this.planetPicture(p), h("div", {}, h("h2", {}, p.name), p.orion ? h("div", { class: "muted" }, this.t("planet.orion")) : null)),
+      view,
+      h("div", { class: "planet-head" }, view ? null : this.planetPicture(p), h("div", {}, h("h2", {}, p.name), p.orion ? h("div", { class: "muted" }, this.t("planet.orion")) : null)),
       h("table", { class: "facts" }, ...rows.map(([k, val]) => h("tr", {}, h("th", {}, k), h("td", {}, val)))),
     );
     if (!p.explored) append(this.panel, h("p", { class: "muted" }, this.t("planet.unexplored")));

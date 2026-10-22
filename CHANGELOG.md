@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Age theme pictures for the map, the city panel and battles, made with Google's Nano Banana
+  (`docs/ART.md`):
+  - a painted view at the top of the side panel for each of the 14 kinds of land, for
+    Persepolis, and for cities by size;
+  - 8 battlefields seen from above, chosen by the land where the battle is fought;
+  - 24 troop types for battle stacks (6 per unit size, from spearmen to bombards), plus the
+    Catalan Company, the Great Company and the Immortals, each with a pennant in the
+    empire's colour; boulders, ruins and trees as obstacles;
+  - map tokens for villages, towns and castles (also the defended city in battle), armies,
+    ox wagons and canal locks;
+  - the ten empires' coats of arms, in the city panel and the empires screen.
+- Age theme missiles are drawn by kind (javelins, throwing axes, darts, fire arrows, stones,
+  rockets, fire ships), and hits raise dust instead of fire.
+
 - "What is the same as Master of Orion, and what differs": a link in the main menu opens
   `docs/MOO1.md` (or `docs/MOO1.es.md`) in a dialog: the rules that are exactly MOO1's, the
   ones that differ, and tables of the Age theme's empires, words and technologies against

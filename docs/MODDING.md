@@ -92,6 +92,11 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `ground/death` | A soldier falling (LANDING.LBX 0x14) |
 | `news/tv`, `news/anchor`, `news/gnn` | The GNN newscast: the TV, the newscaster, the logo (NEWSCAST.LBX 0..2) |
 | `news/icon/<type>` | The newscast picture of news type 1..22 (1oom `GAME_NEWS_*`; NEWSCAST.LBX 3 + type) |
+| `view/<type>`, `view/orion`, `view/city/<0..2>` | Age theme: the wide painted view at the top of the side panel, for a site of that planet type, Orion, or a city by size (population under 25, under 60, more) |
+| `battle/field/<kind>` | Age theme: battlefield by land (`green`, `forest`, `dry`, `snow`, `rocky`, `ash`, `marsh`, `mists` in a nebula); takes the place of `battle/bg` |
+| `unit/<look>` | Age theme: a battle stack by its design's look 0..23 (hull * 6 + variant), drawn fitted in its square with a pennant in the empire's colour; `unit/crystal`, `unit/amoeba`, `unit/guardian` for the monsters and the Guardian |
+| `mark/village`, `mark/town`, `mark/castle` | Age theme: a city on the map and in battle, by size, with the owner's pennant over it |
+| `arms/<race>` | A coat of arms (0..9, race order), in the city panel and the empires screen |
 
 Fonts and sounds: `font/<n>` (n = 0..5) are TrueType fonts the Classic theme uses when fonts
 3 and 4 are present (`--font`, `--title-font`, `--button-font` in `style.css`), and `sfx/<n>`

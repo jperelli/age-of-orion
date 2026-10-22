@@ -3,6 +3,14 @@
 import type { Theme } from "./theme";
 import type { FleetView, MonsterView, PlanetType, StarType, TransportView, View } from "./types";
 
+/** Size of a city for its pictures: 0 village, 1 town, 2 great city. */
+export function cityLevel(pop: number): number {
+  return pop < 25 ? 0 : pop < 60 ? 1 : 2;
+}
+
+/** Pictures of a city by `cityLevel` (the Age theme's map and battle markers). */
+export const CITY_MARKS = ["mark/village", "mark/town", "mark/castle"];
+
 export type Selection = { kind: "planet"; id: number } | { kind: "fleet"; id: number } | { kind: "transport"; id: number } | null;
 
 export interface Targeting {
@@ -521,8 +529,13 @@ export class MapView {
       return;
     }
     const custom = this.theme.img(p.owner !== null ? `site/city` : `site/${p.kind}`);
+    const mark = p.owner !== null ? this.theme.img(CITY_MARKS[cityLevel(p.pop ?? 0)]) : null;
     if (custom) {
       ctx.drawImage(custom, p.x - u * 2, p.y - u * 2, u * 4, u * 4);
+    } else if (mark && p.owner !== null) {
+      const s = u * (3.6 + cityLevel(p.pop ?? 0) * 0.5);
+      ctx.drawImage(mark, p.x - s / 2, p.y - s * 0.6, s, s);
+      this.flag(p.x, p.y - s * 0.45, u, this.theme.banner(v.empires[p.owner].banner));
     } else if (p.owner !== null) {
       this.drawCity(p.x, p.y, u, this.theme.banner(v.empires[p.owner].banner), p.pop ?? 0, (p.bases ?? 0) > 0);
     } else if (p.kind === "not_habitable") {
@@ -580,17 +593,23 @@ export class MapView {
     ctx.lineWidth = s;
     ctx.fillRect(x - u * 0.6, y - u * 0.9, u * 1.2, u * 1.5);
     ctx.strokeRect(x - u * 0.6, y - u * 0.9, u * 1.2, u * 1.5);
-    // banner
+    this.flag(x, y - u * 0.9, u, color);
+  }
+
+  /** An empire's pennant on a pole standing at (x, y). */
+  private flag(x: number, y: number, u: number, color: string): void {
+    const ctx = this.ctx;
     ctx.strokeStyle = "#2b2219";
+    ctx.lineWidth = this.px(1);
     ctx.beginPath();
-    ctx.moveTo(x, y - u * 0.9);
-    ctx.lineTo(x, y - u * 2.2);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y - u * 1.3);
     ctx.stroke();
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(x, y - u * 2.2);
-    ctx.lineTo(x + u * 1.1, y - u * 1.9);
-    ctx.lineTo(x, y - u * 1.6);
+    ctx.moveTo(x, y - u * 1.3);
+    ctx.lineTo(x + u * 1.1, y - u * 1.0);
+    ctx.lineTo(x, y - u * 0.7);
     ctx.fill();
   }
 
@@ -745,7 +764,8 @@ export class MapView {
     const color = this.theme.banner(v.empires[f.owner].banner);
     const custom = this.theme.img("army");
     if (custom) {
-      ctx.drawImage(custom, x - u * 1.5, y - u * 1.5, u * 3, u * 3);
+      ctx.drawImage(custom, x - u * 1.7, y - u * 1.9, u * 3.4, u * 3.4);
+      this.flag(x + u * 0.9, y - u * 0.6, u * 0.8, color);
     } else if (this.theme.def.map === "world") {
       ctx.strokeStyle = "#2b2219";
       ctx.lineWidth = this.px(1.2);
@@ -787,7 +807,8 @@ export class MapView {
     const u = Math.max(1.2, Math.min(3, 9 / this.zoom + 0.9));
     const custom = this.theme.img("caravan");
     if (custom) {
-      ctx.drawImage(custom, t.x - u * 1.5, t.y - u * 1.5, u * 3, u * 3);
+      ctx.drawImage(custom, t.x - u * 1.6, t.y - u * 1.6, u * 3.2, u * 3.2);
+      this.flag(t.x + u * 0.8, t.y - u * 0.5, u * 0.7, this.theme.banner(v.empires[t.owner].banner));
       return;
     }
     ctx.fillStyle = this.theme.banner(v.empires[t.owner].banner);

@@ -4,6 +4,7 @@
 import { TUNE, audio } from "./audio";
 import type { Ctx } from "./ctx";
 import { shipParts } from "./engine";
+import { CITY_MARKS, cityLevel } from "./map";
 import { type Battle, type BattleAction, type BattleAnim, type BattleItem, type View } from "./types";
 import { append, clear, h } from "./ui";
 
@@ -607,9 +608,15 @@ class BattleScreen {
         return;
       }
       const g = c.createRadialGradient(x, y, 0, x, y, r * (0.5 + k));
-      g.addColorStop(0, `rgba(255,240,180,${1 - k})`);
-      g.addColorStop(0.5, `rgba(255,120,30,${0.8 * (1 - k)})`);
-      g.addColorStop(1, "rgba(120,20,0,0)");
+      if (this.world) {
+        g.addColorStop(0, `rgba(235,215,170,${0.9 * (1 - k)})`);
+        g.addColorStop(0.55, `rgba(150,120,80,${0.7 * (1 - k)})`);
+        g.addColorStop(1, "rgba(90,70,40,0)");
+      } else {
+        g.addColorStop(0, `rgba(255,240,180,${1 - k})`);
+        g.addColorStop(0.5, `rgba(255,120,30,${0.8 * (1 - k)})`);
+        g.addColorStop(1, "rgba(120,20,0,0)");
+      }
       c.fillStyle = g;
       c.beginPath();
       c.arc(x, y, r * (0.5 + k), 0, Math.PI * 2);
@@ -689,9 +696,10 @@ class BattleScreen {
   private drawBackground(c: CanvasRenderingContext2D): void {
     const p = this.view.planets[this.bt.planet];
     const n = p.nebula ? 0 : 1 + (this.bt.planet % 4);
-    const img = this.ctx.theme.img(`battle/bg/${n}`) ?? this.ctx.theme.img("battle/bg");
+    const field = this.world ? this.ctx.theme.img(`battle/field/${p.nebula ? "mists" : FIELD[p.kind ?? "terran"] ?? "green"}`) : null;
+    const img = field ?? this.ctx.theme.img(`battle/bg/${n}`) ?? this.ctx.theme.img("battle/bg");
     if (img) {
-      c.drawImage(img, 0, 0, W * CW, H * CH);
+      this.paint(c, img, 0, 0, W * CW, H * CH, field !== null);
       return;
     }
     if (this.world) {
@@ -725,10 +733,29 @@ class BattleScreen {
     }
   }
 
+  /** Draws a picture; painted (not pixel art) ones are smoothed. */
+  private paint(c: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, smooth: boolean): void {
+    c.imageSmoothingEnabled = smooth;
+    c.imageSmoothingQuality = "high";
+    c.drawImage(img, x, y, w, h);
+    c.imageSmoothingEnabled = false;
+  }
+
+  /** A painted sprite fitted into a w x h box centred on (cx, cy). */
+  private sprite(c: CanvasRenderingContext2D, img: HTMLImageElement, cx: number, cy: number, w: number, h: number): void {
+    const k = Math.min(w / img.width, h / img.height);
+    this.paint(c, img, cx - (img.width * k) / 2, cy - (img.height * k) / 2, img.width * k, img.height * k, true);
+  }
+
   private drawRock(c: CanvasRenderingContext2D, x: number, y: number, look: number): void {
-    const img = this.ctx.theme.img(`battle/rock/${look}`);
-    if (img) {
+    const alias = `battle/rock/${look}`;
+    const img = this.ctx.theme.img(alias);
+    if (img && this.ctx.theme.pixel.has(alias)) {
       c.drawImage(img, x + (CW - img.width) / 2, y + (CH - img.height) / 2);
+      return;
+    }
+    if (img) {
+      this.sprite(c, img, x + CW / 2, y + CH / 2, CW, CH);
       return;
     }
     c.fillStyle = this.world ? "#7c766a" : "#5b544c";
@@ -761,8 +788,12 @@ class BattleScreen {
     const cx = s.x + CW / 2;
     const cy = s.y + CH / 2;
     const img = p.image !== null ? this.ctx.theme.img(`planet/${p.image}`) : null;
+    const mark = this.world ? this.ctx.theme.img(CITY_MARKS[cityLevel(p.pop ?? 0)]) : null;
     if (img && !this.world) {
       c.drawImage(img, cx - 15, cy - 11, 30, 22);
+    } else if (mark) {
+      this.sprite(c, mark, cx, cy + 1, CW + 4, CH + 2);
+      pennant(c, cx - 9, cy - 4, color);
     } else if (this.world) {
       // A walled town that fits its square.
       c.fillStyle = "#b9a37a";
@@ -812,12 +843,16 @@ class BattleScreen {
       c.fillRect(s.x, s.y, CW, CH);
     }
     const img = this.ctx.theme.img(`ship/${it.look}`);
+    const unit = this.world ? this.ctx.theme.img(it.design === null ? `unit/${it.name}` : `unit/${it.look % 24}`) : null;
     c.save();
     if (it.side === "r") {
       c.translate(s.x + CW, s.y);
       c.scale(-1, 1);
     } else c.translate(s.x, s.y);
-    if (img) c.drawImage(img, (CW - img.width) / 2, (CH - img.height) / 2);
+    if (unit) {
+      this.sprite(c, unit, CW / 2 + 1, CH / 2 + 1, CW - 2, CH - 2);
+      if (it.design !== null) pennant(c, 3, 9, color);
+    } else if (img) c.drawImage(img, (CW - img.width) / 2, (CH - img.height) / 2);
     else if (it.design === null) this.drawMonster(c, it);
     else if (this.world) drawTroop(c, it.hull, color);
     else drawShip(c, it.hull, color);
@@ -897,14 +932,7 @@ class BattleScreen {
     }
     const r = (ang * Math.PI) / 180;
     if (this.world) {
-      c.strokeStyle = "#3b2a16";
-      c.lineWidth = 1.2;
-      c.beginPath();
-      c.moveTo(m.x - Math.cos(r) * 7, m.y - Math.sin(r) * 7);
-      c.lineTo(m.x, m.y);
-      c.stroke();
-      c.fillStyle = "#cfcfcf";
-      c.fillRect(m.x - 1, m.y - 1, 2, 2);
+      drawProjectile(c, w.key, m.x, m.y, r, performance.now());
     } else {
       c.strokeStyle = "rgba(255,160,60,0.7)";
       c.lineWidth = 1;
@@ -1014,6 +1042,136 @@ function drawTroop(c: CanvasRenderingContext2D, hull: number, color: string): vo
     c.beginPath();
     c.arc(23.5, 20, 1.6, 0, Math.PI * 2);
     c.arc(28.5, 20, 1.6, 0, Math.PI * 2);
+    c.fill();
+  }
+}
+
+/** The battlefield of each kind of land (the Age theme's `battle/field/*`). */
+const FIELD: Record<string, string> = {
+  terran: "green",
+  ocean: "green",
+  jungle: "forest",
+  desert: "dry",
+  arid: "dry",
+  steppe: "dry",
+  minimal: "dry",
+  tundra: "snow",
+  barren: "rocky",
+  dead: "rocky",
+  not_habitable: "rocky",
+  inferno: "ash",
+  radiated: "ash",
+  toxic: "marsh",
+};
+
+/** A small pennant in an empire's colour, on a pole standing at (x, y). */
+function pennant(c: CanvasRenderingContext2D, x: number, y: number, color: string): void {
+  c.strokeStyle = "#2b2219";
+  c.lineWidth = 0.7;
+  c.beginPath();
+  c.moveTo(x, y);
+  c.lineTo(x, y - 8);
+  c.stroke();
+  c.fillStyle = color;
+  c.strokeStyle = "#1a140e";
+  c.lineWidth = 0.4;
+  c.beginPath();
+  c.moveTo(x, y - 8);
+  c.lineTo(x + 6, y - 6.5);
+  c.lineTo(x, y - 5);
+  c.closePath();
+  c.fill();
+  c.stroke();
+}
+
+/** A missile of the Age theme by weapon: javelins, axes, darts, fire arrows, stones, rockets, volleys. */
+function drawProjectile(c: CanvasRenderingContext2D, key: string, x: number, y: number, r: number, now: number): void {
+  const dx = Math.cos(r), dy = Math.sin(r);
+  const shaft = (len: number, color: string, width: number) => {
+    c.strokeStyle = color;
+    c.lineWidth = width;
+    c.beginPath();
+    c.moveTo(x - dx * len, y - dy * len);
+    c.lineTo(x, y);
+    c.stroke();
+  };
+  const flame = (fx: number, fy: number, size: number) => {
+    const g = c.createRadialGradient(fx, fy, 0, fx, fy, size);
+    g.addColorStop(0, "rgba(255,240,150,0.95)");
+    g.addColorStop(0.5, "rgba(255,120,20,0.8)");
+    g.addColorStop(1, "rgba(160,30,0,0)");
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(fx, fy, size, 0, Math.PI * 2);
+    c.fill();
+  };
+  const stone = (size: number, color: string) => {
+    c.fillStyle = color;
+    c.strokeStyle = "#2e2a24";
+    c.lineWidth = 0.5;
+    c.beginPath();
+    c.arc(x, y, size, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+  };
+  if (key.startsWith("hyper_v")) {
+    // a spinning throwing axe
+    const a = now / 60;
+    c.strokeStyle = "#5a3b1a";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(x - Math.cos(a) * 3, y - Math.sin(a) * 3);
+    c.lineTo(x + Math.cos(a) * 3, y + Math.sin(a) * 3);
+    c.stroke();
+    c.fillStyle = "#c9c9c9";
+    c.beginPath();
+    c.arc(x + Math.cos(a) * 3, y + Math.sin(a) * 3, 1.6, 0, Math.PI * 2);
+    c.fill();
+  } else if (key.startsWith("hyper_x")) {
+    shaft(4, "#5a3b1a", 0.8);
+    c.fillStyle = "#d9d9d9";
+    c.fillRect(x - 0.8, y - 0.8, 1.6, 1.6);
+  } else if (key.startsWith("merculite")) {
+    shaft(6, "#5a3b1a", 0.8);
+    flame(x, y, 2.6);
+  } else if (key.startsWith("scatter_pack")) {
+    // a hail of arrows
+    for (let i = -1; i <= 1; i++) {
+      const ox = -dy * i * 2.5, oy = dx * i * 2.5;
+      c.strokeStyle = "#4a3218";
+      c.lineWidth = 0.6;
+      c.beginPath();
+      c.moveTo(x + ox - dx * 5, y + oy - dy * 5);
+      c.lineTo(x + ox, y + oy);
+      c.stroke();
+    }
+  } else if (key.startsWith("pulson") || key === "anti_matter_torp") {
+    stone(2.2, "#8a8378");
+  } else if (key.startsWith("hercular")) {
+    stone(3, "#7a7366");
+  } else if (key === "hellfire_torpedo") {
+    stone(2.6, "#5a4a3a");
+    flame(x - dx * 2, y - dy * 2, 3.5);
+  } else if (key.startsWith("zeon") || key === "proton_torpedo") {
+    // a rocket and its sparks
+    shaft(5, "#7a2a1a", 1.4);
+    flame(x - dx * 6, y - dy * 6, 2.4);
+  } else if (key === "plasma_torpedo") {
+    // a fire ship: a burning hulk
+    c.fillStyle = "#4a2e16";
+    c.beginPath();
+    c.ellipse(x, y, 4, 2, r, 0, Math.PI * 2);
+    c.fill();
+    flame(x, y - 1, 4);
+  } else {
+    // javelins and barbed javelins
+    shaft(8, "#5a3b1a", 1);
+    c.fillStyle = "#cfcfcf";
+    c.beginPath();
+    c.moveTo(x + dx * 2, y + dy * 2);
+    c.lineTo(x - dy * 1.2, y + dx * 1.2);
+    c.lineTo(x + dy * 1.2, y - dx * 1.2);
+    c.closePath();
     c.fill();
   }
 }

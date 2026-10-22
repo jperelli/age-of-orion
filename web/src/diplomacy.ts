@@ -149,6 +149,8 @@ function card(ctx: Ctx, id: number, r: RelationView | null, render: () => void):
       }
     }
   }
+  const arms = ctx.theme.url(`arms/${RACES.indexOf(e.race)}`);
+  if (arms) lines.unshift(h("img", { class: "arms big", src: arms, alt: "" }));
   return h("div", { class: `rival ${e.alive ? "" : "dead"}` }, portrait(ctx, id), h("div", { class: "rival-info" }, ...lines), extra.length ? h("div", { class: "rival-actions" }, ...extra) : null);
 }
 

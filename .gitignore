@@ -2,3 +2,4 @@
 *.LBX
 *.lbx
 /assets-out/
+__pycache__/

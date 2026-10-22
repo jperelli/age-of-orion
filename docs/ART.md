@@ -54,7 +54,42 @@ SEED=11 STEPS=6 /tmp/sd/bin/python tools/art/gen_portraits.py age-3      # one p
 A portrait takes about 2 minutes on ten CPU cores (6 steps), seconds on a GPU. `PICK` in
 `finish_portraits.py` chooses the seed of each portrait when several were made.
 
+## Age theme: map, city panel and battles
+
+Made with Google's Nano Banana 2.1 (`gemini-nano-banana-2.1`, Gemini API) by
+`tools/art/gen_gemini.py`, from the subjects in `tools/art/subjects.py`. The troops, map
+markers and coats of arms are drawn with one approved picture of their kind as a style
+reference (the halberdiers, the castle, the Holy Roman arms), so each set looks alike.
+`tools/art/finish_art.py` crops them, cuts the sprites out of their white background, writes
+WebP files to `web/public/themes/age/images/` and lists them in `theme.json`.
+`tools/art/gen_art.py` makes the same set with the local Stable Diffusion model, without an
+API key, at lower quality.
+
+| Alias | Picture | Where |
+| --- | --- | --- |
+| `view/<land>`, `view/orion` | 14 landscapes (one per kind of land) and the ruins of Persepolis, 768x384 | top of the side panel when a site is selected |
+| `view/city/0..2` | a village, a walled town, a great city | top of the panel of a city, by population (under 25, under 60, more) |
+| `battle/field/<kind>` | 8 battlefields seen from above: green, forest, dry, snow, rocky, ash, marsh, mists | behind the battle grid, by the land of the battle's site |
+| `unit/0..23` | 24 troop types (6 per unit size: band, company, battalion, host) | battle stacks, by the design's look; a pennant in the empire's colour is drawn over them |
+| `unit/crystal`, `unit/amoeba`, `unit/guardian` | the Catalan Company, the Great Company, the Immortals | battles against them |
+| `battle/rock/0..3` | a boulder, a ruined wall, trees, a pile of stones | obstacles on the battle grid |
+| `mark/village`, `mark/town`, `mark/castle` | cities by size | map markers and the defended city in battles, with the owner's pennant |
+| `army`, `caravan`, `stargate` | a knight with a banner, an ox wagon, a canal lock | armies, migrants and levies, canal ports on the map |
+| `arms/<race>` | the ten empires' coats of arms | city panel (owner) and the empires screen |
+
+Missiles (javelins, axes, darts, fire arrows, stones, rockets, fire ships) and the dust of a
+hit are drawn by the battle screen itself (`web/src/battle.ts`).
+
+```sh
+GEMINI_API_KEY=... python3 tools/art/gen_gemini.py              # everything, about $2.50
+GEMINI_API_KEY=... TRY=2 python3 tools/art/gen_gemini.py unit-04  # another try of one picture
+/tmp/sd/bin/python tools/art/finish_art.py /tmp/art/gemini      # PICK chooses among tries
+```
+
+Google's terms leave the generated pictures to the user; every picture carries Google's
+invisible SynthID watermark.
+
 ## Mods
 
-A mod overrides any picture with `images/<alias>.png` (`docs/MODDING.md`): `race/<n>` for
-portraits.
+A mod overrides any picture with `images/<alias>.png` (`docs/MODDING.md`), with the aliases
+above: `race/<n>` for portraits, `unit/<look>` for battle troops, and so on.
