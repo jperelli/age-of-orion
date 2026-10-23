@@ -97,6 +97,10 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `unit/<look>` | Age theme: a battle stack by its design's look 0..23 (hull * 6 + variant), drawn fitted in its square with a pennant in the empire's colour; `unit/crystal`, `unit/amoeba`, `unit/guardian` for the monsters and the Guardian |
 | `mark/village`, `mark/town`, `mark/castle` | Age theme: a city on the map and in battle, by size, with the owner's pennant over it |
 | `arms/<race>` | A coat of arms (0..9, race order), in the city panel and the empires screen |
+| `unit/<look>/march/<0..3>`, `unit/<look>/attack/<0..3>` | Age theme: animation frames of a battle stack, played while it moves and when it shoots or strikes (missing frames: the still `unit/<look>`) |
+| `news/herald` | Age theme: the herald next to the Herald's masthead |
+| `hall/<race>` | Age theme: the throne room behind an empire's envoy (0..9, race order) |
+| `council/hall` | Age theme: the Great Council's hall |
 
 Fonts and sounds: `font/<n>` (n = 0..5) are TrueType fonts the Classic theme uses when fonts
 3 and 4 are present (`--font`, `--title-font`, `--button-font` in `style.css`), and `sfx/<n>`

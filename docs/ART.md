@@ -81,6 +81,12 @@ API key, at lower quality.
 | `mark/village`, `mark/town`, `mark/castle` | cities by size | map markers and the defended city in battles, with the owner's pennant |
 | `army`, `caravan`, `stargate` | a knight with a banner, an ox wagon, a canal lock | armies, migrants and levies, canal ports on the map |
 | `arms/<race>` | the ten empires' coats of arms | city panel (owner) and the empires screen |
+| `unit/<look>/march/0..3`, `unit/<look>/attack/0..3` | four frames of each troop marching and attacking, drawn from its still picture as the reference | battle stacks while they move and when they shoot or strike |
+| `landing/invade/<land>` | 14 sieges: a besieged city's walls behind an empty battlefield, one per kind of land | the siege screen (ground battles) |
+| `ground/soldier/<race>`, `ground/death` | a foot soldier of each empire, a fallen soldier | the siege screen |
+| `news/herald`, `news/icon/<type>` | the herald, and an illuminated miniature for each of the 22 kinds of news | the Herald |
+| `hall/<race>` | the throne room of each empire | behind the envoy in audiences and messages |
+| `council/hall` | the hall of the Great Council | the council's vote and verdict |
 
 Missiles (javelins, axes, darts, fire arrows, stones, rockets, fire ships) and the dust of a
 hit are drawn by the battle screen itself (`web/src/battle.ts`).

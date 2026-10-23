@@ -19,7 +19,12 @@ interface Shown {
   y: number;
   alpha: number;
   flash: number;
+  /** An animation of the theme's troop pictures: marching while it moves, attacking once. */
+  anim?: { kind: "march" | "attack"; start: number; until: number };
 }
+
+/** Frames of a troop animation (`unit/<look>/<kind>/<frame>`). */
+const ANIM_FRAMES = 4;
 
 interface Effect {
   until: number;
@@ -428,7 +433,10 @@ class BattleScreen {
         const s = this.shown.get(a.uid);
         if (!s) return;
         const [x0, y0] = [s.x, s.y];
-        return this.tween(a.type === "move" ? 140 : 200, (k) => {
+        // Painted troops walk a little slower, so their march shows.
+        const ms = a.type === "move" ? (this.world && this.ctx.theme.img(`unit/${s.item.look % 24}/march/0`) ? 260 : 140) : 200;
+        if (a.type === "move") this.troopAnim(s, "march", ms);
+        return this.tween(ms, (k) => {
           s.x = x0 + (a.x * CW - x0) * k;
           s.y = y0 + (a.y * CH - y0) * k;
         });
@@ -442,6 +450,7 @@ class BattleScreen {
         return this.tween(150, (k) => (s.alpha = k));
       }
       case "beam": {
+        this.troopAnim(this.shown.get(a.from), "attack", 320);
         const [x0, y0] = this.center(a.from);
         const [x1, y1] = this.center(a.to);
         const w = parts.weapons[a.weapon];
@@ -516,6 +525,7 @@ class BattleScreen {
         return this.wait(120);
       }
       case "missile_launch": {
+        this.troopAnim(this.shown.get(a.from), "attack", 320);
         audio.sfx(this.world ? "arrow" : "missile", this.world ? undefined : parts.weapons[a.weapon].sound);
         this.missiles.set(a.id, { x: a.x, y: a.y, w: a.weapon, dx: 1, dy: 0 });
         return this.wait(60);
@@ -594,6 +604,30 @@ class BattleScreen {
         return;
       }
     }
+  }
+
+  /** Starts a troop animation (marching runs on through consecutive steps). */
+  private troopAnim(s: Shown | undefined, kind: "march" | "attack", ms: number): void {
+    if (!s || !this.world) return;
+    const now = performance.now();
+    const keep = s.anim?.kind === kind && kind === "march" && s.anim.until > now - 60;
+    s.anim = { kind, start: keep ? s.anim!.start : now, until: now + ms / this.speed };
+  }
+
+  /** The troop picture of a stack now: a frame of its animation, else its still picture. */
+  private unitPicture(s: Shown, now: number): HTMLImageElement | null {
+    const it = s.item;
+    const base = it.design === null ? `unit/${it.name}` : `unit/${it.look % 24}`;
+    const a = s.anim;
+    if (a && a.until > now) {
+      const f =
+        a.kind === "march"
+          ? Math.floor((now - a.start) / (110 / this.speed)) % ANIM_FRAMES
+          : Math.min(ANIM_FRAMES - 1, Math.floor(((now - a.start) / (a.until - a.start)) * ANIM_FRAMES));
+      const frame = this.ctx.theme.img(`${base}/${a.kind}/${f}`);
+      if (frame) return frame;
+    }
+    return this.ctx.theme.img(base);
   }
 
   private boom(x: number, y: number, r: number): void {
@@ -843,7 +877,7 @@ class BattleScreen {
       c.fillRect(s.x, s.y, CW, CH);
     }
     const img = this.ctx.theme.img(`ship/${it.look}`);
-    const unit = this.world ? this.ctx.theme.img(it.design === null ? `unit/${it.name}` : `unit/${it.look % 24}`) : null;
+    const unit = this.world ? this.unitPicture(s, now) : null;
     c.save();
     if (it.side === "r") {
       c.translate(s.x + CW, s.y);

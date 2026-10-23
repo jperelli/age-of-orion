@@ -125,14 +125,16 @@ export class Theme {
     }
   }
 
-  /** A picture shipped with the theme (not a blob: no URL to revoke). */
-  async addImageUrl(alias: string, url: string): Promise<void> {
-    const img = await loadImage(url);
-    if (img) {
-      this.images.set(alias, img);
-      this.urls.set(alias, img.src);
-      this.pixel.delete(alias);
-    }
+  /** A picture shipped with the theme (not a blob: no URL to revoke). Its URL is usable at
+   * once; canvas drawing gets it when it has loaded, unless an imported or mod picture took
+   * its place meanwhile. */
+  addImageUrl(alias: string, url: string): void {
+    const src = new URL(url, document.baseURI).href;
+    this.urls.set(alias, src);
+    this.pixel.delete(alias);
+    void loadImage(src).then((img) => {
+      if (img && this.urls.get(alias) === src) this.images.set(alias, img);
+    });
   }
 
   /** Fonts converted from FONTS.LBX ("MOO1 0" .. "MOO1 5"). */
@@ -169,7 +171,7 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
   }
   if (mod) Object.assign(text, mod.text);
   const theme = new Theme(def, text, mod);
-  await Promise.all(Object.entries(def.images ?? {}).map(([alias, path]) => theme.addImageUrl(alias, `themes/${def.id}/${path}`)));
+  for (const [alias, path] of Object.entries(def.images ?? {})) theme.addImageUrl(alias, `themes/${def.id}/${path}`);
 
   if (def.use_lbx) {
     const manifest = await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json");

@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Animated troops in Age theme battles: each of the 27 troop types marches while it moves
+  and plays a four-frame attack when it shoots or strikes (made with Nano Banana from the
+  troop's own picture).
+- Age theme pictures for the rest of the game, made with Nano Banana:
+  - the siege screen: a besieged city for each of the 14 kinds of land, a foot soldier of
+    each empire and a fallen soldier;
+  - the Herald: the herald himself and an illuminated miniature for each of the 22 kinds of
+    news;
+  - audiences and messages take place in the empire's throne room;
+  - the Great Council meets in its hall.
+
+### Changed
+
+- Theme pictures load in the background instead of delaying the start of the game.
+
 ## [0.11.0] - 2026-10-22
 
 The race portraits of both themes painted again with Nano Banana.

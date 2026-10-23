@@ -83,8 +83,11 @@ export async function groundScreen(ctx: Ctx, e: GroundEvent): Promise<void> {
   document.body.append(overlay);
 
   const bg = theme.img(`landing/invade/${PLANET_TYPES.indexOf(p.kind ?? "terran")}`);
-  const soldier = (i: number) => theme.img(`ground/soldier/${RACES.indexOf(v.empires[i].race)}`);
+  const soldierAlias = (i: number) => `ground/soldier/${RACES.indexOf(v.empires[i].race)}`;
+  const soldier = (i: number) => theme.img(soldierAlias(i));
   const deathImg = theme.img("ground/death");
+  /** Painted pictures (not MOO1's pixel art) are drawn at a fixed height, smoothed. */
+  const painted = (alias: string) => !theme.pixel.has(alias);
   const world = theme.def.map !== "space";
   const left = [e.attacker, e.attackers];
   const right = [e.defender, e.defenders];
@@ -126,7 +129,12 @@ export async function groundScreen(ctx: Ctx, e: GroundEvent): Promise<void> {
       g.scale(-1, 1);
       x = 0;
     }
-    if (img) {
+    if (img && painted(soldierAlias(owner))) {
+      const hgt = 20;
+      const wid = (img.width / img.height) * hgt;
+      g.imageSmoothingEnabled = true;
+      g.drawImage(img, (x + 4 - wid / 2) * SCALE, (y + 16 - hgt) * SCALE, wid * SCALE, hgt * SCALE);
+    } else if (img) {
       g.drawImage(img, x * SCALE, y * SCALE, img.width * SCALE, img.height * SCALE);
     } else {
       const c = theme.banner(v.empires[owner].banner);
@@ -157,7 +165,12 @@ export async function groundScreen(ctx: Ctx, e: GroundEvent): Promise<void> {
       const [side, i] = fallen;
       let [x, y] = spot(i, side === 0 ? left[1] : right[1]);
       if (side === 1) x = 295 - x - 5;
-      if (deathImg) {
+      if (deathImg && painted("ground/death")) {
+        const wid = 18;
+        const hgt = (deathImg.height / deathImg.width) * wid;
+        g.imageSmoothingEnabled = true;
+        g.drawImage(deathImg, (x - 5) * SCALE, (y + 16 - hgt) * SCALE, wid * SCALE, hgt * SCALE);
+      } else if (deathImg) {
         const fw = Math.min(deathImg.width, 16);
         g.drawImage(deathImg, 0, 0, fw, deathImg.height, x * SCALE, y * SCALE, fw * SCALE, deathImg.height * SCALE);
       } else {

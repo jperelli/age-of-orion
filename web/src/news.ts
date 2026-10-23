@@ -62,7 +62,8 @@ export async function newscast(ctx: Ctx, items: NewsItem[]): Promise<void> {
     const gnn = theme.url("news/gnn");
     if (anchor || gnn) screen.append(h("img", { class: anchor ? "news-anchor" : "news-gnn", src: (anchor ?? gnn)!, alt: "" }));
   } else {
-    screen.append(h("div", { class: "news-masthead" }, t("news.masthead")));
+    const herald = theme.url("news/herald");
+    screen.append(h("div", { class: "news-masthead" }, herald ? h("img", { class: "news-herald-figure", src: herald, alt: "" }) : null, t("news.masthead")));
   }
   const icon = h("img", { class: "news-icon", alt: "" }) as HTMLImageElement;
   screen.append(icon);
@@ -76,8 +77,10 @@ export async function newscast(ctx: Ctx, items: NewsItem[]): Promise<void> {
   audio.play(TUNE.news);
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
-    const url = theme.url(`news/icon/${it.type}`);
+    const alias = `news/icon/${it.type}`;
+    const url = theme.url(alias);
     icon.style.display = url ? "" : "none";
+    icon.classList.toggle("painted", !theme.pixel.has(alias));
     if (url) icon.src = url;
     text.replaceChildren(
       h("p", {}, it.text),

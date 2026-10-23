@@ -268,6 +268,10 @@ tr.clickable:hover { background: rgba(0, 0, 0, 0.08); }
 .treaty-war, .treaty-final_war { color: var(--warn); font-weight: bold; }
 .treaty-alliance, .treaty-non_aggression { color: var(--good); }
 .audience-head { display: flex; gap: 0.8em; align-items: center; margin-bottom: 0.6em; }
+.audience-head.hall { background-size: cover; background-position: center; min-height: 190px; padding: 0.8em; border: 2px solid var(--border); border-radius: 4px; }
+.audience-head.hall > div:last-child { background: rgba(20, 12, 4, 0.72); color: #f5e7c6; padding: 0.4em 0.7em; border-radius: 4px; }
+.audience-head.hall .muted { color: #e0cfae; }
+.council-hall { display: block; width: 100%; aspect-ratio: 21 / 9; object-fit: cover; border: 2px solid var(--border); border-radius: 4px; margin-bottom: 0.4em; }
 .audience-log { max-height: 16em; overflow-y: auto; border: 1px solid var(--parchment-dark); border-radius: 4px; padding: 0.4em 0.6em; background: rgba(0, 0, 0, 0.06); }
 .audience-log p { margin: 0.35em 0; }
 .say-them { font-style: italic; }
@@ -356,4 +360,6 @@ label.checkbox { display: block; margin-top: 0.8em; }
 .news-herald .news-screen { flex: none; }
 .news-herald .news-masthead { font-size: 1.6em; font-weight: bold; color: var(--accent); letter-spacing: 0.08em; border-bottom: 2px solid var(--border); margin-bottom: 0.4em; }
 .news-herald .news-icon { width: 64px; image-rendering: pixelated; }
+.news-herald .news-icon.painted { width: 260px; image-rendering: auto; border: 2px solid var(--border); border-radius: 3px; }
+.news-herald-figure { height: 88px; vertical-align: middle; margin-right: 0.3em; }
 .news-ranking { columns: 2; margin: 0.3em 0 0; }

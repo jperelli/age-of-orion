@@ -22,7 +22,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image
 
-from subjects import ARMS_P, FIELDS, MARKS, PORTRAITS_AGE, PORTRAITS_CLASSIC, RACES, ROCKS, SPECIAL, UNITS, VIEWS
+from subjects import (ARMS_P, COUNCIL, FALLEN, FIELDS, HALLS, HERALD, MARKS, NEWS, PORTRAITS_AGE, PORTRAITS_CLASSIC,
+                      RACES, ROCKS, SIEGES, SOLDIERS, SPECIAL, UNITS, VIEWS)
 
 MODEL = os.environ.get("MODEL", "gemini-nano-banana-2.1")
 OUT = os.environ.get("OUT", "/tmp/art/gemini")
@@ -53,6 +54,26 @@ PORTRAIT_CLASSIC = ("A painted head-and-shoulders portrait of {}, the ruler of a
                     "Painted science fiction illustration, dramatic lighting, a starship bridge in the background, "
                     "in the same painting style as the reference portrait (only its style, not its face). No text, no frame.")
 NOT_CHRISTIAN = {"mrrshan", "silicoid", "sakkra", "psilon", "klackon"}
+SIEGE = ("A wide painted background for the siege screen of a medieval strategy game, seen from the side: in the "
+         "middle distance the walls, gate and towers of a besieged medieval city; in front, {}, an empty open "
+         "battlefield where two armies will meet in the lower half of the picture. Oil painting, overcast "
+         "dramatic light, no people, no text, no frame.")
+SOLDIER = ("{}. Full body, standing in profile facing to the right, ready to fight. Painted medieval concept art "
+           "for a strategy game sprite, in the same painting style as the reference image. " + WHITE)
+NEWS_PIC = ("A medieval illuminated manuscript miniature showing {}. Rich colours, gold leaf, a simple coloured "
+            "background, in the same style as the reference image, no text, no letters, no frame or border.")
+# Animated battle troops: four frames of the troop in its own approved picture, in a 2x2 grid.
+ANIM = ("Four animation frames of exactly the troop in the reference image, {}, arranged in a 2 by 2 grid of "
+        "four equal cells read left to right, top to bottom. The same figures, colours, equipment, size and "
+        "position in every cell, facing to the right, each cell holding the whole troop once. Plain pure white "
+        "background, no grid lines, no borders, no captions, no text, no numbers.")
+ANIMS = {
+    "march": "marching to the right in a walk cycle: only legs, arms and weapons move from frame to frame",
+    "attack": "attacking: frame 1 readying their weapons, frame 2 striking or loosing, frame 3 following "
+              "through, frame 4 recovering to their guard",
+}
+HALL = ("{}, seen from the entrance, an empty throne at the far end, no people. Painted medieval interior, warm "
+        "torchlight, oil painting, no text, no frame.")
 
 # name -> (prompt, aspect ratio, reference picture or None)
 jobs: dict[str, tuple[str, str, str | None]] = {}
@@ -71,6 +92,25 @@ for k, p in MARKS.items():
 for k, p in ARMS_P.items():
     jobs[f"arms-{k}"] = (ARMS.format(p), "1:1", None if k == "human" else "arms-human")
 
+
+for k, p in SIEGES.items():
+    jobs[f"siege-{k}"] = (SIEGE.format(p), "16:9", None)
+for k, p in SOLDIERS.items():
+    jobs[f"soldier-{k}"] = (SOLDIER.format(p[0].upper() + p[1:]), "3:4", "unit-13")
+jobs["fallen"] = (SOLDIER.format(FALLEN[0].upper() + FALLEN[1:]).replace("standing in profile facing to the right, ready to fight", "lying on the ground"), "4:3", "unit-13")
+jobs["herald"] = (SOLDIER.format(HERALD[0].upper() + HERALD[1:]).replace(", ready to fight", ""), "3:4", "unit-13")
+for k, p in NEWS.items():
+    jobs[f"news-{k}"] = (NEWS_PIC.format(p), "4:3", None if k == "plague" else "news-plague")
+for k, p in HALLS.items():
+    jobs[f"hall-{k}"] = (HALL.format(p[0].upper() + p[1:]), "16:9", None)
+jobs["council"] = (HALL.format(COUNCIL[0].upper() + COUNCIL[1:]).replace(", an empty throne at the far end, no people", ""), "16:9", None)
+
+for i in range(len(UNITS)):
+    for a, p in ANIMS.items():
+        jobs[f"anim-{i:02}-{a}"] = (ANIM.format(p), "4:3", f"unit-{i:02}")
+for k in SPECIAL:
+    for a, p in ANIMS.items():
+        jobs[f"anim-{k}-{a}"] = (ANIM.format(p), "4:3", f"unit-{k}")
 
 # Race portraits go to OUT/portraits as <theme>-<n>-<race>-s<TRY>.png, for finish_portraits.py.
 for i, r in enumerate(RACES):
@@ -121,7 +161,7 @@ def main() -> None:
     only = sys.argv[1:]
     todo = [n for n in jobs if (not only or any(n.startswith(o) for o in only)) and not os.path.exists(f"{OUT}/{n}-s{TRY}.png")]
     # References first, then everything else in parallel.
-    for ref in ("unit-13", "mark-castle", "arms-human", "portraits/age-0-human", "portraits/classic-0-human"):
+    for ref in ("unit-13", "mark-castle", "arms-human", "news-plague", "portraits/age-0-human", "portraits/classic-0-human"):
         if ref in todo:
             print(generate(ref), flush=True)
             todo.remove(ref)

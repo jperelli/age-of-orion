@@ -43,6 +43,23 @@ function portrait(ctx: Ctx, id: number): HTMLElement {
     : h("div", { class: "crest big", style: `--banner:${ctx.theme.banner(e.banner)}` });
 }
 
+/** The envoy's portrait and name, in front of the empire's throne room when the theme has one. */
+function audienceHead(ctx: Ctx, id: number): HTMLElement {
+  const hall = ctx.theme.url(`hall/${RACES.indexOf(ctx.view().empires[id].race)}`);
+  return h(
+    "div",
+    { class: hall ? "audience-head hall" : "audience-head", style: hall ? `background-image: url("${hall}")` : "" },
+    portrait(ctx, id),
+    h("div", {}, h("b", {}, ctx.view().empires[id].leader), h("div", { class: "muted" }, empireName(ctx, id))),
+  );
+}
+
+/** The Great Council's hall, when the theme has one. */
+function councilHall(ctx: Ctx): HTMLElement | null {
+  const url = ctx.theme.url("council/hall");
+  return url ? h("img", { class: "council-hall", src: url, alt: "" }) : null;
+}
+
 function offerText(ctx: Ctx, bc: number, tech: TechRef | null): string {
   const t = tr(ctx);
   if (tech) return techRefName(ctx, tech);
@@ -331,7 +348,7 @@ function audience(ctx: Ctx, ai: number): Promise<number> {
   };
 
   main();
-  const head = h("div", { class: "audience-head" }, portrait(ctx, ai), h("div", {}, h("b", {}, ctx.view().empires[ai].leader), h("div", { class: "muted" }, empireName(ctx, ai))));
+  const head = audienceHead(ctx, ai);
   return modal(t("audience.title", { race: empireName(ctx, ai) }), [head, log, menu], [t("audience.goodbye")], "wide audience");
 }
 
@@ -364,7 +381,7 @@ async function messages(ctx: Ctx): Promise<void> {
 
 async function showMessage(ctx: Ctx, m: Incoming): Promise<{ accept: boolean; pick: TechRef | null }> {
   const t = tr(ctx);
-  const head = h("div", { class: "audience-head" }, portrait(ctx, m.from), h("div", {}, h("b", {}, ctx.view().empires[m.from].leader), h("div", { class: "muted" }, empireName(ctx, m.from))));
+  const head = audienceHead(ctx, m.from);
   const text = h("p", { class: "say-them" }, msgText(ctx, m.kind, m.from, m.params));
   const title = t("audience.from", { race: empireName(ctx, m.from) });
   if (!m.needs_answer) {
@@ -450,7 +467,7 @@ async function council(ctx: Ctx): Promise<void> {
       .map((e) => h("tr", {}, h("td", {}, empireName(ctx, e.id)), h("td", {}, t("council.votes", { n: el!.votes[e.id] ?? 0 }))));
     const r = await modal(
       t("council.title"),
-      [h("p", {}, t("council.text", { a: name(a), b: name(b), need: Math.floor(((el.total + 1) * 2) / 3), total: el.total })), h("table", { class: "list" }, ...rows), h("p", {}, t("council.your_votes", { n: el.votes[v.player] ?? 0 }))],
+      [councilHall(ctx), h("p", {}, t("council.text", { a: name(a), b: name(b), need: Math.floor(((el.total + 1) * 2) / 3), total: el.total })), h("table", { class: "list" }, ...rows), h("p", {}, t("council.your_votes", { n: el.votes[v.player] ?? 0 }))],
       [t("council.vote_for", { race: empireName(ctx, a) }), t("council.vote_for", { race: empireName(ctx, b) }), t("council.abstain")],
       "wide",
     );
@@ -462,7 +479,7 @@ async function council(ctx: Ctx): Promise<void> {
       const elected = res.elected as number | null;
       await modal(
         t("council.title"),
-        h("p", {}, t(elected === null ? "council.nobody" : "council.elected", { a: name(a), b: name(b), va: got[0], vb: got[1], winner: elected === null ? "" : name(elected) })),
+        [councilHall(ctx), h("p", {}, t(elected === null ? "council.nobody" : "council.elected", { a: name(a), b: name(b), va: got[0], vb: got[1], winner: elected === null ? "" : name(elected) }))],
         [t("btn.ok")],
       );
     }
@@ -470,7 +487,7 @@ async function council(ctx: Ctx): Promise<void> {
   v = ctx.view();
   el = v.election;
   if (el?.awaiting_acceptance && el.elected !== null) {
-    const r = await modal(t("council.title"), h("p", {}, t("council.accept_text", { winner: name(el.elected) })), [t("council.accept"), t("council.refuse")]);
+    const r = await modal(t("council.title"), [councilHall(ctx), h("p", {}, t("council.accept_text", { winner: name(el.elected) }))], [t("council.accept"), t("council.refuse")]);
     ctx.command({ type: "accept_council", accept: r !== 1 });
   }
 }

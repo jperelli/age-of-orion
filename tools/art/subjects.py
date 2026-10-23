@@ -125,3 +125,75 @@ PORTRAITS_CLASSIC = {
     "meklar": "cyborg robot alien, metal face with glowing blue optics, cables, not human",
     "darlok": "shapeshifter alien spy with dark grey skin, black hood, glowing white eyes, not human",
 }
+
+# Siege screen (ground battles): the land in front of a besieged city, by kind of land.
+SIEGES = {
+    "not_habitable": "a mountain pass below snowy peaks",
+    "radiated": "a blighted plain of grey ash and burnt tree stumps",
+    "toxic": "a foggy swamp with dead trees",
+    "inferno": "a volcanic plain with smoking cracks and black rocks",
+    "dead": "red eroded badlands",
+    "tundra": "a frozen snowy plain",
+    "barren": "bare stony hills",
+    "minimal": "dry scrubland",
+    "desert": "a sandy desert with dunes",
+    "steppe": "an open grassy steppe",
+    "arid": "a golden savanna with acacia trees",
+    "ocean": "a sea shore with the sea beside the walls",
+    "jungle": "a jungle clearing among huge trees",
+    "terran": "green farmland with fields and hedges",
+}
+# A foot soldier of each empire for the siege screen, by race order.
+SOLDIERS = {
+    "human": "a German imperial foot soldier in mail and a kettle hat with a spear and a heater shield bearing a black eagle on gold",
+    "mrrshan": "a Mongol warrior in lamellar armour and a fur-trimmed helmet with a sabre and a small round shield",
+    "silicoid": "a Ghurid infantryman in mail with a turban wrapped around his helmet, a spear and a round shield",
+    "sakkra": "a Khmer soldier with a bare chest, a gold collar, a spear and a round shield",
+    "psilon": "an Abbasid soldier in black robes and mail with a lance and a round shield",
+    "alkari": "a Danish huscarl with a long Dane axe, a nasal helmet and a round shield painted with a raven",
+    "klackon": "a Song dynasty Chinese infantryman in black lacquered lamellar armour with a halberd",
+    "bulrathi": "a Bulgar warrior with a bear fur cloak, a conical helmet and a spear",
+    "meklar": "a Byzantine infantryman with a long oval shield, a scale coat and a spear",
+    "darlok": "a Venetian crossbowman in a red tunic and a sallet helmet with a crossbow",
+}
+FALLEN = "a fallen medieval soldier lying on the ground on his side, his shield and spear dropped beside him"
+HERALD = "a medieval herald in a colourful quartered tabard reading a proclamation from an unrolled scroll"
+# The Herald's pictures of the news (1oom GAME_NEWS_* types), as illuminated manuscript miniatures.
+NEWS = {
+    "plague": "the plague in a medieval town, the sick in their beds and a doctor",
+    "quake": "an earthquake bringing down the houses and towers of a medieval town",
+    "nova": "a volcano erupting above a medieval town",
+    "accident": "a great fire in the workshops of a medieval town, black smoke over the fields",
+    "assassin": "an envoy stabbed by an assassin in a palace hall",
+    "virus": "a great library on fire, scholars carrying books out",
+    "comet": "a great flood sweeping over fields and villages, people building dikes",
+    "pirates": "bandits ambushing a merchant caravan on a road through a forest",
+    "derelict": "soldiers discovering an abandoned armoury full of weapons",
+    "rebellion": "peasants in revolt storming the gate of a town with pitchforks and torches",
+    "crystal": "mercenaries under a red and gold striped banner sacking a town",
+    "amoeba": "a mercenary company in black and white plundering a village",
+    "enviro": "a rich harvest, peasants reaping golden wheat under a kind sun",
+    "rich": "miners finding a rich vein of silver ore in a mountain",
+    "support": "merchants presenting chests of gold coins to a king",
+    "poor": "miners leaving an exhausted mine with empty carts",
+    "orion": "settlers entering the ruined columned palace of Persepolis",
+    "coup": "nobles seizing the throne in a palace coup, the old king led away",
+    "stars": "a great empire's banners raised over many cities on a map",
+    "stats": "a herald announcing a ranking of kingdoms to a crowd in a town square",
+    "genocide": "a burning capital and its fallen banner, the end of an empire",
+    "guardian": "knights defeating the Persian Immortals among ancient columns",
+}
+# Throne rooms behind the envoys of each empire, by race order.
+HALLS = {
+    "human": "the throne hall of the Holy Roman Emperor in a Romanesque imperial palace, round arches, the black eagle on gold banners",
+    "mrrshan": "the great felt tent of a Mongol khan with a golden throne, carpets, furs and horsehair standards",
+    "silicoid": "the stone throne hall of a Ghurid sultan in a mountain fortress, carved brick arches and lapis tiles",
+    "sakkra": "the throne hall of a Khmer king at Angkor, carved sandstone pillars, naga balustrades and parasols",
+    "psilon": "the audience hall of the Abbasid caliph in Baghdad, a domed hall with arches, books and black banners",
+    "alkari": "the timber great hall of a Danish king, carved pillars, a long hearth, shields and raven banners",
+    "klackon": "the throne hall of a Song emperor, red lacquered columns, a dragon throne and painted screens",
+    "bulrathi": "the stone throne hall of a Bulgar khan at Pliska, heavy columns, furs and torches",
+    "meklar": "the golden throne hall of the Byzantine emperor in Constantinople, mosaics, purple curtains and golden automaton lions",
+    "darlok": "the Hall of the Great Council in the Doge's Palace in Venice, gilded ceiling, paintings and candles",
+}
+COUNCIL = "a great medieval council hall where envoys of many nations sit in a half circle under their banners before an empty throne"

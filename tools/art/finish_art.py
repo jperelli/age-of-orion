@@ -1,6 +1,6 @@
 """Turns the chosen pictures of gen_art.py into Age theme pictures.
 
-    python tools/art/finish_art.py SRC_DIR...
+    [ONLY=prefix,...] python tools/art/finish_art.py SRC_DIR...
 
 The SRC_DIRs hold `<name>-s<seed>.png` (gen_gemini.py numbers its tries 1, 2...; gen_art.py
 uses its seeds); when several exist, PICK names the one to use, else the lowest wins. Landscapes are resized; sprites (units, rocks, markers, arms) are
@@ -19,8 +19,11 @@ from PIL import Image, ImageFilter
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 THEME = os.path.join(ROOT, "web/public/themes/age")
 RACES = ["human", "mrrshan", "silicoid", "sakkra", "psilon", "alkari", "klackon", "bulrathi", "meklar", "darlok"]
+PLANET_TYPES = ["not_habitable", "radiated", "toxic", "inferno", "dead", "tundra", "barren", "minimal", "desert", "steppe", "arid", "ocean", "jungle", "terran"]
+# 1oom GAME_NEWS_* numbers (web/src/news.ts).
+NEWS_TYPES = ["", "plague", "quake", "nova", "accident", "assassin", "virus", "comet", "pirates", "derelict", "rebellion", "crystal", "amoeba", "enviro", "rich", "support", "poor", "orion", "coup", "stars", "stats", "genocide", "guardian"]
 # Seed chosen for a picture when several were made (default: the lowest seed).
-PICK: dict[str, int] = {}
+PICK: dict[str, int] = {"anim-01-attack": 2, "anim-06-march": 2, "anim-16-attack": 2, "anim-23-march": 3}
 
 
 def alias_of(name: str) -> tuple[str, str, str]:
@@ -41,34 +44,44 @@ def alias_of(name: str) -> tuple[str, str, str]:
         return alias, f"images/map/{key}.webp", "mark"
     if kind == "arms":
         return f"arms/{RACES.index(key)}", f"images/arms/{key}.webp", "arms"
+    if kind == "siege":
+        return f"landing/invade/{PLANET_TYPES.index(key)}", f"images/siege/{key}.webp", "siege"
+    if kind == "soldier":
+        return f"ground/soldier/{RACES.index(key)}", f"images/ground/{key}.webp", "soldier"
+    if name == "fallen":
+        return "ground/death", "images/ground/fallen.webp", "soldier"
+    if name == "herald":
+        return "news/herald", "images/news/herald.webp", "soldier"
+    if kind == "news":
+        return f"news/icon/{NEWS_TYPES.index(key)}", f"images/news/{key}.webp", "vignette"
+    if kind == "hall":
+        return f"hall/{RACES.index(key)}", f"images/hall/{key}.webp", "hall"
+    if name == "council":
+        return "council/hall", "images/hall/council.webp", "hall"
     raise ValueError(name)
 
 
 def holes(mask: np.ndarray, min_area: int) -> np.ndarray:
     """The connected regions of `mask` of at least `min_area` pixels (background seen through
-    gaps, such as between legs)."""
+    gaps, such as between legs), labelled by spreading the smallest index through each region."""
     h, w = mask.shape
-    seen = np.zeros_like(mask)
-    out = np.zeros_like(mask)
-    for y0, x0 in zip(*np.nonzero(mask)):
-        if seen[y0, x0]:
-            continue
-        region, todo = [], [(y0, x0)]
-        seen[y0, x0] = True
-        while todo:
-            y, x = todo.pop()
-            region.append((y, x))
-            for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
-                if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not seen[ny, nx]:
-                    seen[ny, nx] = True
-                    todo.append((ny, nx))
-        if len(region) >= min_area:
-            ys, xs = zip(*region)
-            out[list(ys), list(xs)] = True
-    return out
+    big = h * w
+    lab = np.where(mask, np.arange(big).reshape(h, w), big)
+    while True:
+        new = lab.copy()
+        new[1:, :] = np.minimum(new[1:, :], lab[:-1, :])
+        new[:-1, :] = np.minimum(new[:-1, :], lab[1:, :])
+        new[:, 1:] = np.minimum(new[:, 1:], lab[:, :-1])
+        new[:, :-1] = np.minimum(new[:, :-1], lab[:, 1:])
+        new = np.where(mask, new, big)
+        if (new == lab).all():
+            break
+        lab = new
+    sizes = np.bincount(lab[mask], minlength=big + 1)
+    return mask & (sizes[lab] >= min_area)
 
 
-def cut_out(im: Image.Image, gaps: bool = True) -> Image.Image:
+def cut_out(im: Image.Image, gaps: bool = True, crop: bool = True) -> Image.Image:
     """Removes the plain background around a sprite: grey pixels reached from the borders
     through smooth steps (so gradients and vignettes go too), and big grey holes seen through
     gaps (not for coats of arms: their white fields are inside an outline). The bottom strip is
@@ -99,7 +112,23 @@ def cut_out(im: Image.Image, gaps: bool = True) -> Image.Image:
     out = im.convert("RGBA")
     out.putalpha(alpha)
     box = alpha.point(lambda v: 255 if v > 24 else 0).getbbox()
-    return out.crop(box) if box else out
+    return out.crop(box) if box and crop else out
+
+
+def sheet_frames(im: Image.Image) -> list[Image.Image]:
+    """The four frames of a 2x2 animation sheet, cut out and cropped to the box that holds
+    all of them, so the troop keeps its place from frame to frame."""
+    im = im.convert("RGB")
+    w, h = im.width // 2, im.height // 2
+    m = round(min(w, h) * 0.03)  # the model sometimes draws grid lines between the cells
+    cells = [im.crop((x * w + m, y * h + m, (x + 1) * w - m, (y + 1) * h - m)) for y in (0, 1) for x in (0, 1)]
+    for c in cells:
+        c.thumbnail((480, 480), Image.LANCZOS)
+    frames = [cut_out(c, crop=False) for c in cells]
+    boxes = [f.getchannel("A").point(lambda v: 255 if v > 24 else 0).getbbox() for f in frames]
+    boxes = [b for b in boxes if b]
+    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+    return [f.crop(box) for f in frames]
 
 
 def trim(im: Image.Image, k: float = 0.05) -> Image.Image:
@@ -129,16 +158,36 @@ def main(srcs: list[str]) -> None:
             if m:
                 found.setdefault(m[1], {})[int(m[2])] = os.path.join(src, name)
     images = {}
+    only = [o for o in os.environ.get("ONLY", "").split(",") if o]  # name prefixes, to redo a few
     for name in sorted(found):
+        if only and not any(name.startswith(o) for o in only):
+            continue
         seeds = found[name]
         im = Image.open(seeds[PICK.get(name, min(seeds))])
+        if name.startswith("anim-"):
+            # anim-<troop>-<march|attack>: frames unit/<look>/<kind>/<n> of the troop's picture
+            _, key, anim = name.split("-")
+            unit = f"unit/{int(key) if key.isdigit() else key}"
+            for n, frame in enumerate(sheet_frames(im)):
+                path = f"images/unit/{key}-{anim}{n}.webp"
+                fit(frame, 192, 144).save(os.path.join(THEME, path), "WEBP", quality=80, method=6)
+                images[f"{unit}/{anim}/{n}"] = path
+            continue
         alias, path, kind = alias_of(name)
-        if kind not in ("view", "field"):
+        if kind not in ("view", "field", "siege", "vignette", "hall"):
             im.thumbnail((640, 640), Image.LANCZOS)  # far above the sizes shown, and quick to cut out
         if kind == "view":
             im = cover(trim(im.convert("RGB")), 768, 384)
         elif kind == "field":
             im = cover(trim(im.convert("RGB")), 800, 480)
+        elif kind == "siege":
+            im = cover(trim(im.convert("RGB"), 0.02), 640, 400)
+        elif kind == "vignette":
+            im = cover(trim(im.convert("RGB"), 0.02), 400, 300)
+        elif kind == "hall":
+            im = cover(trim(im.convert("RGB"), 0.02), 960, 540)
+        elif kind == "soldier":
+            im = fit(cut_out(im), 240, 240)
         elif kind in ("unit", "rock"):
             im = fit(cut_out(im), 192, 144)
         elif kind == "mark":
