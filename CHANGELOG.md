@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-24
+
 ### Added
 
 - The Classic theme has pictures and music of its own, so it no longer needs MOO1's files:
@@ -24,8 +26,8 @@ All notable changes to this project are documented here. The format follows
     news;
   - audiences and messages take place in the empire's throne room;
   - the Great Council meets in its hall.
-- A planet window, opened by clicking the planet's picture in the side panel: its land (in
-  Classic, MOO1's own colonization scene when imported), the ships of every empire in orbit
+- A planet window, opened by clicking the planet's picture in the side panel: its land (the
+  colonization scene in Classic, the place's view in Age), the ships of every empire in orbit
   with their pictures and numbers, and its population, factories, waste, bases and shield as
   rows of icons, faded up to the planet's maximum.
 - A technology tree, from the Tech screen: one branch per field with the techs discovered
@@ -95,8 +97,7 @@ All notable changes to this project are documented here. The format follows
   MOO1's own star pictures when STARMAP.LBX is imported again.
 - The ship design screen follows MOO1's: the ship's picture with arrows to choose another, and
   the four hull sizes as buttons with their pictures; the designs list shows each ship's
-  picture. Without MOO1's ship pictures, Classic draws six different ship shapes per hull
-  size instead of one.
+  picture; Classic has six ship pictures of its own per hull size, in each empire's colour.
 - Cities and planets are easier to click: the map picks the nearest one within a larger radius.
 
 ### Fixed
@@ -483,7 +484,8 @@ First playable version.
 - CI (fmt, clippy, tests, web and desktop builds), tag-driven releases and GitHub Pages
   deployment.
 
-[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/jperelli/age-of-orion/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/jperelli/age-of-orion/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/jperelli/age-of-orion/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/jperelli/age-of-orion/compare/v0.8.0...v0.9.0
