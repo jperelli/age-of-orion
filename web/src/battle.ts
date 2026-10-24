@@ -889,7 +889,7 @@ class BattleScreen {
     } else if (img) c.drawImage(img, (CW - img.width) / 2, (CH - img.height) / 2);
     else if (it.design === null) this.drawMonster(c, it);
     else if (this.world) drawTroop(c, it.hull, color);
-    else drawShip(c, it.hull, color);
+    else drawShip(c, it.hull, color, it.look % 6);
     c.restore();
     if (it.stasisby) {
       c.fillStyle = "rgba(150,220,255,0.35)";
@@ -1012,8 +1012,19 @@ function beamColor(tech: number, world: boolean): string {
 }
 
 /** A spaceship silhouette by hull size (facing right), in a 32x24 cell. */
-export function drawShip(c: CanvasRenderingContext2D, hull: number, color: string): void {
+/** Six ship silhouettes (nose to the right), one per picture of a hull size (MOO1 has six). */
+const SHIP_SHAPES: number[][] = [
+  [14, 0, -8, -8, -4, -2, -13, -4, -13, 4, -4, 2, -8, 8],
+  [14, 0, -12, -9, -8, 0, -12, 9],
+  [12, 0, 6, -6, -6, -7, -12, -3, -12, 3, -6, 7, 6, 6],
+  [14, -2, 2, -9, -12, -9, -12, -4, -4, 0, -12, 4, -12, 9, 2, 9, 14, 2],
+  [15, 0, 0, -3, -6, -10, -10, -10, -6, -2, -13, -2, -13, 2, -6, 2, -10, 10, -6, 10, 0, 3],
+  [12, -3, 8, -7, -10, -7, -13, -3, -13, 3, -10, 7, 8, 7, 12, 3],
+];
+
+export function drawShip(c: CanvasRenderingContext2D, hull: number, color: string, variant = 0): void {
   const s = [0.45, 0.62, 0.8, 1][hull] ?? 0.6;
+  const shape = SHIP_SHAPES[variant % SHIP_SHAPES.length];
   c.save();
   c.translate(16, 12);
   c.scale(s, s);
@@ -1021,13 +1032,8 @@ export function drawShip(c: CanvasRenderingContext2D, hull: number, color: strin
   c.strokeStyle = "#0b0b0b";
   c.lineWidth = 1.2;
   c.beginPath();
-  c.moveTo(14, 0);
-  c.lineTo(-8, -8);
-  c.lineTo(-4, -2);
-  c.lineTo(-13, -4);
-  c.lineTo(-13, 4);
-  c.lineTo(-4, 2);
-  c.lineTo(-8, 8);
+  c.moveTo(shape[0], shape[1]);
+  for (let i = 2; i < shape.length; i += 2) c.lineTo(shape[i], shape[i + 1]);
   c.closePath();
   c.fill();
   c.stroke();

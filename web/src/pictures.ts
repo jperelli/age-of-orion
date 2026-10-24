@@ -13,7 +13,7 @@ export function designPicture(theme: Theme, look: number, hull: number, banner: 
   const own = theme.url(world ? `unit/${look % 24}` : `ship/${banner * 24 + (look % 24)}`);
   if (own) return own;
   const color = theme.banner(banner);
-  const key = `${world}/${hull}/${color}`;
+  const key = `${world}/${hull}/${look % 6}/${color}`;
   let url = drawn.get(key);
   if (!url) {
     const c = document.createElement("canvas");
@@ -22,7 +22,7 @@ export function designPicture(theme: Theme, look: number, hull: number, banner: 
     const g = c.getContext("2d")!;
     g.scale(2, 2);
     if (world) drawTroop(g, hull, color);
-    else drawShip(g, hull, color);
+    else drawShip(g, hull, color, look % 6);
     url = c.toDataURL();
     drawn.set(key, url);
   }

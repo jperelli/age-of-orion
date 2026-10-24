@@ -236,7 +236,7 @@ export class GameScreen {
       const name = this.empireName(p.owner);
       rows.push([
         this.t("planet.owner"),
-        h("span", { class: "owner" }, this.arms(p.owner), explained(name, name, [this.t(`race.${e.race}.trait`), ...raceLines(this.theme, e.race, this.theme.mod?.rules)])),
+        h("span", { class: "owner" }, this.arms(p.owner), explained(name, name, this.raceInfo(e.race))),
       ]);
       if (!long) {
         rows.push([this.t("planet.pop"), `${p.pop}${mine ? ` / ${p.max_pop}` : ""}`]);
@@ -252,6 +252,13 @@ export class GameScreen {
     if (p.stargate) rows.push([this.t("planet.stargate"), this.t("planet.stargate_yes")]);
     if (!mine) rows.push([this.t("planet.distance"), p.range > 900 ? "-" : this.t("planet.parsecs", { n: p.range })]);
     return rows;
+  }
+
+  /** A race's summary, then what it does in the rules (without repeating the summary). */
+  private raceInfo(race: EmpireView["race"]): string[] {
+    const trait = this.t(`race.${race}.trait`);
+    const lines = raceLines(this.theme, race, this.theme.mod?.rules);
+    return lines.includes(trait) ? lines : [trait, ...lines];
   }
 
   private facts(rows: [string, string | number | HTMLElement][]): HTMLElement {

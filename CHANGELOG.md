@@ -61,7 +61,8 @@ All notable changes to this project are documented here. The format follows
   MOO1's own star pictures when STARMAP.LBX is imported again.
 - The ship design screen follows MOO1's: the ship's picture with arrows to choose another, and
   the four hull sizes as buttons with their pictures; the designs list shows each ship's
-  picture.
+  picture. Without MOO1's ship pictures, Classic draws six different ship shapes per hull
+  size instead of one.
 - Cities and planets are easier to click: the map picks the nearest one within a larger radius.
 
 ## [0.11.0] - 2026-10-22
