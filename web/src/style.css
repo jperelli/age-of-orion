@@ -138,23 +138,30 @@ input[type="range"] { accent-color: var(--accent); }
 
 /* ------------------------------------------------------------ game */
 .game { display: flex; flex-direction: column; height: 100%; }
-.topbar {
+/* MOO1's button bar, at the bottom (GAME, DESIGN, FLEET, MAP, RACES, PLANETS, TECH, NEXT TURN). */
+.bottombar {
   display: flex;
+  gap: 0.4em;
+  padding: 0.4em 0.6em;
+  background: var(--wood);
+  border-top: 3px solid var(--border);
+}
+.bottombar button { flex: 1; min-width: 0; padding: 0.45em 0.3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bottombar .end-turn { flex: 1.4; }
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1em;
-  padding: 0.4em 0.8em;
+  gap: 0.2em 0.6em;
+  padding: 0.45em 0.8em;
   background: var(--wood);
   color: #f5e7c6;
   border-bottom: 3px solid var(--border);
-  flex-wrap: wrap;
 }
-:root[data-theme="classic"] .topbar { color: var(--ink); }
-.topbar .stats { display: flex; gap: 1.2em; flex-wrap: wrap; flex: 1; align-items: baseline; }
-.topbar .stats b { color: var(--gold); font-size: 1.15em; }
-.topbar .stats span { white-space: nowrap; }
-:root[data-moofonts] .topbar .stats { font-size: 18px; gap: 0.2em 1em; }
-:root[data-moofonts] .topbar .stats b { font-family: var(--title-font); font-size: 20px; }
-.topbar nav { display: flex; gap: 0.4em; flex-wrap: wrap; }
+:root[data-theme="classic"] .panel-head { color: var(--ink); }
+.panel-head .year { color: var(--gold); font-size: 1.3em; }
+.panel-head .stats { display: flex; flex-direction: column; width: 100%; font-size: 0.85em; }
+:root[data-moofonts] .panel-head .year { font-family: var(--title-font); font-size: 20px; }
 .crest { width: 26px; height: 32px; background: var(--banner); clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%); border: 2px solid #000; flex: none; }
 .crest.big { width: 48px; height: 60px; }
 .main { flex: 1; display: flex; min-height: 0; }
@@ -162,12 +169,13 @@ canvas.map { flex: 1; min-width: 0; width: 100%; height: 100%; display: block; c
 .panel {
   width: 330px;
   flex: none;
-  overflow-y: auto;
-  padding: 0.8em 1em;
+  display: flex;
+  flex-direction: column;
   background: var(--parchment);
   border-left: 3px solid var(--border);
   box-shadow: inset 6px 0 12px rgba(0, 0, 0, 0.15);
 }
+.panel-body { flex: 1; overflow-y: auto; padding: 0.8em 1em; }
 .panel h2 { margin: 0.1em 0; color: var(--accent); }
 .panel h3 { margin: 1em 0 0.4em; border-bottom: 1px solid var(--parchment-dark); }
 .planet-head { display: flex; gap: 0.8em; align-items: center; }
@@ -200,8 +208,33 @@ table.facts td { text-align: right; }
 .panel select { width: 100%; }
 .panel button { margin-top: 0.4em; }
 .fleet-box { border: 1px solid var(--parchment-dark); border-radius: 4px; padding: 0.4em; margin: 0.3em 0; }
-.ship-row { display: grid; grid-template-columns: 1fr 5em 3em; gap: 0.4em; align-items: center; margin: 0.15em 0; }
-.ship-row input { width: 100%; padding: 0.1em 0.3em; }
+.ship-row { display: grid; grid-template-columns: 52px 1fr auto; gap: 0.4em; align-items: center; margin: 0.2em 0; }
+.ship-pic { width: 52px; height: 39px; object-fit: contain; display: block; }
+.ship-name { font-size: 0.9em; }
+.ship-count { display: flex; align-items: center; gap: 0.25em; white-space: nowrap; }
+.ship-count .step { width: 1.6em; padding: 0; margin: 0; }
+.ship-count b { min-width: 1.6em; text-align: center; cursor: pointer; font-variant-numeric: tabular-nums; }
+.opens { cursor: zoom-in; }
+.opens:hover { filter: brightness(1.08); outline: 2px solid var(--accent); }
+/* The planet window (clicking the picture in the side panel). */
+.planet-window { display: grid; grid-template-columns: 1.3fr 1fr; gap: 0.8em; align-items: start; }
+.window-picture { width: 100%; aspect-ratio: 2 / 1; object-fit: cover; border: 2px solid var(--border); border-radius: 4px; }
+.planet-pic.window-picture { height: auto; object-fit: contain; background: #000; }
+.window-side ul { margin: 0 0 0.4em; padding-left: 1.1em; }
+.window-stat { margin: 0.35em 0; }
+.icon-row { display: flex; flex-wrap: wrap; gap: 1px; margin-top: 0.15em; }
+.icon-row img { width: 22px; height: 22px; object-fit: contain; }
+.icon-row img.room { opacity: 0.25; filter: grayscale(1); }
+.window-fleet { margin: 0.4em 0; }
+.window-ships { display: flex; flex-wrap: wrap; gap: 0.6em; }
+.window-ship { text-align: center; width: 92px; }
+.window-ship img { width: 88px; height: 66px; object-fit: contain; display: block; }
+table.list.fleets td { vertical-align: middle; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: rgba(0, 0, 0, 0.06); }
+.fleet-chip { display: inline-flex; align-items: center; gap: 0.15em; margin-right: 0.5em; font-weight: bold; }
+.fleet-chip img { width: 40px; height: 30px; object-fit: contain; }
+@media (max-width: 700px) { .planet-window { grid-template-columns: 1fr; } }
 .enemy { color: var(--warn); }
 .targeting { background: var(--accent); color: #fff; padding: 0.5em; border-radius: 4px; margin-bottom: 0.6em; }
 .targeting p { margin: 0 0 0.3em; }
@@ -259,6 +292,40 @@ tr.clickable:hover { background: rgba(0, 0, 0, 0.08); }
 .menu-options .sliders { min-width: 18em; font-size: 0.9em; }
 .menu-options .slider-row { grid-template-columns: 10em 1.5em minmax(5em, 1fr) 1.5em 3em; }
 .menu-options .slider-row label { display: block; }
+/* MOO1's TECH screen: known techs on the left, research sliders on the right. */
+.tech-screen { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; align-items: start; }
+.tech-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3em; }
+.tech-fields button { padding: 0.3em 0.2em; font-size: 0.9em; }
+.tech-level { margin: 0.4em 0 0.2em; }
+.tech-list { list-style: none; margin: 0; padding: 0.3em; max-height: 15em; overflow-y: auto; border: 2px solid var(--border); border-radius: 4px; background: rgba(0, 0, 0, 0.06); }
+.tech-list li { padding: 0.1em 0.3em; cursor: pointer; border-radius: 3px; }
+.tech-list li:hover { background: rgba(0, 0, 0, 0.08); }
+.tech-list li.selected { background: var(--parchment-dark); }
+.tech-list li.current { color: var(--accent); font-weight: bold; }
+.tech-desc { margin-top: 0.4em; min-height: 6em; border: 1px solid var(--parchment-dark); border-radius: 4px; padding: 0.2em 0.4em; }
+.tech-right .slider-row { grid-template-columns: 8.5em 1.5em minmax(4em, 1fr) 1.5em 5em; }
+.tech-project { display: grid; grid-template-columns: 1fr auto; gap: 0 0.5em; align-items: center; margin: -0.1em 0 0.5em 0.3em; font-size: 0.85em; cursor: pointer; }
+.tech-project .progress { grid-column: 1 / -1; height: 6px; }
+.tech-project button { margin: 0; }
+.tree-button { margin-top: 0.5em; width: 100%; }
+.tech-total { font-weight: bold; text-align: right; margin: 0.3em 0; }
+.tech-choices { display: grid; gap: 0.4em; max-height: 60vh; overflow-y: auto; }
+.tech-choice { display: grid; grid-template-columns: 1fr auto; gap: 0.5em; align-items: center; border-bottom: 1px solid var(--parchment-dark); }
+.tree-wrap { display: grid; grid-template-columns: 1fr 17em; gap: 0.8em; align-items: start; }
+.tree-wrap .tech-desc { margin-top: 0; }
+@media (max-width: 800px) { .tree-wrap { grid-template-columns: 1fr; } }
+.tech-tree { overflow: auto; max-height: 62vh; border: 2px solid var(--border); border-radius: 4px; background: rgba(0, 0, 0, 0.05); }
+.tech-tree-svg { display: block; font-family: var(--font); font-size: 11px; }
+.tech-tree-svg .tier { fill: var(--muted); font-size: 10px; }
+.tech-tree-svg .lane { fill: var(--accent); font-weight: bold; font-size: 12px; }
+.tech-tree-svg .trunk { stroke: var(--border); stroke-width: 3; }
+.tech-tree-svg .branch { stroke: var(--border); stroke-width: 1.5; fill: none; }
+.tech-tree-svg .node rect { fill: var(--parchment); stroke: var(--border); stroke-width: 1.5; }
+.tech-tree-svg .node text { fill: var(--ink); }
+.tech-tree-svg .node { cursor: pointer; }
+.tech-tree-svg .node:hover rect { fill: var(--parchment-dark); }
+.tech-tree-svg .node.current rect { stroke: var(--accent); stroke-dasharray: 4 3; }
+@media (max-width: 800px) { .tech-screen { grid-template-columns: 1fr; } }
 .tech-card { margin: 0.25em 0 0.35em; padding: 0.3em 0.5em; border-left: 3px solid var(--parchment-dark); }
 .tech-card.current { border-left-color: var(--accent); }
 .tech-card .effects { margin: 0.15em 0 0; padding-left: 1.2em; font-size: 0.9em; columns: 1; }

@@ -87,6 +87,8 @@ pub struct FleetView {
     pub ships: Vec<u32>,
     /// Design names of the owner, for enemy fleets.
     pub names: Vec<String>,
+    /// Picture (`look`) and hull size of each design of the owner, to draw any fleet's ships.
+    pub looks: Vec<(u8, u8)>,
     pub speed: i32,
     pub range: i32,
     /// The player can change its destination (own fleet still at its planet, or
@@ -331,6 +333,12 @@ pub fn view(st: &State, me: EmpireId) -> View {
         .collect();
 
     let names = |o: &Empire| o.designs.iter().map(|d| d.name.clone()).collect::<Vec<_>>();
+    let looks = |o: &Empire| {
+        o.designs
+            .iter()
+            .map(|d| (d.look, d.hull))
+            .collect::<Vec<_>>()
+    };
     let mut fleets = Vec::new();
     for (ei, other) in st.empires.iter().enumerate() {
         for (pi, o) in other.orbit.iter().enumerate() {
@@ -355,6 +363,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
                     eta: None,
                     ships: o.clone(),
                     names: names(other),
+                    looks: looks(other),
                     speed: st.fleet_speed(ei as u8, o),
                     range: crate::commands::fleet_range(st, ei as u8, o),
                     redirect: false,
@@ -378,6 +387,7 @@ pub fn view(st: &State, me: EmpireId) -> View {
                 }),
                 ships: f.ships.clone(),
                 names: names(&st.empires[f.owner as usize]),
+                looks: looks(&st.empires[f.owner as usize]),
                 speed: f.speed,
                 range: crate::commands::fleet_range(st, f.owner, &f.ships),
                 redirect: f.owner == me

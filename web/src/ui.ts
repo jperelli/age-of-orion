@@ -29,7 +29,9 @@ export function clear(el: HTMLElement): HTMLElement {
 }
 
 /** Shows a modal dialog; resolves with the index of the button pressed (-1 on Escape). */
-export function modal(title: string, body: Child | Child[], buttons: string[] = ["OK"], cls = ""): Promise<number> {
+/** A dialog; resolves with the index of the button pressed (-1: Escape). `onOpen` gets a way
+ * to close it from inside its body, as if button `i` had been pressed. */
+export function modal(title: string, body: Child | Child[], buttons: string[] = ["OK"], cls = "", onOpen?: (close: (i: number) => void) => void): Promise<number> {
   return new Promise((resolve) => {
     const close = (i: number) => {
       document.removeEventListener("keydown", onKey);
@@ -55,6 +57,7 @@ export function modal(title: string, body: Child | Child[], buttons: string[] = 
     );
     document.body.append(overlay);
     overlay.querySelector<HTMLButtonElement>(".dialog-buttons button")?.focus();
+    onOpen?.(close);
   });
 }
 

@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image
 
-from subjects import (ARMS_P, COUNCIL, FALLEN, FIELDS, HALLS, HERALD, MARKS, NEWS, PORTRAITS_AGE, PORTRAITS_CLASSIC,
+from subjects import (ARMS_P, COUNCIL, FALLEN, FIELDS, HALLS, HERALD, ICONS, MARKS, NEWS, PORTRAITS_AGE, PORTRAITS_CLASSIC,
                       RACES, ROCKS, SIEGES, SOLDIERS, SPECIAL, UNITS, VIEWS)
 
 MODEL = os.environ.get("MODEL", "gemini-nano-banana-2.1")
@@ -112,6 +112,12 @@ for k in SPECIAL:
     for a, p in ANIMS.items():
         jobs[f"anim-{k}-{a}"] = (ANIM.format(p), "4:3", f"unit-{k}")
 
+ICON = ("{}. A small painted icon for a strategy game, simple and readable at a small size, in the same style "
+        "as the reference image. " + WHITE)
+for theme, icons in ICONS.items():
+    for k, p in icons.items():
+        jobs[f"icon-{theme}-{k}"] = (ICON.format(p[0].upper() + p[1:]), "1:1", None if k == "pop" else f"icon-{theme}-pop")
+
 # Race portraits go to OUT/portraits as <theme>-<n>-<race>-s<TRY>.png, for finish_portraits.py.
 for i, r in enumerate(RACES):
     extra = " No Christian crosses." if r in NOT_CHRISTIAN else ""
@@ -127,6 +133,8 @@ def generate(name: str) -> str:
     prompt, aspect, ref = jobs[name]
     parts: list[dict] = [{"text": prompt}]
     if ref and ref != name:
+        if not os.path.exists(ref_path(ref)):
+            return f"{name}: no reference picture {ref} yet"
         with open(ref_path(ref), "rb") as f:
             parts.append({"inlineData": {"mimeType": "image/png", "data": base64.b64encode(f.read()).decode()}})
     body = {"contents": [{"parts": parts}], "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": aspect}}}
@@ -161,7 +169,8 @@ def main() -> None:
     only = sys.argv[1:]
     todo = [n for n in jobs if (not only or any(n.startswith(o) for o in only)) and not os.path.exists(f"{OUT}/{n}-s{TRY}.png")]
     # References first, then everything else in parallel.
-    for ref in ("unit-13", "mark-castle", "arms-human", "news-plague", "portraits/age-0-human", "portraits/classic-0-human"):
+    for ref in ("unit-13", "mark-castle", "arms-human", "news-plague", "icon-age-pop", "icon-classic-pop",
+                "portraits/age-0-human", "portraits/classic-0-human"):
         if ref in todo:
             print(generate(ref), flush=True)
             todo.remove(ref)

@@ -197,3 +197,21 @@ HALLS = {
     "darlok": "the Hall of the Great Council in the Doge's Palace in Venice, gilded ceiling, paintings and candles",
 }
 COUNCIL = "a great medieval council hall where envoys of many nations sit in a half circle under their banners before an empty throne"
+
+# Icons repeated in the city window to show how much of something a place has, per theme.
+ICONS = {
+    "age": {
+        "pop": "a medieval peasant standing with a hoe",
+        "factory": "a small medieval timber workshop with a smoking chimney",
+        "waste": "a heap of refuse and soot with a wisp of dark smoke",
+        "base": "a small round stone defence tower with a pointed roof",
+        "shield": "a short piece of crenellated stone city wall",
+    },
+    "classic": {
+        "pop": "a space colonist in a blue jumpsuit and helmet",
+        "factory": "a small futuristic factory building with chimneys",
+        "waste": "a leaking barrel of glowing green toxic waste",
+        "base": "a small missile base with a missile on its launcher",
+        "shield": "a glowing blue energy shield dome",
+    },
+}

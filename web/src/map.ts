@@ -11,7 +11,23 @@ export function cityLevel(pop: number): number {
 /** Pictures of a city by `cityLevel` (the Age theme's map and battle markers). */
 export const CITY_MARKS = ["mark/village", "mark/town", "mark/castle"];
 
-export type Selection = { kind: "planet"; id: number } | { kind: "fleet"; id: number } | { kind: "transport"; id: number } | null;
+export type Selection =
+  | { kind: "planet"; id: number }
+  | { kind: "fleet"; id: number }
+  | { kind: "transport"; id: number }
+  /** Ships of `owner` in orbit of planet `id`. */
+  | { kind: "orbit"; id: number; owner: number }
+  | null;
+
+/** Turns to travel from (x, y) to a planet at `speed` (the map's estimate). */
+export function etaTurns(from: { x: number; y: number }, to: { x: number; y: number }, speed: number): number {
+  return Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (11 * Math.max(1, speed))));
+}
+
+/** Where the marker of the `i`-th fleet in orbit of a planet is drawn. */
+function orbitSpot(p: { x: number; y: number }, i: number): [number, number] {
+  return [p.x + 5 + i * 3.5, p.y - 2 + i * 3];
+}
 
 export interface Targeting {
   from: { x: number; y: number };
@@ -25,6 +41,12 @@ export interface Targeting {
   ranges?: boolean;
   /** Label next to a valid target; `null` shows the travel time. */
   label?: (planet: number) => string | null;
+  /** The destination chosen so far (MOO1's fleet orders wait for Accept). */
+  dest?: number | null;
+  /** The side panel explains the choice itself (no generic prompt). */
+  inline?: boolean;
+  /** What the choice is for (the panel keeps it while it shows the same thing). */
+  key?: string;
 }
 
 const BIOME: Record<PlanetType, string> = {
@@ -142,6 +164,12 @@ export class MapView {
     this.dirty = true;
   }
 
+  /** Shows the whole map (MOO1's MAP button). */
+  showAll(): void {
+    this.fit();
+    this.dirty = true;
+  }
+
   private fit(): void {
     const v = this.view;
     if (!v || !this.sized) return;
@@ -166,10 +194,17 @@ export class MapView {
     if (!v) return null;
     const [mx, my] = this.toMap(sx, sy);
     const near = (x: number, y: number, px: number) => Math.hypot(x - mx, y - my) * this.zoom < px;
-    const f = v.fleets.find((f) => f.id !== null && f.owner === v.player && near(f.x, f.y, 10));
-    if (f && f.id !== null && !this.targeting) return { kind: "fleet", id: f.id };
-    const tr = v.transports.find((t) => t.owner === v.player && near(t.x, t.y, 10));
-    if (tr && !this.targeting) return { kind: "transport", id: tr.id };
+    if (!this.targeting) {
+      const f = v.fleets.find((f) => f.id !== null && f.owner === v.player && near(f.x, f.y, 10));
+      if (f && f.id !== null) return { kind: "fleet", id: f.id };
+      const tr = v.transports.find((t) => t.owner === v.player && near(t.x, t.y, 10));
+      if (tr) return { kind: "transport", id: tr.id };
+      for (const p of v.planets) {
+        const here = v.fleets.filter((f) => f.at === p.id);
+        const i = here.findIndex((_, i) => near(...orbitSpot(p, i), 9));
+        if (i >= 0) return { kind: "orbit", id: p.id, owner: here[i].owner };
+      }
+    }
     let best: number | null = null;
     let bd = Infinity;
     for (const p of v.planets) {
@@ -381,6 +416,7 @@ export class MapView {
     for (const m of v.monsters ?? []) this.drawMonster(m);
     this.drawSelection(v);
     this.drawLabels(v);
+    if (this.targeting?.dest != null && this.targeting.dest !== this.hover) this.drawTargetLine(v, this.targeting.dest);
     if (this.targeting && this.hover !== null) this.drawTargetLine(v, this.hover);
   }
 
@@ -755,7 +791,7 @@ export class MapView {
   private drawOrbit(v: View, id: number): void {
     const p = v.planets[id];
     const here = v.fleets.filter((f) => f.at === id);
-    here.forEach((f, i) => this.drawFleet(v, f, p.x + 5 + i * 3.5, p.y - 2 + i * 3));
+    here.forEach((f, i) => this.drawFleet(v, f, ...orbitSpot(p, i)));
   }
 
   private drawFleet(v: View, f: FleetView, x: number, y: number): void {
@@ -829,7 +865,12 @@ export class MapView {
     if (!s) return;
     let x: number, y: number;
     if (s.kind === "planet") ({ x, y } = v.planets[s.id]);
-    else {
+    else if (s.kind === "orbit") {
+      const p = v.planets[s.id];
+      const i = v.fleets.filter((f) => f.at === s.id).findIndex((f) => f.owner === s.owner);
+      if (i < 0) return;
+      [x, y] = orbitSpot(p, i);
+    } else {
       const f = s.kind === "fleet" ? v.fleets.find((f) => f.id === s.id) : v.transports.find((t) => t.id === s.id);
       if (!f) return;
       ({ x, y } = f);
@@ -839,7 +880,7 @@ export class MapView {
     ctx.strokeStyle = "#ffe9a8";
     ctx.lineWidth = this.px(2);
     ctx.beginPath();
-    ctx.arc(x, y, this.px(16 + Math.sin(t) * 2), 0, Math.PI * 2);
+    ctx.arc(x, y, this.px((s.kind === "orbit" ? 9 : 16) + Math.sin(t) * 2), 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -872,7 +913,7 @@ export class MapView {
     ctx.moveTo(t.from.x, t.from.y);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
-    const eta = Math.max(1, Math.ceil(Math.hypot(p.x - t.from.x, p.y - t.from.y) / (11 * t.speed)));
+    const eta = etaTurns(t.from, p, t.speed);
     const label = ok ? (t.label?.(id) ?? this.theme.t("map.eta", { turns: eta })) : this.theme.t("map.out_of_range");
     ctx.font = `bold ${this.px(13)}px sans-serif`;
     ctx.textAlign = "left";

@@ -1,17 +1,19 @@
-// The in-game screen: top bar, map, side panel and dialogs.
+// The in-game screen, laid out like MOO1's: the map, the side panel and the button bar at the
+// bottom (GAME, DESIGN, FLEET, MAP, RACES, PLANETS, TECH, NEXT TURN).
 import { battleScreen } from "./battle";
 import type { Ctx } from "./ctx";
 import { designDialog } from "./designer";
 import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefName } from "./diplomacy";
 import type { Game } from "./engine";
 import { groundScreen, isGroundScreen } from "./ground";
-import { MapView, cityLevel } from "./map";
+import { MapView, cityLevel, etaTurns } from "./map";
+import { designPicture, iconRow } from "./pictures";
 import { newscast, newsType } from "./news";
 import { adjustGroup, slider, sliders } from "./sliders";
-import { needsChoice, researchDialog } from "./research";
+import { chooseTechs, needsChoice, techScreen } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
-import { BUILD_STARGATE, FIELDS, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
+import { BUILD_STARGATE, FIELDS, PLANET_TYPES, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
 import { append, clear, download, h, modal, pickFiles, toast } from "./ui";
 
 export const AUTOSAVE = "autosave";
@@ -21,7 +23,10 @@ export class GameScreen {
   private view: View;
   private map: MapView;
   private panel: HTMLElement;
+  private head: HTMLElement;
   private bar: HTMLElement;
+  /** Ships chosen in the fleet deployment panel, by design (MOO1's FLEET DEPLOYMENT). */
+  private deploy: { key: string; ships: number[] } | null = null;
   private keyHandler = (e: KeyboardEvent) => this.onKey(e);
 
   constructor(
@@ -32,9 +37,10 @@ export class GameScreen {
   ) {
     this.view = game.view();
     const canvas = h("canvas", { class: "map" });
-    this.bar = h("header", { class: "topbar" });
-    this.panel = h("aside", { class: "panel" });
-    this.el = h("div", { class: `game theme-${theme.def.id}` }, this.bar, h("div", { class: "main" }, canvas, this.panel));
+    this.bar = h("footer", { class: "bottombar" });
+    this.head = h("div", { class: "panel-head" });
+    this.panel = h("div", { class: "panel-body" });
+    this.el = h("div", { class: `game theme-${theme.def.id}` }, h("div", { class: "main" }, canvas, h("aside", { class: "panel" }, this.head, this.panel)), this.bar);
     this.map = new MapView(canvas, theme);
     this.map.onSelect = () => this.renderPanel();
     this.map.setView(this.view);
@@ -95,37 +101,39 @@ export class GameScreen {
     if (document.querySelector(".overlay") || (e.target as HTMLElement)?.tagName === "INPUT") return;
     if (e.key === "Escape" && this.map.targeting) {
       this.map.targeting = null;
+      if (this.map.selection?.kind === "orbit") this.map.selection = { kind: "planet", id: this.map.selection.id };
       this.renderPanel();
     } else if (e.key === "Enter") {
       void this.endTurn();
     }
   }
 
-  // ------------------------------------------------------------- top bar
+  // ------------------------------------------------------------- bottom bar
 
   private renderBar(): void {
     const v = this.view;
     const me = v.empires[v.player];
-    clear(this.bar).append(
+    clear(this.head).append(
       h("div", { class: "crest", style: `--banner:${this.theme.banner(me.banner)}` }),
+      h("b", { class: "year" }, this.t("game.year", { year: v.year })),
       h(
         "div",
         { class: "stats" },
-        h("b", {}, this.t("game.year", { year: v.year })),
         h("span", { title: this.t("game.production_hint") }, this.t("game.production", { bc: v.total_prod - v.maintenance, maint: v.maintenance })),
         h("span", {}, this.t("game.research", { rp: v.research })),
         h("span", {}, this.t("game.reserve", { bc: v.reserve })),
       ),
-      h(
-        "nav",
-        {},
-        h("button", { onclick: () => this.openResearch() }, this.t("game.btn.research")),
-        h("button", { onclick: () => this.openDesigner() }, this.t("game.btn.design")),
-        h("button", { onclick: () => this.empireDialog() }, this.t("game.btn.empire")),
-        h("button", { class: this.view.messages.length ? "attention" : "", onclick: () => this.rivalsDialog() }, this.t("game.btn.rivals")),
-        h("button", { onclick: () => this.menuDialog() }, this.t("game.btn.menu")),
-        h("button", { class: "primary end-turn", onclick: () => this.endTurn() }, this.t("game.btn.end_turn")),
-      ),
+    );
+    const button = (key: string, onclick: () => void, cls = "") => h("button", { class: cls, onclick }, this.t(key));
+    clear(this.bar).append(
+      button("game.btn.menu", () => void this.menuDialog()),
+      button("game.btn.design", () => void this.openDesigner()),
+      button("game.btn.fleets", () => void this.fleetsDialog()),
+      button("game.btn.map", () => this.map.showAll()),
+      button("game.btn.rivals", () => void this.rivalsDialog(), v.messages.length ? "attention" : ""),
+      button("game.btn.empire", () => this.empireDialog()),
+      button("game.btn.research", () => void this.openResearch()),
+      button("game.btn.end_turn", () => void this.endTurn(), "primary end-turn"),
     );
   }
 
@@ -134,17 +142,32 @@ export class GameScreen {
   private renderPanel(): void {
     const s = this.map.selection;
     clear(this.panel);
-    if (this.map.targeting) {
+    if (this.map.targeting && !this.map.targeting.inline) {
       this.panel.scrollTop = 0;
       append(this.panel, 
         h("div", { class: "targeting" }, h("p", {}, this.map.targeting.prompt ?? this.t("game.choose_destination")), h("button", { onclick: () => ((this.map.targeting = null), this.renderPanel()) }, this.t("btn.cancel"))),
       );
     }
+    if (s?.kind !== "orbit" && s?.kind !== "fleet") this.deploy = null;
+    // Fleet orders belong to the fleet shown; anything else selected drops them.
+    const own = s?.kind === "orbit" ? `orbit/${s.id}` : s?.kind === "fleet" ? `fleet/${s.id}` : null;
+    if (this.map.targeting?.key && this.map.targeting.key !== own) this.map.targeting = null;
     if (s?.kind === "planet") this.planetPanel(this.view.planets[s.id]);
-    else if (s?.kind === "fleet") {
+    else if (s?.kind === "orbit") {
+      const f = this.view.fleets.find((f) => f.at === s.id && f.owner === s.owner);
+      if (f) this.orbitPanel(f);
+      else {
+        this.map.targeting = null;
+        this.map.selection = { kind: "planet", id: s.id };
+        this.planetPanel(this.view.planets[s.id]);
+      }
+    } else if (s?.kind === "fleet") {
       const f = this.view.fleets.find((f) => f.id === s.id);
       if (f) this.fleetPanel(f);
-      else this.overviewPanel();
+      else {
+        this.map.targeting = null;
+        this.overviewPanel();
+      }
     } else if (s?.kind === "transport") {
       const tr = this.view.transports.find((t) => t.id === s.id);
       if (tr) this.transportPanel(tr);
@@ -211,9 +234,15 @@ export class GameScreen {
     if (p.stargate) rows.push([this.t("planet.stargate"), this.t("planet.stargate_yes")]);
     if (!mine) rows.push([this.t("planet.distance"), p.range > 900 ? "-" : this.t("planet.parsecs", { n: p.range })]);
     const view = this.placeView(p);
+    const pic = view ?? this.planetPicture(p);
+    if (p.explored) {
+      pic.classList.add("opens");
+      pic.title = this.t("planet.open_window");
+      pic.addEventListener("click", () => void this.planetWindow(p));
+    }
     append(this.panel, 
       view,
-      h("div", { class: "planet-head" }, view ? null : this.planetPicture(p), h("div", {}, h("h2", {}, p.name), p.orion ? h("div", { class: "muted" }, this.t("planet.orion")) : null)),
+      h("div", { class: "planet-head" }, view ? null : pic, h("div", {}, h("h2", {}, p.name), p.orion ? h("div", { class: "muted" }, this.t("planet.orion")) : null)),
       h("table", { class: "facts" }, ...rows.map(([k, val]) => h("tr", {}, h("th", {}, k), h("td", {}, val)))),
     );
     if (!p.explored) append(this.panel, h("p", { class: "muted" }, this.t("planet.unexplored")));
@@ -222,7 +251,7 @@ export class GameScreen {
       append(this.panel, h("p", { class: p.colonizable ? "good" : "muted" }, this.t(p.colonizable ? "planet.can_colonize" : "planet.needs_tech")));
     }
     if (mine && p.colony) this.colonyControls(p);
-    this.orbitControls(p);
+    if (v.fleets.some((f) => f.at === p.id)) append(this.panel, h("p", { class: "muted small" }, this.t("orbit.select_hint")));
   }
 
   private colonyControls(p: PlanetView): void {
@@ -344,80 +373,158 @@ export class GameScreen {
     };
   }
 
-  private orbitControls(p: PlanetView): void {
+  /** A fleet's ships, one row per design with its picture and count. */
+  private shipRows(f: FleetView, chosen?: number[], onChange?: (i: number, n: number) => void): HTMLElement {
     const v = this.view;
-    const here = v.fleets.filter((f) => f.at === p.id);
-    if (!here.length) return;
-    append(this.panel, h("h3", {}, this.t("orbit.title")));
-    for (const f of here) {
-      if (f.owner !== v.player) {
-        append(this.panel, h("p", { class: "enemy" }, `${this.empireName(f.owner)}: ${this.shipsLine(f)}`));
-        continue;
-      }
-      const inputs = f.ships.map((n) => h("input", { type: "number", min: 0, max: n, value: n }));
-      const rows = f.ships
-        .map((n, i) =>
-          n > 0 ? h("div", { class: "ship-row" }, h("label", {}, this.designName(f, i)), inputs[i], h("span", { class: "muted" }, `/ ${n}`)) : null,
-        )
-        .filter(Boolean) as HTMLElement[];
-      const chosen = () => inputs.map((inp, i) => Math.max(0, Math.min(f.ships[i], Math.floor(Number(inp.value) || 0))));
-      const scrap = () => {
-        const ships = chosen();
-        if (ships.some((n) => n > 0) && window.confirm(this.t("orbit.scrap_confirm", { ships: this.shipsLine({ ...f, ships }) }))) {
-          this.command({ type: "scrap_ships", planet: p.id, ships });
-        }
-      };
-      const send = () => {
-        const ships = chosen();
-        if (!ships.some((n) => n > 0)) return;
-        const { range, speed } = this.fleetLimits(ships);
-        this.map.targeting = {
-          from: p,
-          range,
-          speed,
-          label: (id) => (p.stargate && v.planets[id].stargate && v.planets[id].owner === v.player ? this.t("map.via_stargate") : null),
-          ok: (id) => id !== p.id && v.planets[id].range <= range,
-          pick: (to) => {
-            this.map.targeting = null;
-            this.command({ type: "send_fleet", from: p.id, to, ships });
-          },
-        };
-        this.renderPanel();
-      };
-      append(
-        this.panel,
-        h(
-          "div",
-          { class: "fleet-box" },
-          ...rows,
-          h("div", { class: "row" }, h("button", { class: "primary", onclick: send }, this.t("orbit.send")), h("button", { onclick: scrap }, this.t("orbit.scrap"))),
-        ),
-      );
-    }
+    const banner = v.empires[f.owner].banner;
+    const rows = f.ships.map((n, i) => {
+      if (n <= 0) return null;
+      const [look, hull] = f.looks[i] ?? [0, 0];
+      const pic = h("img", { class: "ship-pic", src: designPicture(this.theme, look, hull, banner), alt: "" });
+      const count = chosen ? chosen[i] : n;
+      const counter = onChange
+        ? h(
+            "span",
+            { class: "ship-count" },
+            h("button", { class: "mini step", disabled: count <= 0, onclick: (e: Event) => onChange(i, (e as MouseEvent).shiftKey ? 0 : count - 1) }, "−"),
+            h("b", { title: this.t("orbit.all_none"), onclick: () => onChange(i, count === n ? 0 : n) }, `${count}`),
+            h("button", { class: "mini step", disabled: count >= n, onclick: (e: Event) => onChange(i, (e as MouseEvent).shiftKey ? n : count + 1) }, "+"),
+            h("span", { class: "muted small" }, `/ ${n}`),
+          )
+        : h("b", { class: "ship-count" }, `${n}`);
+      return h("div", { class: "ship-row" }, pic, h("span", { class: "ship-name" }, this.designName(f, i)), counter);
+    });
+    return h("div", { class: "fleet-box" }, ...rows);
   }
 
+  /** MOO1's fleet deployment: choose how many of each ship, a destination on the map, Accept. */
+  private orbitPanel(f: FleetView): void {
+    const v = this.view;
+    const p = v.planets[f.at!];
+    append(this.panel, h("h2", {}, this.t("orbit.title")), h("p", { class: "muted" }, p.name));
+    if (f.owner !== v.player) {
+      append(this.panel, h("p", { class: "enemy" }, this.empireName(f.owner)), this.shipRows(f));
+      return;
+    }
+    const key = `orbit/${p.id}/${f.ships.join(",")}`;
+    if (this.deploy?.key !== key) this.deploy = { key, ships: [...f.ships] };
+    const ships = this.deploy.ships;
+    const any = ships.some((n) => n > 0);
+    const limits = any ? this.fleetLimits(ships) : { range: 0, speed: 1 };
+    const t = this.map.targeting;
+    const dest = t?.dest ?? null;
+    if (!t || t.key !== `orbit/${p.id}`) {
+      this.map.targeting = {
+        key: `orbit/${p.id}`,
+        from: p,
+        inline: true,
+        dest: null,
+        range: limits.range,
+        speed: limits.speed,
+        label: (id) => (p.stargate && v.planets[id].stargate && v.planets[id].owner === v.player ? this.t("map.via_stargate") : null),
+        ok: (id) => id !== p.id && v.planets[id].range <= limits.range,
+        pick: (to) => {
+          this.map.targeting!.dest = to;
+          this.renderPanel();
+        },
+      };
+    } else {
+      t.range = limits.range;
+      t.speed = limits.speed;
+      t.ok = (id) => id !== p.id && v.planets[id].range <= limits.range;
+      if (dest !== null && !t.ok(dest)) t.dest = null;
+    }
+    const target = this.map.targeting!.dest ?? null;
+    const gate = target !== null && p.stargate && v.planets[target].stargate && v.planets[target].owner === v.player;
+    const eta = target !== null ? (gate ? 1 : etaTurns(p, v.planets[target], limits.speed)) : 0;
+    const change = (i: number, n: number) => {
+      ships[i] = Math.max(0, Math.min(f.ships[i], n));
+      this.renderPanel();
+    };
+    const close = () => {
+      this.map.targeting = null;
+      this.deploy = null;
+      this.map.selection = { kind: "planet", id: p.id };
+      this.renderPanel();
+    };
+    const scrap = () => {
+      if (any && window.confirm(this.t("orbit.scrap_confirm", { ships: this.shipsLine({ ...f, ships }) }))) {
+        this.map.targeting = null;
+        this.command({ type: "scrap_ships", planet: p.id, ships: [...ships] });
+      }
+    };
+    const accept = () => {
+      if (!any || target === null) return;
+      this.map.targeting = null;
+      this.deploy = null;
+      this.map.selection = { kind: "planet", id: p.id };
+      if (!this.command({ type: "send_fleet", from: p.id, to: target, ships: [...ships] })) this.map.selection = { kind: "orbit", id: p.id, owner: f.owner };
+    };
+    append(
+      this.panel,
+      this.shipRows(f, ships, change),
+      h("p", {}, target !== null ? this.t("orbit.destination", { planet: v.planets[target].name, turns: eta }) : this.t("orbit.choose_destination")),
+      any ? h("p", { class: "muted small" }, this.t("orbit.limits", { range: limits.range, speed: limits.speed })) : null,
+      h(
+        "div",
+        { class: "row" },
+        h("button", { class: "primary", disabled: !any || target === null, onclick: accept }, this.t("orbit.accept")),
+        h("button", { onclick: close }, this.t("btn.cancel")),
+        h("button", { class: "mini", disabled: !any, onclick: scrap }, this.t("orbit.scrap")),
+      ),
+    );
+  }
+
+  /** A fleet on its way: its ships, where it goes and, when allowed, a new destination. */
   private fleetPanel(f: FleetView): void {
     const v = this.view;
     const dest = f.dest !== null ? v.planets[f.dest] : null;
     const { range, speed } = this.fleetLimits(f.ships);
-    append(this.panel, 
+    const t = this.map.targeting;
+    const target = t && t.key === `fleet/${f.id}` ? (t.dest ?? null) : null;
+    const accept = () => {
+      if (target === null) return;
+      this.map.targeting = null;
+      this.command({ type: "redirect_fleet", fleet: f.id!, to: target });
+    };
+    append(
+      this.panel,
       h("h2", {}, this.t("fleet.title")),
-      h("p", {}, this.shipsLine(f)),
+      this.shipRows(f),
       dest ? h("p", {}, this.t("fleet.heading", { planet: dest.name, turns: f.eta ?? 0 })) : null,
       f.redirect ? null : h("p", { class: "muted small" }, this.t("fleet.no_redirect")),
+    );
+    if (!f.redirect) return;
+    if (t && t.key === `fleet/${f.id}`) {
+      append(
+        this.panel,
+        h("p", {}, target !== null ? this.t("orbit.destination", { planet: v.planets[target].name, turns: etaTurns(f, v.planets[target], speed) }) : this.t("orbit.choose_destination")),
+        h(
+          "div",
+          { class: "row" },
+          h("button", { class: "primary", disabled: target === null, onclick: accept }, this.t("orbit.accept")),
+          h("button", { onclick: () => ((this.map.targeting = null), this.renderPanel()) }, this.t("btn.cancel")),
+        ),
+      );
+      return;
+    }
+    append(
+      this.panel,
       h(
         "button",
         {
-          disabled: !f.redirect,
           onclick: () => {
             this.map.targeting = {
+              key: `fleet/${f.id}`,
               from: f,
+              inline: true,
+              dest: null,
               range,
               speed,
-              ok: (id) => v.planets[id].range <= range,
+              ok: (id) => v.planets[id].range <= range && id !== f.dest,
               pick: (to) => {
-                this.map.targeting = null;
-                this.command({ type: "redirect_fleet", fleet: f.id!, to });
+                this.map.targeting!.dest = to;
+                this.renderPanel();
               },
             };
             this.renderPanel();
@@ -426,6 +533,92 @@ export class GameScreen {
         this.t("fleet.redirect"),
       ),
     );
+  }
+
+  /** MOO1's planet screen: the land, the ships in orbit and how much it has of everything. */
+  private async planetWindow(p: PlanetView): Promise<void> {
+    const v = this.view;
+    // Classic: MOO1's own picture of the planet's surface (its colonization scene), if imported.
+    const scene = this.theme.def.use_lbx && p.kind ? this.theme.url(`landing/colonize/${PLANET_TYPES.indexOf(p.kind)}`) : null;
+    const big = scene ? h("img", { class: "pixel", src: scene, alt: "" }) : (this.placeView(p) ?? this.planetPicture(p));
+    big.classList.add("window-picture");
+    const stat = (label: string, value: string | number, row: HTMLElement | null) =>
+      h("div", { class: "window-stat" }, h("div", {}, h("b", {}, label), " ", h("span", {}, String(value))), row);
+    const stats: HTMLElement[] = [];
+    if (p.owner !== null) {
+      const mine = p.owner === v.player;
+      const maxPop = mine ? (p.max_pop ?? 0) : 0;
+      const maxFact = mine ? (p.colony?.max_factories ?? 0) : 0;
+      // One icon per 5 people and per 10 factories (more per icon on big planets), faded up to the maximum.
+      const perFact = Math.max(10, Math.ceil(Math.max(p.factories ?? 0, maxFact) / 400) * 10);
+      stats.push(stat(this.t("planet.pop"), maxPop ? `${p.pop} / ${maxPop}` : (p.pop ?? 0), iconRow(this.theme, "pop", p.pop ?? 0, 5, maxPop)));
+      stats.push(stat(this.t("planet.factories"), maxFact ? `${p.factories} / ${maxFact}` : (p.factories ?? 0), iconRow(this.theme, "factory", p.factories ?? 0, perFact, maxFact)));
+      if (mine) stats.push(stat(this.t("planet.waste"), p.colony?.waste ?? 0, iconRow(this.theme, "waste", p.colony?.waste ?? 0, 2)));
+      stats.push(stat(this.t("planet.bases"), p.bases ?? 0, iconRow(this.theme, "base", p.bases ?? 0, 1)));
+      if (p.shield) stats.push(stat(this.t("planet.shield"), p.shield, iconRow(this.theme, "shield", p.shield, 5)));
+    } else if (p.kind) {
+      stats.push(stat(this.t("planet.max_pop"), p.max_pop ?? 0, iconRow(this.theme, "pop", 0, 5, p.max_pop ?? 0)));
+    }
+    const facts = [
+      p.kind ? `${this.t("planet.terrain")}: ${this.t(`planet.${p.kind}`)}` : null,
+      `${this.t("planet.region")}: ${this.t(`star.${p.star}`)}`,
+      p.special && p.special !== "normal" ? `${this.t("planet.special")}: ${this.t(`special.${p.special}`)}` : null,
+      p.growth && p.growth !== "normal" ? `${this.t("planet.growth")}: ${this.t(`growth.${p.growth}`)}` : null,
+      p.owner !== null ? `${this.t("planet.owner")}: ${this.empireName(p.owner)}` : null,
+    ].filter(Boolean) as string[];
+    const fleets = v.fleets.filter((f) => f.at === p.id);
+    const garrison = fleets.length
+      ? [
+          h("h3", {}, this.t("orbit.title")),
+          ...fleets.map((f) =>
+            h(
+              "div",
+              { class: "window-fleet" },
+              h("div", { class: "muted small" }, this.empireName(f.owner)),
+              h(
+                "div",
+                { class: "window-ships" },
+                ...f.ships.map((n, i) => {
+                  if (n <= 0) return null;
+                  const [look, hull] = f.looks[i] ?? [0, 0];
+                  const src = designPicture(this.theme, look, hull, v.empires[f.owner].banner);
+                  return h("div", { class: "window-ship", title: this.designName(f, i) }, h("img", { src, alt: "" }), h("b", {}, `× ${n}`), h("div", { class: "small" }, this.designName(f, i)));
+                }),
+              ),
+            ),
+          ),
+        ]
+      : [];
+    await modal(p.name, [h("div", { class: "planet-window" }, big, h("div", { class: "window-side" }, h("ul", { class: "muted small" }, ...facts.map((x) => h("li", {}, x))), ...stats)), ...garrison], [this.t("btn.close")], "wide");
+  }
+
+  /** MOO1's FLEET button: every fleet of the player, to find and select it on the map. */
+  private async fleetsDialog(): Promise<void> {
+    const v = this.view;
+    const mine = v.fleets.filter((f) => f.owner === v.player);
+    let picked: FleetView | null = null;
+    let close: (i: number) => void = () => {};
+    const rows = mine.map((f) => {
+      const where = f.at !== null ? this.t("fleets.at", { planet: v.planets[f.at].name }) : this.t("fleets.to", { planet: f.dest !== null ? v.planets[f.dest].name : "?", turns: f.eta ?? 0 });
+      return h(
+        "tr",
+        { class: "clickable", onclick: () => ((picked = f), close(0)) },
+        h("td", {}, where),
+        h(
+          "td",
+          {},
+          ...f.ships.map((n, i) => (n > 0 ? h("span", { class: "fleet-chip", title: this.designName(f, i) }, h("img", { src: designPicture(this.theme, f.looks[i]?.[0] ?? 0, f.looks[i]?.[1] ?? 0, v.empires[v.player].banner), alt: "" }), `${n}`) : null)),
+        ),
+      );
+    });
+    const body = mine.length ? h("table", { class: "list fleets" }, ...rows) : h("p", { class: "muted" }, this.t("fleets.none"));
+    await modal(this.t("fleets.title"), [h("p", { class: "muted small" }, this.t("fleets.hint")), body], [this.t("btn.close")], "wide", (c) => (close = c));
+    if (picked) {
+      const f = picked as FleetView;
+      this.map.selection = f.at !== null ? { kind: "orbit", id: f.at, owner: f.owner } : { kind: "fleet", id: f.id! };
+      this.map.centerOn(f.x, f.y);
+      this.renderPanel();
+    }
   }
 
   /** Transports in flight: where they go; with Hyperspace Communications, a new destination. */
@@ -536,7 +729,10 @@ export class GameScreen {
     if (await this.checkEnd()) return;
     await deliverMessages(this.ctx);
     await spyChances(this.ctx);
-    if (needsChoice(this.ctx)) await this.openResearch();
+    if (needsChoice(this.ctx)) {
+      await chooseTechs(this.ctx);
+      this.refresh();
+    }
   }
 
   /** Shows the end of the game; true when the player has to leave. */
@@ -635,7 +831,7 @@ export class GameScreen {
   // ------------------------------------------------------------- dialogs
 
   private async openResearch(): Promise<void> {
-    await researchDialog(this.ctx);
+    await techScreen(this.ctx);
     this.refresh();
   }
 

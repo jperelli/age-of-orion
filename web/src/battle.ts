@@ -1012,7 +1012,7 @@ function beamColor(tech: number, world: boolean): string {
 }
 
 /** A spaceship silhouette by hull size (facing right), in a 32x24 cell. */
-function drawShip(c: CanvasRenderingContext2D, hull: number, color: string): void {
+export function drawShip(c: CanvasRenderingContext2D, hull: number, color: string): void {
   const s = [0.45, 0.62, 0.8, 1][hull] ?? 0.6;
   c.save();
   c.translate(16, 12);
@@ -1039,7 +1039,7 @@ function drawShip(c: CanvasRenderingContext2D, hull: number, color: string): voi
 }
 
 /** A unit of soldiers under a banner; bigger hulls are bigger formations. */
-function drawTroop(c: CanvasRenderingContext2D, hull: number, color: string): void {
+export function drawTroop(c: CanvasRenderingContext2D, hull: number, color: string): void {
   const n = [2, 3, 4, 6][hull] ?? 3;
   const cols = Math.min(3, n);
   for (let i = 0; i < n; i++) {

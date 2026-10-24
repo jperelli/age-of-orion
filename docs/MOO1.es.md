@@ -28,7 +28,8 @@ mismos números aleatorios.
   los impuestos y la reserva, y el mantenimiento de naves y bases.
 - **Investigación**: el árbol de cada campo y la lista al azar de tecnologías que cada imperio
   puede investigar. También los costos, los intereses y los avances, y los niveles de campo,
-  que abaratan y achican las piezas de las naves.
+  que abaratan y achican las piezas de las naves. El proyecto de un campo se elige cuando no
+  tiene ninguno y no se puede cambiar hasta descubrirlo.
 - **Diseño de naves**: cada casco y cada pieza, con el costo, el espacio y los valores de
   combate de MOO1. Los cinco diseños iniciales cuestan 8, 14, 74, 65 y 570 BC, como en MOO1.
 - **Movimiento**: las distancias del mapa, las velocidades, el alcance de combustible y los
@@ -80,11 +81,21 @@ los primeros 39 turnos de la partida pequeña.
 
 ### Pantallas y presentación
 
-- **Interfaz**: nueva, no las pantallas de 320x200 de MOO1. Tiene un panel lateral, diálogos,
-  un mapa con zoom y atajos de teclado. Se mantienen los controles deslizantes de MOO1: − y +
-  a cada lado, y un clic en el nombre lo bloquea.
-- **Agregados**: la pantalla de investigación muestra exactamente qué da cada tecnología, con
-  sus números. También puedes cambiar el idioma y el tema, y cargar mods.
+- **Interfaz**: nueva, no las pantallas de 320x200 de MOO1, pero ordenada como ellas:
+  - el mapa con un panel lateral, y los botones de MOO1 abajo (Juego, Diseño, Flota, Mapa,
+    Razas, Planetas, Tecnología, Turno siguiente)
+  - las flotas reciben órdenes como en MOO1: clic en las naves junto a una estrella, cuántas
+    de cada una, clic en el destino y Aceptar
+  - la pantalla de Tecnología tiene a la izquierda las tecnologías conocidas de cada campo y a
+    la derecha los controles de investigación; el proyecto de una tecnología nueva se elige en
+    su propio diálogo
+  - los controles deslizantes de MOO1: − y + a cada lado, y un clic en el nombre lo bloquea
+  - a diferencia de MOO1, el mapa tiene zoom, hay atajos de teclado y los diálogos se adaptan
+    a la ventana
+- **Agregados**: la pantalla de Tecnología muestra exactamente qué da cada tecnología, con sus
+  números, y un árbol tecnológico de lo ya descubierto. Un clic en la imagen de un planeta abre
+  una ventana con su terreno, las naves en órbita y su población, fábricas, desechos y bases
+  dibujados como filas de íconos. También puedes cambiar el idioma y el tema, y cargar mods.
 - **Textos**: escritos para este juego, porque los de MOO1 tienen derechos de autor. En
   inglés, el tema Clásico usa las noticias y las descripciones de tecnologías de MOO1 si
   importas EVENTMSG.LBX y RESEARCH.LBX.

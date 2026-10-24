@@ -26,7 +26,8 @@ random numbers.
   base upkeep.
 - **Research**: each field's tech tree and the random list of techs each empire can research.
   Also research costs, interest and breakthroughs, and field levels, which make ship parts
-  cheaper and smaller.
+  cheaper and smaller. A field's project is chosen when it has none and cannot be changed
+  until it is discovered.
 - **Ship design**: every hull and part, with MOO1's cost, space and combat values. The five
   starting designs cost 8, 14, 74, 65 and 570 BC, as in MOO1.
 - **Movement**: map distances, speeds, fuel range and reserve tanks, nebulae, stargates and
@@ -72,11 +73,19 @@ years, 613 of 710 turns (86%) are identical, including the first 39 turns of the
 
 ### Screens and presentation
 
-- **Interface**: new, not MOO1's 320x200 screens. It has a side panel, dialogs, a zoomable map
-  and keyboard shortcuts. MOO1's slider controls are kept: − and + on each side, and clicking
-  a slider's name locks it.
-- **Additions**: the research screen shows exactly what each tech gives, with its numbers.
-  You can also change the language and the theme, and load mods.
+- **Interface**: new, not MOO1's 320x200 screens, but laid out like them:
+  - the map with a side panel, and MOO1's buttons at the bottom (Game, Design, Fleet, Map,
+    Races, Planets, Tech, Next turn)
+  - fleets are given orders as in MOO1: click the ships next to a star, choose how many of
+    each, click the destination and Accept
+  - the Tech screen has the known techs of each field on the left and the research sliders on
+    the right, and a new tech's project is chosen in its own dialog
+  - MOO1's slider controls: − and + on each side, and clicking a slider's name locks it
+  - unlike MOO1, the map zooms, there are keyboard shortcuts, and dialogs fit the window
+- **Additions**: the Tech screen shows exactly what each tech gives, with its numbers, and a
+  technology tree of what has been discovered. Clicking a planet's picture opens a window
+  with its land, the ships in orbit, and its population, factories, waste and bases drawn as
+  rows of icons. You can also change the language and the theme, and load mods.
 - **Texts**: written for this game, because MOO1's are copyrighted. In English, the Classic
   theme uses MOO1's own news and tech descriptions if you import EVENTMSG.LBX and
   RESEARCH.LBX.

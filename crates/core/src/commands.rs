@@ -75,6 +75,8 @@ pub enum Command {
         locked: bool,
     },
     /// Chooses the tech researched in a field (an ongoing project loses its investment).
+    /// Chooses the project of a field that has none (1oom `game_tech_start_next`, from the
+    /// new-tech dialog); a project in progress cannot be changed.
     SetResearchProject {
         field: usize,
         tech: u8,
@@ -468,7 +470,13 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             {
                 return err("invalid_tech");
             }
-            if st.empires[empire as usize].tech.project[field] != tech {
+            // As in MOO1, a field's project is chosen when it has none (at the start of the
+            // game or once a tech is discovered) and stays until it is discovered.
+            let project = st.empires[empire as usize].tech.project[field];
+            if project != 0 && project != tech {
+                return err("project_locked");
+            }
+            if project != tech {
                 tech::start_project(st, empire, field, tech);
             }
         }

@@ -593,7 +593,23 @@ mod tests {
         let v = g.view(0);
         let f = &v.tech[FIELD_WEAPON];
         assert!(f.project > 1 && !f.choices.is_empty());
+        let first = f.project;
         let other = f.choices.iter().find(|c| c.tech != f.project).unwrap().tech;
+        // A project in progress is locked until it is discovered.
+        assert_eq!(
+            g.command(
+                0,
+                &Command::SetResearchProject {
+                    field: FIELD_WEAPON,
+                    tech: other,
+                },
+            )
+            .unwrap_err()
+            .code,
+            "project_locked"
+        );
+        tech::grant(&mut g.st, 0, FIELD_WEAPON, first, tech::Source::Research);
+        assert_eq!(g.st.empires[0].tech.project[FIELD_WEAPON], 0);
         g.command(
             0,
             &Command::SetResearchProject {

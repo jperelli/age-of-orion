@@ -18,9 +18,30 @@ All notable changes to this project are documented here. The format follows
     news;
   - audiences and messages take place in the empire's throne room;
   - the Great Council meets in its hall.
+- A planet window, opened by clicking the planet's picture in the side panel: its land (in
+  Classic, MOO1's own colonization scene when imported), the ships of every empire in orbit
+  with their pictures and numbers, and its population, factories, waste, bases and shield as
+  rows of icons, faded up to the planet's maximum.
+- A technology tree, from the Tech screen: one branch per field with the techs discovered
+  tier by tier and the project in progress, and nothing not yet discovered.
+- MOO1's Fleet and Map buttons: a list of every fleet to find and select it, and a view of the
+  whole map.
 
 ### Changed
 
+- The screen is laid out like MOO1's: the buttons are at the bottom, in MOO1's order (Game,
+  Design, Fleet, Map, Races, Planets, Tech, Next turn), and the year and treasury sit at the
+  top of the side panel.
+- Fleets take orders as in MOO1: ships in orbit are selected on the map, next to their star,
+  and the side panel shows their pictures and numbers; choose how many of each, click the
+  destination on the map (it can be changed by clicking another) and press Accept. Fleets in
+  flight show their ships the same way and change destination the same way. The planet panel
+  no longer lists the ships in orbit.
+- The Tech screen follows MOO1's: the fields and the techs known in the selected one on the
+  left, with what the selected tech gives, and the research sliders on the right, each with
+  its project and progress.
+- A field's research project can no longer be changed once chosen, as in MOO1: it is chosen
+  in a dialog when the field has none (after a discovery) and stays until it is discovered.
 - Theme pictures load in the background instead of delaying the start of the game.
 
 ## [0.11.0] - 2026-10-22

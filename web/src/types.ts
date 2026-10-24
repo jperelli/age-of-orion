@@ -84,6 +84,8 @@ export interface FleetView {
   eta: number | null;
   ships: number[];
   names: string[];
+  /** Picture (look) and hull size of each design of the owner. */
+  looks: [number, number][];
   speed: number;
   range: number;
   /** The player can change its destination (still at its planet, or Hyperspace Communications). */
