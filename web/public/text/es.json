@@ -1187,7 +1187,6 @@
  "research.pick": "Investigar esto",
  "research.new_title": "Nueva investigación: {field}",
  "research.new_text": "Elige qué investigan tus científicos ahora en {field}.",
- "research.locked_note": "Como en Master of Orion, una vez elegido, un proyecto sigue hasta descubrirlo.",
  "research.later": "Más tarde",
  "research.in_progress": "en investigación, {pct}%",
  "research.breakthrough": "descubrimiento posible",

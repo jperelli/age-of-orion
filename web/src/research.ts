@@ -75,7 +75,7 @@ async function chooseTech(ctx: Ctx, i: number): Promise<void> {
   );
   await modal(
     t("research.new_title", { field: t(`field.${f.field}`) }),
-    [h("p", {}, t("research.new_text", { field: t(`field.${f.field}`) })), list, h("p", { class: "muted small" }, t("research.locked_note"))],
+    [h("p", {}, t("research.new_text", { field: t(`field.${f.field}`) })), list],
     [t("research.later")],
     "wide",
     (c) => (close = c),

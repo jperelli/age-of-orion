@@ -1207,7 +1207,6 @@
  "research.pick": "Study this",
  "research.new_title": "New subject: {field}",
  "research.new_text": "Choose what your scholars study next in {field}.",
- "research.locked_note": "As in Master of Orion, once chosen a subject stays until it is mastered.",
  "research.in_progress": "studying, {pct}%",
  "research.nothing": "Nothing left to learn.",
  "research.total": "Total learning: {rp}",

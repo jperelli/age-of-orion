@@ -1208,7 +1208,6 @@
  "research.pick": "Estudiar esto",
  "research.new_title": "Nuevo tema: {field}",
  "research.new_text": "Elige qué estudian tus eruditos ahora en {field}.",
- "research.locked_note": "Como en Master of Orion, una vez elegido, un tema sigue hasta dominarlo.",
  "research.in_progress": "en estudio, {pct}%",
  "research.nothing": "No queda nada por aprender.",
  "research.total": "Saber total: {rp}",
