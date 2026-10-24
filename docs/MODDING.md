@@ -95,6 +95,7 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `star/<k>` | A star on the Classic map: star type 0..5 (yellow, red, green, white, blue, neutron) + 6 for the bigger look (STARMAP.LBX 3..14) |
 | `embassy/room`, `embassy/border`, `embassy/emperor/<banner>` | MOO1's audience: the room, the frame and the player's emperor seen from behind (EMBASSY.LBX 1, 0, 0x0c + banner) |
 | `newtech/lab/<n>` | The new-tech screen's background: 0 the laboratory, 1 the spies' den, 2 the ruins (TECHNO.LBX 0..2) |
+| `tech/<field>/<n>`, `tech/<field>/advanced` | The blueprint of tech `n` of field 0..5, and the one of a field's advanced techs, shown on the new-tech screen and the research cards (TECHNO.LBX, picture from RESEARCH.LBX entry 0) |
 
 ### Animations
 

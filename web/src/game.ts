@@ -12,7 +12,7 @@ import { designPicture, iconRow, uiIcon } from "./pictures";
 import { explained, pictureSelect } from "./widgets";
 import { newscast, newsType } from "./news";
 import { adjustGroup, slider, sliders } from "./sliders";
-import { chooseTechs, needsChoice, techScreen } from "./research";
+import { chooseTechs, needsChoice, newTechScreen, techScreen } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
 import { BUILD_STARGATE, FIELDS, PLANET_TYPES, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
@@ -777,6 +777,7 @@ export class GameScreen {
       const list = h("ul", { class: "events" }, ...events.map((e) => h("li", { class: `ev-${e.type}`, onclick: () => this.focusEvent(e) }, this.eventText(e))));
       await modal(this.t("report.title", { year: v.year }), list, [this.t("btn.ok")], "report");
     }
+    for (const e of v.events) if (e.type === "tech_discovered" && e.to.includes(v.player)) await newTechScreen(this.ctx, e, this.eventText(e));
     if (await this.checkEnd()) return;
     await this.decisions();
   }

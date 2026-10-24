@@ -109,8 +109,9 @@ los primeros 39 turnos de la partida pequeña.
   importas EVENTMSG.LBX y RESEARCH.LBX.
 - **Imágenes**:
   - el Clásico muestra el arte de MOO1 que importes: planetas, razas, estrellas, naves,
-    fondos de batalla, las pantallas de desembarco, del noticiero y de la embajada y el
-    laboratorio, con las animaciones de MOO1 (estrellas que titilan, motores de las naves,
+    fondos de batalla, las pantallas de desembarco, del noticiero y de la embajada, el
+    laboratorio y el plano de cada tecnología en la pantalla de tecnología nueva, con las
+    animaciones de MOO1 (estrellas que titilan, motores de las naves,
     los embajadores, el locutor, los científicos). Sin él, el Clásico usa el arte propio del
     juego.
   - Era tiene su propio arte y retratos pintados.

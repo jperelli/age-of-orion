@@ -1254,5 +1254,6 @@
  "designer.col.cost": "Costo",
  "designer.col.space": "Espacio",
  "designer.col.class": "Clase",
- "designer.col.speed": "Velocidad de combate"
+ "designer.col.speed": "Velocidad de combate",
+ "newtech.title": "Nueva tecnología"
 }

@@ -1263,5 +1263,6 @@
  "designer.class": "Drill {n}",
  "designer.col.space": "Room",
  "designer.col.class": "Drill",
- "designer.col.speed": "Battle pace"
+ "designer.col.speed": "Battle pace",
+ "newtech.title": "New learning"
 }

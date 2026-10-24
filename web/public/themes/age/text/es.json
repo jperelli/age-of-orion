@@ -1264,5 +1264,6 @@
  "designer.class": "Instrucción {n}",
  "designer.col.space": "Lugar",
  "designer.col.class": "Instrucción",
- "designer.col.speed": "Paso en batalla"
+ "designer.col.speed": "Paso en batalla",
+ "newtech.title": "Nuevo saber"
 }

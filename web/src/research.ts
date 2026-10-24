@@ -7,7 +7,8 @@ import type { Ctx } from "./ctx";
 import { moo1Scene } from "./pictures";
 import { sliders } from "./sliders";
 import { effectLines } from "./techinfo";
-import { FIELDS, RACES, type FieldView, type TechChoice } from "./types";
+import { shipParts } from "./engine";
+import { FIELDS, RACES, type FieldView, type GameEvent, type TechChoice } from "./types";
 import { clear, h, keepScroll, modal } from "./ui";
 
 export function techName(ctx: Ctx, f: FieldView | string, key: string, tech?: number): string {
@@ -21,6 +22,12 @@ function info(ctx: Ctx, field: number, tech: number): string | null {
   return tech > 0 && ctx.theme.has(key) ? ctx.theme.t(key) : null;
 }
 
+/** MOO1's blueprint of a tech (TECHNO.LBX, imported), if any. */
+function techPicture(ctx: Ctx, field: number, tech: number): HTMLElement | null {
+  const url = ctx.theme.url(`tech/${field}/${tech > 50 ? "advanced" : tech}`);
+  return url ? h("img", { class: "tech-pic pixel", src: url, alt: "" }) : null;
+}
+
 /** A tech with its cost and what it gives. */
 function techCard(ctx: Ctx, f: FieldView, c: TechChoice, cost: boolean, cls = ""): HTMLElement {
   const t = (k: string, p?: Record<string, string | number>) => ctx.theme.t(k, p);
@@ -29,6 +36,7 @@ function techCard(ctx: Ctx, f: FieldView, c: TechChoice, cost: boolean, cls = ""
   return h(
     "div",
     { class: `tech-card ${cls}` },
+    techPicture(ctx, FIELDS.indexOf(f.field), c.tech),
     h("div", { class: "tech-head" }, h("b", {}, techName(ctx, f, c.key, c.tech)), cost ? h("span", { class: "muted" }, ` ${c.cost} ${t("unit.rp")}`) : null),
     lines.length ? h("ul", { class: "effects" }, ...lines.map((l) => h("li", {}, l))) : null,
     d ? h("p", { class: "muted small techinfo" }, d) : null,
@@ -83,6 +91,39 @@ async function chooseTech(ctx: Ctx, i: number): Promise<void> {
     [t("research.later")],
     "wide",
     (c) => (close = c),
+  );
+}
+
+/** 1oom `TECHSOURCE_*` of a discovery: the laboratory and the scientist shown. */
+const SOURCE_SCENE: Record<string, number> = { research: 0, espionage: 1, artifacts: 2, orion: 2, trade: 4 };
+
+/**
+ * MOO1's new-tech screen (1oom `ui_newtech`), with MOO1's pictures imported: the laboratory
+ * (the spies' den for a stolen tech, the ruins for a found one) with the tech's blueprint on
+ * the table, the scientist (or spy) at work, then what the tech gives.
+ */
+export async function newTechScreen(ctx: Ctx, e: GameEvent, text: string): Promise<void> {
+  const v = ctx.view();
+  const field = FIELDS.indexOf(e.field as FieldView["field"]);
+  const tech = e.tech as number;
+  const source = SOURCE_SCENE[e.source as string] ?? 0;
+  const race = RACES.indexOf(v.empires[source === 4 && typeof e.from === "number" ? e.from : v.player].race);
+  const picture = `tech/${field}/${tech > 50 ? "advanced" : tech}`;
+  if (field < 0 || !ctx.theme.img(picture)) return;
+  const scene = moo1Scene(
+    ctx.theme,
+    [{ alias: `newtech/lab/${source === 4 ? 0 : source}` }, { alias: picture, x: 145, y: 54 }, { alias: `anim/newtech/${source === 4 ? race : source * 10 + race}`, fps: 6 }],
+    1.5,
+  );
+  if (!scene) return;
+  const f = v.tech[field];
+  const c = f.completed.find((x) => x.tech === tech);
+  const key = tech > 50 ? "advanced" : (shipParts().techs?.[field]?.[tech] ?? "");
+  await modal(
+    ctx.theme.t("newtech.title"),
+    [scene, h("p", {}, text), c ? techCard(ctx, f, c, false, "current no-pic") : h("h3", {}, techName(ctx, f, key, tech))],
+    [ctx.theme.t("btn.ok")],
+    "wide",
   );
 }
 

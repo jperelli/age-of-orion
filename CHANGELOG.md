@@ -41,6 +41,11 @@ All notable changes to this project are documented here. The format follows
   - the newscaster talks and the globe turns on the GNN newscast;
   - choosing a new research project shows MOO1's laboratory with the race's scientist at
     work.
+- MOO1's new-tech screen in the Classic theme (from TECHNO.LBX and SPIES.LBX): each tech
+  discovered is shown in the laboratory (the spies' den for a stolen one, the ruins for a found
+  one) with its own blueprint on the table and the scientist at work, then what it gives. Each
+  tech's blueprint also appears on its card in the Tech screen, the tree and the research
+  choices.
 - The ship design screen's parts open a list window, as in MOO1: every part known, with what
   it does, its cost and the space it takes with the engines it needs, and the weapons that fit;
   parts that do not fit are greyed out.

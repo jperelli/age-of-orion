@@ -251,6 +251,26 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
     for f in &fonts {
         aliases.insert(format!("font/{}", f.index), f.path.clone());
     }
+    // RESEARCH.LBX entry 0 gives each tech its picture in TECHNO.LBX (1oom
+    // `game_tech_get_gfx_i`); advanced techs have one per field (1oom `ui_newtech`).
+    let techno = |i: usize| {
+        archives
+            .get("TECHNO")
+            .and_then(|t| t.entries.get(i))
+            .and_then(|e| e.png.clone())
+    };
+    if let Some((_, research)) = parsed.iter().find(|(n, _)| n == "RESEARCH") {
+        for (field, tech, gfx) in tech_pictures(research) {
+            if let Some(p) = techno(gfx) {
+                aliases.insert(format!("tech/{field}/{tech}"), p);
+            }
+        }
+    }
+    for (field, gfx) in [9, 22, 20, 25, 15, 29].into_iter().enumerate() {
+        if let Some(p) = techno(gfx) {
+            aliases.insert(format!("tech/{field}/advanced"), p);
+        }
+    }
     let mut frames = BTreeMap::new();
     for (alias, (path, n)) in animations(&archives) {
         aliases.insert(alias.clone(), path);
@@ -286,6 +306,26 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
         files: out,
         manifest,
     }
+}
+
+/// RESEARCH.LBX entry 0: 6 bytes per tech (field * 50 + tech - 1) after a 4-byte header, the
+/// third the tech's TECHNO.LBX picture (pictures start at 8; 0 for no tech).
+fn tech_pictures(archive: &Archive) -> Vec<(usize, u8, usize)> {
+    let Some(d) = archive.entry(0) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for field in 0..6 {
+        for tech in 1..=50u8 {
+            let off = 4 + (field * 50 + tech as usize - 1) * 6 + 2;
+            if let Some(&gfx) = d.get(off) {
+                if gfx >= 8 {
+                    out.push((field, tech, gfx as usize));
+                }
+            }
+        }
+    }
+    out
 }
 
 fn text_table(name: &str, archive: &Archive) -> Option<Vec<String>> {
@@ -579,5 +619,22 @@ mod tests {
         // The still picture is the first frame alone.
         assert_eq!(r.manifest.aliases["news/anchor"], "gfx/newscast/002-0.png");
         assert!(!r.manifest.frames.contains_key("news/tv"));
+    }
+
+    #[test]
+    fn gives_each_tech_its_blueprint() {
+        // RESEARCH.LBX entry 0: weapon tech 4 (field 5) has picture 8 in TECHNO.LBX.
+        let mut table = vec![0x2c, 0x01, 0x06, 0x00];
+        table.extend(vec![0u8; 300 * 6]);
+        table[4 + (5 * 50 + 3) * 6 + 2] = 8;
+        let techno: Vec<Vec<u8>> = (0..10).map(|_| sample_gfx()).collect();
+        let files = vec![
+            ("RESEARCH.LBX".to_string(), build_lbx(5, &[table])),
+            ("TECHNO.LBX".to_string(), build_lbx(0, &techno)),
+        ];
+        let r = import(&files);
+        assert_eq!(r.manifest.aliases["tech/5/4"], "gfx/techno/008.png");
+        assert_eq!(r.manifest.aliases["tech/0/advanced"], "gfx/techno/009.png");
+        assert!(!r.manifest.aliases.contains_key("tech/5/5"));
     }
 }

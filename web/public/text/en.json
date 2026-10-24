@@ -1265,5 +1265,6 @@
  "designer.col.cost": "Cost",
  "designer.col.space": "Space",
  "designer.col.class": "Class",
- "designer.col.speed": "Combat speed"
+ "designer.col.speed": "Combat speed",
+ "newtech.title": "New technology"
 }

@@ -373,6 +373,9 @@ tr.clickable:hover { background: rgba(0, 0, 0, 0.08); }
 .tech-tree-svg .node:hover rect { fill: var(--parchment-dark); }
 .tech-tree-svg .node.current rect { stroke: var(--accent); stroke-dasharray: 4 3; }
 @media (max-width: 800px) { .tech-screen { grid-template-columns: 1fr; } }
+.tech-pic { float: right; width: 119px; height: 78px; margin: 0 0 0.3em 0.6em; border-radius: 3px; }
+.tech-card::after { content: ""; display: block; clear: both; }
+.tech-card.no-pic .tech-pic { display: none; }
 .tech-card { margin: 0.25em 0 0.35em; padding: 0.3em 0.5em; border-left: 3px solid var(--parchment-dark); }
 .tech-card.current { border-left-color: var(--accent); }
 .tech-card .effects { margin: 0.15em 0 0; padding-left: 1.2em; font-size: 0.9em; columns: 1; }

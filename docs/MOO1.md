@@ -97,7 +97,8 @@ years, 613 of 710 turns (86%) are identical, including the first 39 turns of the
   RESEARCH.LBX.
 - **Pictures**:
   - Classic shows your imported MOO1 art: planets, races, stars, ships, battle backgrounds,
-    the landing, newscast and embassy screens and the laboratory, with MOO1's animations
+    the landing, newscast and embassy screens, the laboratory and each tech's blueprint on the
+    new-tech screen, with MOO1's animations
     (twinkling stars, ships' engines, the ambassadors, the newscaster, the scientists).
     Without it, Classic uses the game's own art.
   - Age has its own art and painted portraits.
