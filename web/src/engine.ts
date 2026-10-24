@@ -1,5 +1,5 @@
 // Typed wrapper around the WebAssembly build of the Rust core (crates/wasm).
-import init, { LbxImporter, WasmGame, parts, version } from "./wasm/aoo.js";
+import init, { LbxImporter, WasmGame, defaultRules as wasmDefaultRules, parts, version } from "./wasm/aoo.js";
 import type { Command, DesignStats, NewGameOptions, Parts, Reply, ShipDesign, Talk, View } from "./types";
 
 let ready: Promise<unknown> | null = null;
@@ -14,6 +14,13 @@ export function engineVersion(): string {
 }
 
 let partsCache: Parts | null = null;
+let rulesCache: Record<string, unknown> | null = null;
+
+/** The game's default rules (crates/core/src/rules.rs), for explanations in the interface. */
+export function defaultRules(): Record<string, unknown> {
+  rulesCache ??= JSON.parse(wasmDefaultRules()) as Record<string, unknown>;
+  return rulesCache;
+}
 
 /** Static ship part tables. */
 export function shipParts(): Parts {

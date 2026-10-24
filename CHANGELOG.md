@@ -26,6 +26,13 @@ All notable changes to this project are documented here. The format follows
   tier by tier and the project in progress, and nothing not yet discovered.
 - MOO1's Fleet and Map buttons: a list of every fleet to find and select it, and a view of the
   whole map.
+- Clicking a planet's type, star, special, environment or owner explains it in a popup with
+  the rules' numbers: the usual population of that type and what settling it needs, what a
+  star means for its planets, what minerals or artifacts do to spending and research, how the
+  environment changes growth, and a race's research costs and abilities.
+- A picture select, used in the new game screen (each empire with its coat of arms or
+  portrait, each banner with its colour) and for the ship a colony builds (with its picture).
+- Dialogs have a close button (×) at the top right, except the Council's choices.
 
 ### Changed
 
@@ -44,6 +51,18 @@ All notable changes to this project are documented here. The format follows
   in a dialog when the field has none (at the start of the game and after each discovery)
   and stays until it is discovered.
 - Theme pictures load in the background instead of delaying the start of the game.
+- An unexplored star or place shows only its distance and that something is there: no name,
+  type or star colour in the panel, and no name on the map (as in MOO1).
+- The Races/Empires screen lists only the empires met, as in MOO1; one out of contact is greyed
+  out and marked "Lost contact".
+- The side panel's header is one line: the year and the gold, research and reserve numbers
+  with icons; clicking them shows the details.
+- Classic map stars are small points with a soft glow and a twinkling glint, as in MOO1, or
+  MOO1's own star pictures when STARMAP.LBX is imported again.
+- The ship design screen follows MOO1's: the ship's picture with arrows to choose another, and
+  the four hull sizes as buttons with their pictures; the designs list shows each ship's
+  picture.
+- Cities and planets are easier to click: the map picks the nearest one within a larger radius.
 
 ## [0.11.0] - 2026-10-22
 

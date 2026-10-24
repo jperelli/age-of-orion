@@ -91,12 +91,19 @@ los primeros 39 turnos de la partida pequeña.
     la derecha los controles de investigación; el proyecto de una tecnología nueva se elige en
     su propio diálogo
   - los controles deslizantes de MOO1: − y + a cada lado, y un clic en el nombre lo bloquea
+  - como en MOO1, de una estrella inexplorada solo se ve la distancia (ni nombre ni datos),
+    las estrellas son puntos pequeños que titilan (las imágenes de estrellas de MOO1 si se
+    importan), la pantalla de Razas muestra solo las razas conocidas (las que están fuera de
+    contacto, en gris), y la imagen de una nave se elige con flechas en el diseño
   - a diferencia de MOO1, el mapa tiene zoom, hay atajos de teclado y los diálogos se adaptan
     a la ventana
 - **Agregados**: la pantalla de Tecnología muestra exactamente qué da cada tecnología, con sus
   números, y un árbol tecnológico de lo ya descubierto. Un clic en la imagen de un planeta abre
   una ventana con su terreno, las naves en órbita y su población, fábricas, desechos y bases
-  dibujados como filas de íconos. También puedes cambiar el idioma y el tema, y cargar mods.
+  dibujados como filas de íconos. Un clic en el tipo, la estrella, el especial, el ambiente o
+  el dueño de un planeta explica qué significan en las reglas (población, producción,
+  crecimiento, habilidades de la raza). También puedes cambiar el idioma y el tema, y cargar
+  mods.
 - **Textos**: escritos para este juego, porque los de MOO1 tienen derechos de autor. En
   inglés, el tema Clásico usa las noticias y las descripciones de tecnologías de MOO1 si
   importas EVENTMSG.LBX y RESEARCH.LBX.

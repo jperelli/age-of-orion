@@ -66,6 +66,9 @@ const BIOME: Record<PlanetType, string> = {
   terran: "#6fae4a",
 };
 
+/** Star types in 1oom's order (`STAR_TYPE_*`), for the imported star sprites. */
+const STAR_INDEX: Record<StarType, number> = { yellow: 0, red: 1, green: 2, white: 3, blue: 4, neutron: 5 };
+
 const STAR: Record<StarType, string> = {
   yellow: "#ffe36b",
   red: "#ff6a4d",
@@ -209,7 +212,7 @@ export class MapView {
     let bd = Infinity;
     for (const p of v.planets) {
       const d = Math.hypot(p.x - mx, p.y - my) * this.zoom;
-      if (d < bd && d < 22) {
+      if (d < bd && d < 34) {
         bd = d;
         best = p.id;
       }
@@ -757,23 +760,59 @@ export class MapView {
     ctx.restore();
   }
 
+  /**
+   * A star as MOO1 draws it: small, a bright point with a soft glow and a faint four-pointed
+   * glint that twinkles. With MOO1's files imported, its own star sprite (STARMAP.LBX).
+   */
   private drawStar(v: View, id: number): void {
     const p = v.planets[id];
     const ctx = this.ctx;
-    const r = Math.max(1.4, Math.min(3, 8 / this.zoom + 1));
-    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.4);
-    g.addColorStop(0, STAR[p.star]);
-    g.addColorStop(0.4, STAR[p.star] + "aa");
-    g.addColorStop(1, STAR[p.star] + "00");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r * 2.4, 0, Math.PI * 2);
-    ctx.fill();
+    // Sizes in screen pixels, growing a little with the zoom.
+    const k = Math.max(1, Math.min(3, this.zoom * 0.45));
+    const r = this.px(1.3 * k);
+    const sprite = this.theme.img(`star/${STAR_INDEX[p.star] + (p.look ? 6 : 0)}`);
+    if (sprite) {
+      const w = this.px(sprite.width * k);
+      const hgt = this.px(sprite.height * k);
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sprite, p.x - w / 2, p.y - hgt / 2, w, hgt);
+      ctx.restore();
+    } else {
+      const c = STAR[p.star];
+      const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2);
+      glow.addColorStop(0, "#ffffff");
+      glow.addColorStop(0.25, c);
+      glow.addColorStop(0.6, c + "55");
+      glow.addColorStop(1, c + "00");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      const tw = 0.75 + 0.25 * Math.sin(performance.now() / 700 + id * 1.7);
+      const len = r * (p.look ? 6.5 : 5) * tw;
+      ctx.lineWidth = this.px(0.8);
+      for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        const g = ctx.createLinearGradient(p.x - dx * len, p.y - dy * len, p.x + dx * len, p.y + dy * len);
+        g.addColorStop(0, c + "00");
+        g.addColorStop(0.5, "#ffffffcc");
+        g.addColorStop(1, c + "00");
+        ctx.strokeStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(p.x - dx * len, p.y - dy * len);
+        ctx.lineTo(p.x + dx * len, p.y + dy * len);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (p.owner !== null) {
       ctx.strokeStyle = this.theme.banner(v.empires[p.owner].banner);
-      ctx.lineWidth = this.px(2);
+      ctx.lineWidth = this.px(1.5);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r * 2.2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, r * 4.2, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (p.stargate) this.drawGate(p.x - r * 3, p.y, r * 1.4);
@@ -893,6 +932,7 @@ export class MapView {
     ctx.textBaseline = "top";
     ctx.lineWidth = this.px(3);
     for (const p of v.planets) {
+      if (!p.explored) continue;
       const y = p.y + this.px(14) + 2;
       ctx.strokeStyle = world ? "rgba(30,22,12,0.85)" : "#000";
       ctx.fillStyle = p.owner !== null ? this.theme.banner(v.empires[p.owner].banner) : p.explored ? "#f3ead2" : "#a49c88";

@@ -371,6 +371,15 @@ fn aliases(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, String>
     if let Some(p) = png("STARMAP", 0x2d) {
         a.insert("stargate".into(), p);
     }
+    // Stars 3..0x0e, star type + look (0 or 6), in 1oom's order `{0, 1, 2, 4, 3, 5, ...}`.
+    for (i, k) in [0, 1, 2, 4, 3, 5, 6, 7, 8, 10, 9, 11]
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(p) = png0("STARMAP", 3 + i) {
+            a.insert(format!("star/{k}"), p);
+        }
+    }
     // LANDING.LBX (1oom `uilanding.c`, `uiground.c`): the transport 0, colonization scenes
     // 6 + planet type, invasion scenes 0x24 + planet type, the fallen soldier 0x14, the
     // walking colonists 0x15 + banner, soldiers 0x1b + race.

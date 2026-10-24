@@ -47,9 +47,30 @@ const ICONS: Record<"world" | "space", Record<string, string>> = {
   },
 };
 
+/** Small icons of the interface (24x24): gold, research and the treasury. */
+const UI_ICONS: Record<"world" | "space", Record<string, string>> = {
+  world: {
+    gold: '<circle cx="12" cy="12" r="9" fill="#f2c14e" stroke="#7a5212" stroke-width="1.5"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="#b8862b"/><path d="M12 8.5v7M10 10h4" stroke="#7a5212" stroke-width="1.4"/>',
+    research: '<path d="M3 5c3-1 6-1 9 1v14c-3-2-6-2-9-1z" fill="#efe0bb" stroke="#4a3220"/><path d="M21 5c-3-1-6-1-9 1v14c3-2 6-2 9-1z" fill="#e3d0a3" stroke="#4a3220"/><path d="M5 8h5M5 11h5M14 8h5M14 11h5" stroke="#8a6a44"/>',
+    reserve: '<path d="M3 11h18v10H3z" fill="#8a5a2b" stroke="#3b2414"/><path d="M3 11c0-4 3-6 9-6s9 2 9 6z" fill="#a8713a" stroke="#3b2414"/><path d="M3 11h18M3 16h18" stroke="#d9a440" stroke-width="1.5"/><rect x="10.5" y="12" width="3" height="4" fill="#f2c14e" stroke="#3b2414" stroke-width="0.8"/>',
+  },
+  space: {
+    gold: '<circle cx="12" cy="12" r="9" fill="#e9c349" stroke="#6b5310" stroke-width="1.5"/><text x="12" y="15.5" font-size="9" font-family="sans-serif" font-weight="bold" text-anchor="middle" fill="#6b5310">BC</text>',
+    research: '<path d="M3 5c3-1 6-1 9 1v14c-3-2-6-2-9-1z" fill="#cfe3ff" stroke="#1d3350"/><path d="M21 5c-3-1-6-1-9 1v14c3-2 6-2 9-1z" fill="#b5d2f5" stroke="#1d3350"/><path d="M5 8h5M5 11h5M14 8h5M14 11h5" stroke="#4d6d96"/>',
+    reserve: '<rect x="3" y="4" width="18" height="17" rx="2" fill="#7d8b99" stroke="#1c2630"/><rect x="5.5" y="6.5" width="13" height="12" rx="1" fill="#5d6a77" stroke="#1c2630"/><circle cx="12" cy="12.5" r="3" fill="#c7d0d8" stroke="#1c2630"/><path d="M12 9.5v6M9 12.5h6" stroke="#1c2630"/>',
+  },
+};
+
+const svgUrl = (body: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${body}</svg>`)}`;
+
+/** An interface icon: the theme's `ui/<name>` picture, or a drawn one. */
+export function uiIcon(theme: Theme, name: string): string {
+  return theme.url(`ui/${name}`) ?? svgUrl(UI_ICONS[theme.def.map === "world" ? "world" : "space"][name] ?? "");
+}
+
 function drawnIcon(theme: Theme, what: string): string | null {
   const body = ICONS[theme.def.map === "world" ? "world" : "space"][what];
-  return body ? `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${body}</svg>`)}` : null;
+  return body ? svgUrl(body) : null;
 }
 
 /**

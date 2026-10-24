@@ -46,10 +46,13 @@ export interface Colony {
 
 export interface PlanetView {
   id: number;
+  /** Empty until explored (the game screen shows "Unexplored"). */
   name: string;
   x: number;
   y: number;
   star: StarType;
+  /** Star picture variant on the classic map (0 or 6). */
+  look: number;
   explored: boolean;
   nebula: boolean;
   range: number;

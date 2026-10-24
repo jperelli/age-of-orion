@@ -28,9 +28,19 @@ export function clear(el: HTMLElement): HTMLElement {
   return el;
 }
 
-/** Shows a modal dialog; resolves with the index of the button pressed (-1 on Escape). */
-/** A dialog; resolves with the index of the button pressed (-1: Escape). `onOpen` gets a way
- * to close it from inside its body, as if button `i` had been pressed. */
+let closeLabel = "Close";
+
+/** The tooltip of the dialogs' close button, in the current language. */
+export function setCloseLabel(label: string): void {
+  closeLabel = label;
+}
+
+/**
+ * A dialog; resolves with the index of the button pressed (-1: closed with × or Escape).
+ * `onOpen` gets a way to close it from inside its body, as if button `i` had been pressed.
+ * With "required" among the classes it has no × and Escape does nothing (a choice must be
+ * made).
+ */
 export function modal(title: string, body: Child | Child[], buttons: string[] = ["OK"], cls = "", onOpen?: (close: (i: number) => void) => void): Promise<number> {
   return new Promise((resolve) => {
     const close = (i: number) => {
@@ -38,8 +48,9 @@ export function modal(title: string, body: Child | Child[], buttons: string[] = 
       overlay.remove();
       resolve(i);
     };
+    const required = cls.split(" ").includes("required");
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close(-1);
+      if (e.key === "Escape" && !required) close(-1);
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
       if (e.key === "Enter" && buttons.length === 1 && !typing) close(0);
     };
@@ -50,7 +61,12 @@ export function modal(title: string, body: Child | Child[], buttons: string[] = 
       h(
         "div",
         { class: `dialog ${cls}`, role: "dialog" },
-        h("h2", {}, title),
+        h(
+          "div",
+          { class: "dialog-head" },
+          h("h2", {}, title),
+          required ? null : h("button", { class: "dialog-close", title: closeLabel, "aria-label": closeLabel, onclick: () => close(-1) }, "×"),
+        ),
         h("div", { class: "dialog-body" }, ...(Array.isArray(body) ? body : [body])),
         h("div", { class: "dialog-buttons" }, ...buttons.map((b, i) => h("button", { class: i === 0 ? "primary" : "", onclick: () => close(i) }, b))),
       ),

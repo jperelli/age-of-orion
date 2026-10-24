@@ -7,7 +7,8 @@ import { LANGS, THEMES, loadSettings, loadTheme, readModFolder, saveSettings, ty
 import { RACES, type Difficulty, type GalaxySize, type NewGameOptions, type Race } from "./types";
 import { moo1Dialog } from "./about";
 import { slider } from "./sliders";
-import { clear, h, modal, pickFiles, toast } from "./ui";
+import { pictureSelect } from "./widgets";
+import { clear, h, modal, pickFiles, setCloseLabel, toast } from "./ui";
 
 const root = document.getElementById("app")!;
 let settings: Settings;
@@ -28,6 +29,7 @@ async function applyTheme(): Promise<void> {
   else delete document.documentElement.dataset.moofonts;
   audio.useSamples(theme.def.use_lbx);
   document.title = t("app.title");
+  setCloseLabel(t("btn.close"));
 }
 
 // MOO1 clicks every button (1oom `ui_sound_play_sfx_24`), with the imported samples.
@@ -161,24 +163,35 @@ async function menu(): Promise<void> {
 }
 
 function newGame(): void {
-  const field = (label: string, el: HTMLElement) => h("label", { class: "field" }, h("span", {}, label), el);
+  // A <label> would pass its clicks to the picture selects' first button.
+  const field = (label: string, el: HTMLElement) => h(el.matches("input, select") ? "label" : "div", { class: "field" }, h("span", {}, label), el);
   const select = <T extends string>(values: T[], prefix: string, def: T) =>
     h("select", {}, ...values.map((v) => h("option", { value: v, selected: v === def }, t(`${prefix}${v}`))));
   const size = select<GalaxySize>(["small", "medium", "large", "huge"], "newgame.size.", "small");
   const diff = select<Difficulty>(["simple", "easy", "average", "hard", "impossible"], "newgame.difficulty.", "easy");
   const players = h("select", {}, ...[2, 3, 4, 5, 6].map((n) => h("option", { value: n, selected: n === 4 }, t("newgame.opponents_n", { n: n - 1 }))));
   const ai = h("select", {}, ...[0, 1].map((n) => h("option", { value: n }, t(`newgame.ai.${n}`))));
-  const race = h(
-    "select",
-    {},
-    h("option", { value: "" }, t("newgame.random")),
-    ...RACES.map((r) => h("option", { value: r }, `${t(`race.${r}.plural`)} - ${t(`race.${r}.trait`)}`)),
+  const emblem = (i: number) => {
+    const alias = theme.url(`arms/${i}`) ? `arms/${i}` : `race/${i}`;
+    return { img: theme.url(alias), pixel: theme.pixel.has(alias) };
+  };
+  const race = pictureSelect<Race | "">(
+    [
+      { value: "", label: t("newgame.random") },
+      ...RACES.map((r, i) => ({ value: r, label: t(`race.${r}.plural`), sub: t(`race.${r}.trait`), ...emblem(i) })),
+    ],
+    "",
+    undefined,
+    "race-select",
   );
-  const banner = h("select", {}, h("option", { value: "" }, t("newgame.random")), ...theme.def.banners.map((_, i) => h("option", { value: i }, t(`banner.${i}`))));
+  const banner = pictureSelect<number | null>(
+    [{ value: null, label: t("newgame.random") }, ...theme.def.banners.map((color, i) => ({ value: i, label: t(`banner.${i}`), swatch: color }))],
+    null,
+  );
   const leader = h("input", { type: "text", maxlength: 24, placeholder: t("newgame.leader_placeholder") });
   const seed = h("input", { type: "number", value: Math.floor(Math.random() * 1e9) });
   const start = () => {
-    const r = (race.value || null) as Race | null;
+    const r = race.value || null;
     const opts: NewGameOptions = {
       seed: Number(seed.value) || 1,
       galaxy_size: size.value as GalaxySize,
@@ -186,7 +199,7 @@ function newGame(): void {
       players: Number(players.value),
       ai_id: Number(ai.value),
       race: r,
-      banner: banner.value === "" ? null : Number(banner.value),
+      banner: banner.value,
       star_names: theme.list("names.sites"),
       home_names: theme.list("names.homes"),
       leader_names: RACES.map((r, i) => theme.list("names.leaders")[i] || t(`race.${r}.leader`)),
@@ -213,8 +226,8 @@ function newGame(): void {
         h(
           "div",
           { class: "form" },
-          field(t("newgame.race"), race),
-          field(t("newgame.banner"), banner),
+          field(t("newgame.race"), race.el),
+          field(t("newgame.banner"), banner.el),
           field(t("newgame.leader"), leader),
           field(t("newgame.size"), size),
           field(t("newgame.difficulty"), diff),

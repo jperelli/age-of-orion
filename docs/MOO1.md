@@ -81,11 +81,17 @@ years, 613 of 710 turns (86%) are identical, including the first 39 turns of the
   - the Tech screen has the known techs of each field on the left and the research sliders on
     the right, and a new tech's project is chosen in its own dialog
   - MOO1's slider controls: − and + on each side, and clicking a slider's name locks it
+  - as in MOO1, an unexplored star shows only its distance (no name or details), stars are
+    small points that twinkle (MOO1's own star pictures when imported), the Races screen
+    lists only the races met (those out of contact greyed out), and ship pictures are chosen
+    with arrows in the design screen
   - unlike MOO1, the map zooms, there are keyboard shortcuts, and dialogs fit the window
 - **Additions**: the Tech screen shows exactly what each tech gives, with its numbers, and a
   technology tree of what has been discovered. Clicking a planet's picture opens a window
   with its land, the ships in orbit, and its population, factories, waste and bases drawn as
-  rows of icons. You can also change the language and the theme, and load mods.
+  rows of icons. A planet's type, star, special, environment and owner can be clicked to see
+  what they mean in the rules (population, production, growth, race abilities). You can also
+  change the language and the theme, and load mods.
 - **Texts**: written for this game, because MOO1's are copyrighted. In English, the Classic
   theme uses MOO1's own news and tech descriptions if you import EVENTMSG.LBX and
   RESEARCH.LBX.

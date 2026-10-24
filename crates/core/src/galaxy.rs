@@ -652,8 +652,8 @@ fn generate_planets(rng: &mut Rng, w: u16, h: u16, nebulae: &[Nebula]) -> Vec<Pl
             19 => StarType::Neutron,
             _ => StarType::Yellow,
         };
-        rng.below(2); // look
-        rng.below(50); // animation frame
+        p.look = rng.below(2) as u8 * 6;
+        p.frame = rng.below(50) as u8;
         rng.below(4); // keeps the original random sequence
         let in_nebula = inside(nebulae, p.x, p.y);
         p.nebula = in_nebula;

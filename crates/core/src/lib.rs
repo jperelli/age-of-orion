@@ -588,6 +588,18 @@ mod tests {
         );
     }
 
+    #[test]
+    fn unexplored_planets_show_only_where_they_are() {
+        let g = Game::new(&opts(16)).unwrap();
+        let v = g.view(0);
+        let orion = g.st.orion;
+        assert!(!g.st.empires[0].explored[orion]);
+        let p = &v.planets[orion];
+        assert!(p.name.is_empty() && p.kind.is_none() && p.owner.is_none());
+        assert!(!p.orion && !p.guardian);
+        assert!(v.planets[g.st.empires[0].home].name.len() > 1);
+    }
+
     /// What the new-tech dialogs do: the first choice of every field without a project.
     fn choose_research(g: &mut Game, empire: EmpireId) {
         for (field, f) in g.view(empire).tech.iter().enumerate() {

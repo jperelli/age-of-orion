@@ -43,10 +43,13 @@ pub struct Colony {
 #[derive(Debug, Clone, Serialize)]
 pub struct PlanetView {
     pub id: PlanetId,
+    /// Empty until explored: only the star and the distance are known (as in MOO1).
     pub name: String,
     pub x: i32,
     pub y: i32,
     pub star: StarType,
+    /// Picture variant of the star on the classic map (1oom `look`: 0 or 6).
+    pub look: u8,
     pub explored: bool,
     pub nebula: bool,
     /// Parsecs to the nearest own colony.
@@ -302,15 +305,16 @@ pub fn view(st: &State, me: EmpireId) -> View {
             let known_owner = ex && p.owner.is_some();
             PlanetView {
                 id: i,
-                name: p.name.clone(),
+                name: if ex { p.name.clone() } else { String::new() },
                 x: p.x,
                 y: p.y,
                 star: p.star,
+                look: p.look,
                 explored: ex,
                 nebula: p.nebula,
                 range: st.range_to(me, i),
-                orion: i == st.orion,
-                guardian: i == st.orion && st.guardian,
+                orion: ex && i == st.orion,
+                guardian: ex && i == st.orion && st.guardian,
                 image: ex.then_some(p.image),
                 kind: ex.then_some(p.kind),
                 special: ex.then_some(p.special),

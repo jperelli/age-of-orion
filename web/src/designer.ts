@@ -1,7 +1,10 @@
-// Ship design screen (1oom game_design.c rules live in the Rust core: this only edits a
-// design and asks the core for its cost, space and combat figures).
+// Ship design screen, laid out like MOO1's (1oom `uidesign.c`): the ship's picture with arrows
+// to choose another, the four hull sizes with theirs, then the parts. The rules
+// (1oom game_design.c) live in the Rust core: this only edits a design and asks the core for
+// its cost, space and combat figures.
 import type { Ctx } from "./ctx";
 import { shipParts } from "./engine";
+import { designPicture } from "./pictures";
 import type { DesignStats, DesignView, ShipDesign } from "./types";
 import { append, clear, h, keepScroll, modal } from "./ui";
 
@@ -62,11 +65,13 @@ export function designDialog(ctx: Ctx): Promise<number> {
   const renderList = () => {
     const v = ctx.view();
     clear(list).append(h("h3", {}, t("designer.current", { n: v.designs.length, max: MAX_DESIGNS })));
+    const banner = v.empires[v.player].banner;
     for (const [i, dv] of v.designs.entries()) {
       list.append(
         h(
           "div",
           { class: `design-item ${slot === i ? "selected" : ""}` },
+          h("img", { class: "design-pic", src: designPicture(ctx.theme, dv.look, dv.hull, banner), alt: "" }),
           h("b", {}, dv.name),
           h("span", { class: "muted" }, ` ${part("hull", parts.hulls[dv.hull].key)}`),
           h("div", { class: "small" }, statsLine(dv.stats, dv)),
@@ -153,6 +158,41 @@ export function designDialog(ctx: Ctx): Promise<number> {
       );
       save.disabled = !!stats.error || full;
     };
+    const banner = v.empires[v.player].banner;
+    const variant = (d.look % 24) % 6;
+    const lookAt = (hull: number, n: number) => hull * 6 + ((n % 6) + 6) % 6;
+    const turn = (dir: number) => {
+      d.look = lookAt(d.hull, variant + dir);
+      keepScroll(editor, renderEditor);
+    };
+    // MOO1: the ship's picture, with arrows for the six pictures of its hull size.
+    const look = h(
+      "div",
+      { class: "ship-look" },
+      h("button", { class: "mini", title: t("designer.look_prev"), onclick: () => turn(-1) }, "‹"),
+      h("img", { src: designPicture(ctx.theme, lookAt(d.hull, variant), d.hull, banner), alt: "", title: t("designer.look_next"), onclick: () => turn(1) }),
+      h("button", { class: "mini", title: t("designer.look_next"), onclick: () => turn(1) }, "›"),
+    );
+    const hulls = h(
+      "div",
+      { class: "hull-buttons" },
+      ...parts.hulls.map((hl, i) =>
+        h(
+          "button",
+          {
+            class: i === d.hull ? "primary" : "",
+            onclick: () => {
+              d.hull = i;
+              d.look = lookAt(i, variant);
+              keepScroll(editor, renderEditor);
+            },
+          },
+          h("img", { src: designPicture(ctx.theme, lookAt(i, variant), i, banner), alt: "" }),
+          h("span", {}, part("hull", hl.key)),
+          h("small", {}, t("designer.space", { n: hl.space })),
+        ),
+      ),
+    );
     const name = h("input", { type: "text", value: d.name, maxlength: 24 });
     name.addEventListener("input", () => ((d.name = name.value), update()));
     counts.forEach((c, i) =>
@@ -183,11 +223,10 @@ export function designDialog(ctx: Ctx): Promise<number> {
     append(
       clear(editor),
       h("h3", {}, slot === null ? t("designer.new_title") : t("designer.edit_title", { name: v.designs[slot].name })),
-      h("label", { class: "field" }, h("span", {}, t("designer.name")), name),
+      h("div", { class: "design-top" }, look, h("div", {}, h("label", { class: "field" }, h("span", {}, t("designer.name")), name), hulls)),
       h(
         "div",
         { class: "form" },
-        select(t("designer.hull"), parts.hulls.map((hl, i): [number, string] => [i, `${part("hull", hl.key)} (${t("designer.space", { n: hl.space })})`]), d.hull, (n) => (d.hull = n)),
         select(t("designer.comp"), [none, ...k.comps.map((c): [number, string] => [c, part("comp", parts.comps[c].key)])], d.comp, (n) => (d.comp = n)),
         select(t("designer.shield"), [none, ...k.shields.map((c): [number, string] => [c, part("shield", parts.shields[c].key)])], d.shield, (n) => (d.shield = n)),
         select(t("designer.jammer"), [none, ...k.jammers.map((c): [number, string] => [c, part("jammer", parts.jammers[c].key)])], d.jammer, (n) => (d.jammer = n)),

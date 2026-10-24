@@ -7,7 +7,9 @@ import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefNam
 import type { Game } from "./engine";
 import { groundScreen, isGroundScreen } from "./ground";
 import { MapView, cityLevel, etaTurns } from "./map";
-import { designPicture, iconRow } from "./pictures";
+import { growthLines, kindLines, raceLines, specialLines, starLines } from "./explain";
+import { designPicture, iconRow, uiIcon } from "./pictures";
+import { explained, pictureSelect } from "./widgets";
 import { newscast, newsType } from "./news";
 import { adjustGroup, slider, sliders } from "./sliders";
 import { chooseTechs, needsChoice, techScreen } from "./research";
@@ -35,7 +37,7 @@ export class GameScreen {
     private onQuit: () => void,
     private onLoad: (save: string) => void,
   ) {
-    this.view = game.view();
+    this.view = this.fetchView();
     const canvas = h("canvas", { class: "map" });
     this.bar = h("footer", { class: "bottombar" });
     this.head = h("div", { class: "panel-head" });
@@ -76,8 +78,15 @@ export class GameScreen {
     return { game: this.game, theme: this.theme, view: () => this.view, command: (c) => this.command(c), refresh: () => this.refresh() };
   }
 
+  /** The core's view, with a name for the places not explored yet (the core gives none). */
+  private fetchView(): View {
+    const v = this.game.view();
+    for (const p of v.planets) if (!p.explored) p.name = this.t("planet.unknown");
+    return v;
+  }
+
   private refresh(): void {
-    this.view = this.game.view();
+    this.view = this.fetchView();
     this.map.setView(this.view);
     this.render();
   }
@@ -113,15 +122,16 @@ export class GameScreen {
   private renderBar(): void {
     const v = this.view;
     const me = v.empires[v.player];
+    const stat = (icon: string, n: number, title: string) => h("span", { class: "stat", title }, h("img", { src: uiIcon(this.theme, icon), alt: "" }), String(n));
     clear(this.head).append(
       h("div", { class: "crest", style: `--banner:${this.theme.banner(me.banner)}` }),
-      h("b", { class: "year" }, this.t("game.year", { year: v.year })),
+      h("b", { class: "year" }, String(v.year)),
       h(
-        "div",
-        { class: "stats" },
-        h("span", { title: this.t("game.production_hint") }, this.t("game.production", { bc: v.total_prod - v.maintenance, maint: v.maintenance })),
-        h("span", {}, this.t("game.research", { rp: v.research })),
-        h("span", {}, this.t("game.reserve", { bc: v.reserve })),
+        "button",
+        { class: "stats", title: this.t("game.stats_hint"), onclick: () => void this.treasuryDialog() },
+        stat("gold", v.total_prod - v.maintenance, this.t("game.production", { bc: v.total_prod - v.maintenance, maint: v.maintenance })),
+        stat("research", v.research, this.t("game.research", { rp: v.research })),
+        stat("reserve", v.reserve, this.t("game.reserve", { bc: v.reserve })),
       ),
     );
     const button = (key: string, onclick: () => void, cls = "") => h("button", { class: cls, onclick }, this.t(key));
@@ -207,25 +217,33 @@ export class GameScreen {
     return h("div", { class: `planet-pic swatch kind-${p.kind ?? "unknown"} star-${p.star}` });
   }
 
-  private planetPanel(p: PlanetView): void {
+  /** Rows of facts about a place; land, climate, resources, soil and owner explain themselves when clicked. */
+  private placeFacts(p: PlanetView, long: boolean): [string, string | number | HTMLElement][] {
     const v = this.view;
     const mine = p.owner === v.player;
     const rows: [string, string | number | HTMLElement][] = [];
-    if (p.explored && p.kind) {
-      rows.push([this.t("planet.terrain"), this.t(`planet.${p.kind}`)]);
-      rows.push([this.t("planet.region"), this.t(`star.${p.star}`)]);
-      if (p.special && p.special !== "normal") rows.push([this.t("planet.special"), this.t(`special.${p.special}`)]);
-      if (p.growth && p.growth !== "normal") rows.push([this.t("planet.growth"), this.t(`growth.${p.growth}`)]);
-      rows.push([this.t("planet.max_pop"), p.max_pop ?? 0]);
-    } else {
-      rows.push([this.t("planet.region"), this.t(`star.${p.star}`)]);
+    const ex = (key: string, value: string, lines: string[]) => explained(value, `${this.t(key)}: ${value}`, lines);
+    if (p.kind) {
+      rows.push([this.t("planet.terrain"), ex("planet.terrain", this.t(`planet.${p.kind}`), kindLines(this.theme, p.kind))]);
+      rows.push([this.t("planet.region"), ex("planet.region", this.t(`star.${p.star}`), starLines(this.theme, p.star))]);
+      if (p.special && (long || p.special !== "normal")) rows.push([this.t("planet.special"), ex("planet.special", this.t(`special.${p.special}`), specialLines(this.theme, p.special))]);
+      const race = v.empires[p.owner ?? v.player].race;
+      if (p.growth && (long || p.growth !== "normal")) rows.push([this.t("planet.growth"), ex("planet.growth", this.t(`growth.${p.growth}`), growthLines(this.theme, p.growth, race))]);
+      if (!long) rows.push([this.t("planet.max_pop"), p.max_pop ?? 0]);
     }
     if (p.owner !== null) {
-      rows.push([this.t("planet.owner"), h("span", { class: "owner" }, this.arms(p.owner), this.empireName(p.owner))]);
-      rows.push([this.t("planet.pop"), `${p.pop}${mine ? ` / ${p.max_pop}` : ""}`]);
-      rows.push([this.t("planet.factories"), `${p.factories}${mine && p.colony ? ` / ${p.colony.max_factories}` : ""}`]);
-      rows.push([this.t("planet.bases"), p.bases ?? 0]);
-      if (mine && p.shield) rows.push([this.t("planet.shield"), p.shield]);
+      const e = v.empires[p.owner];
+      const name = this.empireName(p.owner);
+      rows.push([
+        this.t("planet.owner"),
+        h("span", { class: "owner" }, this.arms(p.owner), explained(name, name, [this.t(`race.${e.race}.trait`), ...raceLines(this.theme, e.race, this.theme.mod?.rules)])),
+      ]);
+      if (!long) {
+        rows.push([this.t("planet.pop"), `${p.pop}${mine ? ` / ${p.max_pop}` : ""}`]);
+        rows.push([this.t("planet.factories"), `${p.factories}${mine && p.colony ? ` / ${p.colony.max_factories}` : ""}`]);
+        rows.push([this.t("planet.bases"), p.bases ?? 0]);
+        if (mine && p.shield) rows.push([this.t("planet.shield"), p.shield]);
+      }
       if (p.rebellion) rows.push([this.t("planet.unrest"), this.t("planet.rebellion", { n: p.rebels ?? 0 })]);
       else if (mine && p.rebels) rows.push([this.t("planet.unrest"), this.t("planet.rebels", { n: p.rebels })]);
       if (mine && p.reserve) rows.push([this.t("planet.reserve"), `${p.reserve} ${this.t("unit.bc")}`]);
@@ -233,21 +251,40 @@ export class GameScreen {
     if (p.nebula) rows.push([this.t("planet.nebula"), this.t("planet.nebula_effect")]);
     if (p.stargate) rows.push([this.t("planet.stargate"), this.t("planet.stargate_yes")]);
     if (!mine) rows.push([this.t("planet.distance"), p.range > 900 ? "-" : this.t("planet.parsecs", { n: p.range })]);
+    return rows;
+  }
+
+  private facts(rows: [string, string | number | HTMLElement][]): HTMLElement {
+    return h("table", { class: "facts" }, ...rows.map(([k, val]) => h("tr", {}, h("th", {}, k), h("td", {}, val))));
+  }
+
+  private planetPanel(p: PlanetView): void {
+    const v = this.view;
+    const mine = p.owner === v.player;
+    // Unexplored: only that something is there, and how far (MOO1 shows "UNEXPLORED").
+    if (!p.explored) {
+      append(
+        this.panel,
+        h("div", { class: "planet-head" }, h("div", { class: "planet-pic swatch kind-unknown" }), h("div", {}, h("h2", {}, p.name), h("div", { class: "muted" }, this.t("planet.something_there")))),
+        this.facts([[this.t("planet.distance"), p.range > 900 ? "-" : this.t("planet.parsecs", { n: p.range })]]),
+        h("p", { class: "muted" }, this.t("planet.unexplored")),
+      );
+      if (v.fleets.some((f) => f.at === p.id)) append(this.panel, h("p", { class: "muted small" }, this.t("orbit.select_hint")));
+      return;
+    }
     const view = this.placeView(p);
     const pic = view ?? this.planetPicture(p);
-    if (p.explored) {
-      pic.classList.add("opens");
-      pic.title = this.t("planet.open_window");
-      pic.addEventListener("click", () => void this.planetWindow(p));
-    }
-    append(this.panel, 
+    pic.classList.add("opens");
+    pic.title = this.t("planet.open_window");
+    pic.addEventListener("click", () => void this.planetWindow(p));
+    append(
+      this.panel,
       view,
       h("div", { class: "planet-head" }, view ? null : pic, h("div", {}, h("h2", {}, p.name), p.orion ? h("div", { class: "muted" }, this.t("planet.orion")) : null)),
-      h("table", { class: "facts" }, ...rows.map(([k, val]) => h("tr", {}, h("th", {}, k), h("td", {}, val)))),
+      this.facts(this.placeFacts(p, false)),
     );
-    if (!p.explored) append(this.panel, h("p", { class: "muted" }, this.t("planet.unexplored")));
     if (p.guardian) append(this.panel, h("p", { class: "warn" }, this.t("planet.guardian")));
-    if (p.explored && p.owner === null && p.kind !== "not_habitable" && !p.guardian) {
+    if (p.owner === null && p.kind !== "not_habitable" && !p.guardian) {
       append(this.panel, h("p", { class: p.colonizable ? "good" : "muted" }, this.t(p.colonizable ? "planet.can_colonize" : "planet.needs_tech")));
     }
     if (mine && p.colony) this.colonyControls(p);
@@ -267,14 +304,18 @@ export class GameScreen {
     });
     const turns = Math.ceil(Math.max(0, c.build_cost - c.bc_to_ship) / Math.max(1, c.spending[0]));
     const gate = v.abilities.stargates && !p.stargate;
-    const select = h(
-      "select",
-      { onchange: (e: Event) => this.command({ type: "set_build", planet: p.id, design: Number((e.target as HTMLSelectElement).value) }) },
-      ...v.designs.map((d, i) => h("option", { value: i, selected: i === c.build }, `${d.name} (${d.stats.cost} ${this.t("unit.bc")})`)),
-      gate || c.build === BUILD_STARGATE
-        ? h("option", { value: BUILD_STARGATE, selected: c.build === BUILD_STARGATE }, `${this.t("colony.stargate")} (${v.stargate_cost} ${this.t("unit.bc")})`)
-        : null,
-    );
+    const banner = v.empires[v.player].banner;
+    const select = pictureSelect(
+      [
+        ...v.designs.map((d, i) => ({ value: i, label: d.name, sub: `${d.stats.cost} ${this.t("unit.bc")}`, img: designPicture(this.theme, d.look, d.hull, banner) })),
+        ...(gate || c.build === BUILD_STARGATE
+          ? [{ value: BUILD_STARGATE, label: this.t("colony.stargate"), sub: `${v.stargate_cost} ${this.t("unit.bc")}`, img: this.theme.url("stargate") }]
+          : []),
+      ],
+      c.build,
+      (design) => this.command({ type: "set_build", planet: p.id, design }),
+      "build-select",
+    ).el;
     const rally = c.rally !== null ? v.planets[c.rally] : null;
     append(this.panel, 
       h("h3", {}, this.t("colony.spending", { bc: p.prod ?? 0 })),
@@ -559,13 +600,7 @@ export class GameScreen {
     } else if (p.kind) {
       stats.push(stat(this.t("planet.max_pop"), p.max_pop ?? 0, iconRow(this.theme, "pop", 0, 5, p.max_pop ?? 0)));
     }
-    const facts = [
-      p.kind ? `${this.t("planet.terrain")}: ${this.t(`planet.${p.kind}`)}` : null,
-      `${this.t("planet.region")}: ${this.t(`star.${p.star}`)}`,
-      p.special && p.special !== "normal" ? `${this.t("planet.special")}: ${this.t(`special.${p.special}`)}` : null,
-      p.growth && p.growth !== "normal" ? `${this.t("planet.growth")}: ${this.t(`growth.${p.growth}`)}` : null,
-      p.owner !== null ? `${this.t("planet.owner")}: ${this.empireName(p.owner)}` : null,
-    ].filter(Boolean) as string[];
+    const facts = this.facts(this.placeFacts(p, true));
     const fleets = v.fleets.filter((f) => f.at === p.id);
     const garrison = fleets.length
       ? [
@@ -589,7 +624,23 @@ export class GameScreen {
           ),
         ]
       : [];
-    await modal(p.name, [h("div", { class: "planet-window" }, big, h("div", { class: "window-side" }, h("ul", { class: "muted small" }, ...facts.map((x) => h("li", {}, x))), ...stats)), ...garrison], [this.t("btn.close")], "wide");
+    await modal(p.name, [h("div", { class: "planet-window" }, big, h("div", { class: "window-side" }, facts, ...stats)), ...garrison], [this.t("btn.close")], "wide");
+  }
+
+  /** The empire's income, research and treasury in full (the panel's header shows only the numbers). */
+  private async treasuryDialog(): Promise<void> {
+    const v = this.view;
+    const row = (icon: string, text: string, hint?: string) =>
+      h("div", { class: "treasury-row" }, h("img", { src: uiIcon(this.theme, icon), alt: "" }), h("div", {}, h("div", {}, text), hint ? h("div", { class: "muted small" }, hint) : null));
+    await modal(
+      this.t("game.year", { year: v.year }),
+      [
+        row("gold", this.t("game.production", { bc: v.total_prod - v.maintenance, maint: v.maintenance }), this.t("game.production_hint")),
+        row("research", this.t("game.research", { rp: v.research })),
+        row("reserve", this.t("game.reserve", { bc: v.reserve })),
+      ],
+      [this.t("btn.close")],
+    );
   }
 
   /** MOO1's FLEET button: every fleet of the player, to find and select it on the map. */

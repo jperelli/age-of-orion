@@ -159,8 +159,13 @@ input[type="range"] { accent-color: var(--accent); }
   border-bottom: 3px solid var(--border);
 }
 :root[data-theme="classic"] .panel-head { color: var(--ink); }
-.panel-head .year { color: var(--gold); font-size: 1.3em; }
-.panel-head .stats { display: flex; flex-direction: column; width: 100%; font-size: 0.85em; }
+.panel-head .year { color: var(--gold); font-size: 1.15em; }
+.panel-head .stats { display: flex; gap: 0.7em; margin: 0 0 0 auto; padding: 0.1em 0.3em; background: none; border: 1px solid transparent; box-shadow: none; color: inherit; text-shadow: 0 1px 1px #000; }
+.panel-head .stats:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); border-color: rgba(0, 0, 0, 0.3); }
+.panel-head .stat { display: inline-flex; align-items: center; gap: 0.2em; font-weight: bold; font-variant-numeric: tabular-nums; }
+.panel-head .stat img { width: 18px; height: 18px; }
+.treasury-row { display: flex; gap: 0.6em; align-items: flex-start; margin: 0.5em 0; }
+.treasury-row img { width: 28px; height: 28px; flex: none; }
 :root[data-moofonts] .panel-head .year { font-family: var(--title-font); font-size: 20px; }
 .crest { width: 26px; height: 32px; background: var(--banner); clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%); border: 2px solid #000; flex: none; }
 .crest.big { width: 48px; height: 60px; }
@@ -239,6 +244,41 @@ tr.clickable:hover td { background: rgba(0, 0, 0, 0.06); }
 .targeting { background: var(--accent); color: #fff; padding: 0.5em; border-radius: 4px; margin-bottom: 0.6em; }
 .targeting p { margin: 0 0 0.3em; }
 
+/* A select whose options have pictures (empires, banners, ships). */
+.picture-select { position: relative; }
+.picture-select .picture-select-button, .picture-option {
+  display: flex; align-items: center; gap: 0.5em; width: 100%; margin: 0; text-align: left;
+  background: var(--parchment); color: var(--ink); text-shadow: none; padding: 0.25em 0.5em; box-shadow: none;
+}
+.picture-select .picture-select-button:hover:not(:disabled), .picture-select .picture-option:hover:not(:disabled) { background: var(--parchment-dark); }
+.picture-select .pic { width: 36px; height: 36px; object-fit: contain; flex: none; border-radius: 3px; }
+.picture-select .pic.swatch { display: inline-block; width: 28px; clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%); }
+.picture-select .pic.none { display: inline-flex; align-items: center; justify-content: center; font-weight: bold; background: rgba(0, 0, 0, 0.15); }
+.picture-select .text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.picture-select .text small { color: var(--muted); font-size: 0.8em; font-weight: normal; }
+.picture-select-button .text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picture-select .caret { margin-left: auto; color: var(--muted); }
+.picture-select-list {
+  display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 20; max-height: 50vh; overflow-y: auto;
+  background: var(--parchment); border: 2px solid var(--border); border-radius: 4px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.picture-select.open .picture-select-list { display: block; }
+.picture-select .picture-option { border: 0; border-bottom: 1px solid var(--parchment-dark); border-radius: 0; }
+.picture-select .picture-option.selected { background: var(--parchment-dark); }
+.build-select .pic { width: 48px; height: 36px; }
+.race-select .picture-select-list { min-width: 22em; }
+/* Values that explain themselves when clicked. */
+button.explain, .panel button.explain {
+  margin: 0; padding: 0; background: none; border: 0; box-shadow: none; color: inherit; text-shadow: none;
+  font: inherit; text-align: inherit; cursor: help; text-decoration: underline dotted; text-underline-offset: 2px;
+}
+button.explain:hover:not(:disabled) { background: none; color: var(--accent); }
+.popover {
+  position: fixed; z-index: 50; background: var(--parchment); color: var(--ink); border: 2px solid var(--border);
+  border-radius: 6px; padding: 0.5em 0.7em; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55); font-size: 0.9em;
+}
+.popover p { margin: 0.3em 0; }
+
 /* ------------------------------------------------------------ dialogs */
 .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; z-index: 10; padding: 1em; }
 .dialog {
@@ -255,6 +295,11 @@ tr.clickable:hover td { background: rgba(0, 0, 0, 0.06); }
 .dialog.wide { max-width: 760px; }
 .dialog.huge { max-width: 1100px; }
 .dialog h2 { margin: 0; padding: 0.6em 1em; background: var(--wood); color: #f5e7c6; border-bottom: 2px solid var(--border); font-size: 1.25em; }
+.dialog-head { display: flex; align-items: center; background: var(--wood); border-bottom: 2px solid var(--border); border-radius: 4px 4px 0 0; }
+.dialog-head h2 { flex: 1; border-bottom: 0; min-width: 0; }
+.dialog-close { margin: 0 0.5em 0 0; padding: 0 0.45em; font-size: 1.4em; line-height: 1.2; background: transparent; border-color: transparent; box-shadow: none; color: #f5e7c6; }
+.dialog-close:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); border-color: rgba(0, 0, 0, 0.3); }
+:root[data-theme="classic"] .dialog-close { color: var(--ink); }
 .dialog-body { padding: 0.8em 1em; overflow-y: auto; }
 .dialog-buttons { display: flex; gap: 0.5em; justify-content: flex-end; padding: 0.6em 1em; border-top: 1px solid var(--parchment-dark); flex-wrap: wrap; }
 .events { margin: 0; padding-left: 1.2em; }
@@ -272,6 +317,8 @@ tr.clickable { cursor: pointer; }
 tr.clickable:hover { background: rgba(0, 0, 0, 0.08); }
 .rival { display: flex; gap: 0.8em; align-items: center; margin: 0.6em 0; }
 .rival.dead { opacity: 0.5; }
+.rival.lost > .portrait, .rival.lost > .crest, .rival.lost .rival-info > :not(.lost-contact) { filter: grayscale(1); opacity: 0.55; }
+.lost-contact { display: inline-block; margin: 0.15em 0; padding: 0.05em 0.5em; border: 2px solid var(--warn); border-radius: 3px; color: var(--warn); font-weight: bold; text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
 .rival b { background: #2b1e12; padding: 0.05em 0.4em; border-radius: 3px; }
 .portrait { width: 80px; height: 68px; border: 2px solid var(--border); background: #000; }
 .portrait.painted { width: 96px; height: 120px; object-fit: cover; border-radius: 4px; }
@@ -359,6 +406,17 @@ details.known ul { columns: 2; margin: 0.3em 0; font-size: 0.85em; }
 .design-list { border-right: 1px solid var(--parchment-dark); padding-right: 0.8em; }
 .design-item { padding: 0.4em; border: 1px solid var(--parchment-dark); border-radius: 4px; margin-bottom: 0.4em; }
 .design-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.design-pic { float: left; width: 56px; height: 42px; object-fit: contain; margin: 0 0.5em 0.2em 0; }
+.design-item .row { clear: both; }
+.design-top { display: grid; grid-template-columns: auto 1fr; gap: 1em; align-items: start; margin: 0.4em 0; }
+.ship-look { display: flex; align-items: center; gap: 0.3em; padding: 0.4em; border: 2px solid var(--border); border-radius: 4px; background: radial-gradient(circle, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.25)); }
+:root[data-theme="classic"] .ship-look { background: radial-gradient(circle, #10213a, #000); }
+.ship-look img { width: 132px; height: 99px; object-fit: contain; cursor: pointer; }
+.ship-look img.pixel, :root[data-theme="classic"] .ship-look img { image-rendering: pixelated; }
+.hull-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3em; margin-top: 0.4em; }
+.hull-buttons button { display: flex; flex-direction: column; align-items: center; padding: 0.2em; margin: 0; }
+.hull-buttons img { width: 56px; height: 42px; object-fit: contain; }
+.hull-buttons small { opacity: 0.85; }
 .row { display: flex; gap: 0.4em; flex-wrap: wrap; margin-top: 0.3em; }
 .design-editor .form { margin: 0.5em 0; }
 .weapon-row { display: grid; grid-template-columns: 1fr 9em; gap: 0.6em; align-items: end; margin: 0.3em 0; }

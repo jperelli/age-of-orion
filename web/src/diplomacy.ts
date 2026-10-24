@@ -118,7 +118,10 @@ export function diplomacyDialog(ctx: Ctx): Promise<number> {
       ),
     );
     append(body, card(ctx, v.player, null, render));
-    for (const r of v.relations) append(body, card(ctx, r.empire, r, render));
+    // Only the empires met are known, as in MOO1; those out of reach now are greyed out.
+    const met = v.relations.filter((r) => r.met);
+    for (const r of met) append(body, card(ctx, r.empire, r, render));
+    if (!met.length) append(body, h("p", { class: "muted" }, t("diplomacy.none_met")));
   };
   draw();
   return modal(t("rivals.title"), body, [t("btn.close")], "wide");
@@ -135,6 +138,8 @@ function card(ctx: Ctx, id: number, r: RelationView | null, render: () => void):
     h("div", {}, e.alive ? t("rivals.colonies", { n: e.known_colonies }) : t("rivals.eliminated")),
   ];
   const extra: (HTMLElement | null)[] = [];
+  const lost = !!r && e.alive && !r.contact;
+  if (lost) lines.splice(1, 0, h("div", { class: "lost-contact" }, t("diplomacy.lost_contact")));
   if (r && e.alive) {
     if (!r.met) {
       lines.push(h("div", { class: "muted" }, t("diplomacy.not_met")));
@@ -168,7 +173,7 @@ function card(ctx: Ctx, id: number, r: RelationView | null, render: () => void):
   }
   const arms = ctx.theme.url(`arms/${RACES.indexOf(e.race)}`);
   if (arms) lines.unshift(h("img", { class: "arms big", src: arms, alt: "" }));
-  return h("div", { class: `rival ${e.alive ? "" : "dead"}` }, portrait(ctx, id), h("div", { class: "rival-info" }, ...lines), extra.length ? h("div", { class: "rival-actions" }, ...extra) : null);
+  return h("div", { class: `rival ${e.alive ? "" : "dead"} ${lost ? "lost" : ""}` }, portrait(ctx, id), h("div", { class: "rival-info" }, ...lines), extra.length ? h("div", { class: "rival-actions" }, ...extra) : null);
 }
 
 function spyBox(ctx: Ctx, r: RelationView, render: () => void): HTMLElement {
@@ -469,7 +474,7 @@ async function council(ctx: Ctx): Promise<void> {
       t("council.title"),
       [councilHall(ctx), h("p", {}, t("council.text", { a: name(a), b: name(b), need: Math.floor(((el.total + 1) * 2) / 3), total: el.total })), h("table", { class: "list" }, ...rows), h("p", {}, t("council.your_votes", { n: el.votes[v.player] ?? 0 }))],
       [t("council.vote_for", { race: empireName(ctx, a) }), t("council.vote_for", { race: empireName(ctx, b) }), t("council.abstain")],
-      "wide",
+      "wide required",
     );
     ctx.command({ type: "vote", candidate: r === 0 ? a : r === 1 ? b : null });
     v = ctx.view();
@@ -487,7 +492,7 @@ async function council(ctx: Ctx): Promise<void> {
   v = ctx.view();
   el = v.election;
   if (el?.awaiting_acceptance && el.elected !== null) {
-    const r = await modal(t("council.title"), [councilHall(ctx), h("p", {}, t("council.accept_text", { winner: name(el.elected) }))], [t("council.accept"), t("council.refuse")]);
+    const r = await modal(t("council.title"), [councilHall(ctx), h("p", {}, t("council.accept_text", { winner: name(el.elected) }))], [t("council.accept"), t("council.refuse")], "required");
     ctx.command({ type: "accept_council", accept: r !== 1 });
   }
 }
