@@ -9,6 +9,7 @@ import type { DesignStats, DesignView, ShipDesign } from "./types";
 import { append, clear, h, keepScroll, modal } from "./ui";
 
 const MAX_DESIGNS = 6;
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
 function blank(name: string): ShipDesign {
   return {
@@ -102,17 +103,94 @@ export function designDialog(ctx: Ctx): Promise<number> {
     list.append(h("button", { onclick: () => ((slot = null), (d = blank(t("designer.new_name"))), render()) }, t("designer.new")));
   };
 
-  const select = (label: string, options: [number, string][], value: number, set: (n: number) => void) =>
-    h(
-      "label",
-      { class: "field" },
+  type Slot = { kind: "comp" | "shield" | "jammer" | "armor" | "engine" | "man" } | { kind: "weapon" | "special"; i: number };
+  const get = (x: ShipDesign, s: Slot): number =>
+    s.kind === "weapon" ? x.weapons[s.i] : s.kind === "special" ? x.specials[s.i] : x[s.kind];
+  const put = (x: ShipDesign, s: Slot, n: number) => {
+    if (s.kind === "weapon") {
+      x.weapons[s.i] = n;
+      x.weapon_counts[s.i] = n ? Math.max(1, x.weapon_counts[s.i]) : 0;
+    } else if (s.kind === "special") x.specials[s.i] = n;
+    else if (s.kind === "engine") {
+      x.engine = n;
+      x.man = Math.min(x.man, n);
+    } else x[s.kind] = n;
+  };
+  /**
+   * MOO1's list window for a slot (1oom `ui_design_sel_*`): every part known, with what it
+   * does, what it adds to the cost and the space it takes (with the engines it needs); the
+   * ones that do not fit are greyed out.
+   */
+  const pick = async (s: Slot, title: string, options: number[]) => {
+    const base = copy(d);
+    put(base, s, 0);
+    if (s.kind === "weapon") base.weapon_counts[s.i] = 0;
+    const before = ctx.game.designStats(base);
+    const current = get(d, s);
+    const head = (keys: string[]) => h("tr", {}, ...keys.map((k) => h("th", {}, t(`designer.col.${k}`))));
+    const cols = s.kind === "weapon" ? ["max", "name", "damage", "range", "notes", "cost", "space"] : s.kind === "man" ? ["class", "speed", "cost", "space"] : ["name", "notes", "cost", "space"];
+    let close: (i: number) => void = () => {};
+    const rows = options.map((n) => {
+      const trial = copy(base);
+      put(trial, s, n);
+      if (s.kind === "weapon" && n) trial.weapon_counts[s.i] = 1;
+      const st = ctx.game.designStats(trial);
+      const fits = st.free_space >= 0 || n === current;
+      const cost = n ? `${st.cost - before.cost}` : "";
+      const space = n || s.kind === "man" ? `${before.free_space - st.free_space}` : "";
+      let cells: string[];
+      if (s.kind === "weapon") {
+        const w = parts.weapons[n];
+        const dmg = !n ? "" : w.damage_min === w.damage_max ? `${w.damage_max}` : `${w.damage_min}-${w.damage_max}`;
+        const notes = n && ctx.theme.has(`part.weapon.${w.key}.info`) ? t(`part.weapon.${w.key}.info`) : "";
+        cells = [n ? `${st.max_weapons[s.i]}` : "", n ? part("weapon", w.key) : t("designer.none"), dmg, n ? `${w.range}` : "", notes, cost, space];
+      } else if (s.kind === "man") {
+        cells = [t("designer.class", { n: ROMAN[n] ?? n + 1 }), `${Math.floor((n + 3) / 2)}`, cost, space];
+      } else {
+        const [name, notes] = partInfo(s.kind, n);
+        cells = [name, notes, cost, space];
+      }
+      return h(
+        "tr",
+        {
+          class: `${n === current ? "selected" : ""} ${fits ? "clickable" : "disabled"}`,
+          onclick: () => {
+            if (!fits) return;
+            put(d, s, n);
+            close(0);
+          },
+        },
+        ...cells.map((c) => h("td", {}, c)),
+      );
+    });
+    const r = await modal(title, h("table", { class: "list part-list" }, head(cols), ...rows), [t("btn.cancel")], "wide part-picker", (c) => (close = c));
+    if (r === 0) keepScroll(editor, renderEditor);
+  };
+  /** A part's name and what it does, for the list windows and the slots. */
+  const partInfo = (kind: string, n: number): [string, string] => {
+    if (kind === "comp") return n ? [part("comp", parts.comps[n].key), t("effect.comp", { n: parts.comps[n].level })] : [t("designer.none"), ""];
+    if (kind === "shield") return n ? [part("shield", parts.shields[n].key), t("effect.shield", { n: parts.shields[n].absorb })] : [t("designer.none"), ""];
+    if (kind === "jammer") return n ? [part("jammer", parts.jammers[n].key), t("effect.jammer", { n: parts.jammers[n].level })] : [t("designer.none"), ""];
+    if (kind === "armor") return [part("armor", parts.armor[n].key), t("effect.armor", { pct: parts.armor[n].armor })];
+    if (kind === "engine") return [part("engine", parts.engines[n].key), t("effect.engine", { n: parts.engines[n].warp })];
+    if (kind === "special") {
+      const key = parts.specials[n]?.key;
+      return n ? [part("special", key), ctx.theme.has(`part.special.${key}.info`) ? t(`part.special.${key}.info`) : ""] : [t("designer.none"), ""];
+    }
+    return ["", ""];
+  };
+  /** A slot of the design: its name and current part; clicking opens the list window. */
+  const slotButton = (label: string, s: Slot, options: number[]) => {
+    const n = get(d, s);
+    const name =
+      s.kind === "weapon" ? (n ? weaponLabel(n) : t("designer.none")) : s.kind === "man" ? t("designer.class", { n: ROMAN[n] ?? n + 1 }) : partInfo(s.kind, n)[0];
+    return h(
+      "div",
+      { class: "field part-slot" },
       h("span", {}, label),
-      h(
-        "select",
-        { onchange: (e: Event) => (set(Number((e.target as HTMLSelectElement).value)), keepScroll(editor, renderEditor)) },
-        ...options.map(([i, text]) => h("option", { value: i, selected: i === value }, text)),
-      ),
+      h("button", { class: "part-button", onclick: () => void pick(s, label, options) }, name, h("span", { class: "caret" }, "▾")),
     );
+  };
 
   const renderEditor = () => {
     const v = ctx.view();
@@ -121,7 +199,6 @@ export function designDialog(ctx: Ctx): Promise<number> {
     for (let i = 0; i < 4; i++) {
       if (d.weapons[i] && d.weapon_counts[i] === 0 && stats.max_weapons[i] > 0) d.weapon_counts[i] = 1;
     }
-    const none: [number, string] = [0, t("designer.none")];
     const maxLabels = [0, 1, 2, 3].map(() => h("span", {}));
     const counts = [0, 1, 2, 3].map((i) => h("input", { type: "number", min: 0, max: 99, value: d.weapon_counts[i], disabled: !d.weapons[i] }));
     const figures = h("div", { class: "figures" });
@@ -202,24 +279,9 @@ export function designDialog(ctx: Ctx): Promise<number> {
       }),
     );
     const weapons = [0, 1, 2, 3].map((i) =>
-      h(
-        "div",
-        { class: "weapon-row" },
-        select(t("designer.weapon", { n: i + 1 }), [none, ...k.weapons.map((w): [number, string] => [w, weaponLabel(w)])], d.weapons[i], (n) => {
-          d.weapons[i] = n;
-          d.weapon_counts[i] = n ? Math.max(1, d.weapon_counts[i]) : 0;
-        }),
-        h("label", { class: "field count" }, maxLabels[i], counts[i]),
-      ),
+      h("div", { class: "weapon-row" }, slotButton(t("designer.weapon", { n: i + 1 }), { kind: "weapon", i }, [0, ...k.weapons]), h("label", { class: "field count" }, maxLabels[i], counts[i])),
     );
-    const specials = [0, 1, 2].map((i) =>
-      select(
-        t("designer.special", { n: i + 1 }),
-        [none, ...k.specials.map((s): [number, string] => [s, part("special", parts.specials[s].key)])],
-        d.specials[i],
-        (n) => (d.specials[i] = n),
-      ),
-    );
+    const specials = [0, 1, 2].map((i) => slotButton(t("designer.special", { n: i + 1 }), { kind: "special", i }, [0, ...k.specials]));
     append(
       clear(editor),
       h("h3", {}, slot === null ? t("designer.new_title") : t("designer.edit_title", { name: v.designs[slot].name })),
@@ -227,15 +289,12 @@ export function designDialog(ctx: Ctx): Promise<number> {
       h(
         "div",
         { class: "form" },
-        select(t("designer.comp"), [none, ...k.comps.map((c): [number, string] => [c, part("comp", parts.comps[c].key)])], d.comp, (n) => (d.comp = n)),
-        select(t("designer.shield"), [none, ...k.shields.map((c): [number, string] => [c, part("shield", parts.shields[c].key)])], d.shield, (n) => (d.shield = n)),
-        select(t("designer.jammer"), [none, ...k.jammers.map((c): [number, string] => [c, part("jammer", parts.jammers[c].key)])], d.jammer, (n) => (d.jammer = n)),
-        select(t("designer.armor"), k.armor.map((c): [number, string] => [c, part("armor", parts.armor[c].key)]), d.armor, (n) => (d.armor = n)),
-        select(t("designer.engine"), k.engines.map((c): [number, string] => [c, `${part("engine", parts.engines[c].key)} (${t("designer.warp", { n: parts.engines[c].warp })})`]), d.engine, (n) => {
-          d.engine = n;
-          d.man = Math.min(d.man, n);
-        }),
-        select(t("designer.man"), Array.from({ length: d.engine + 1 }, (_, i): [number, string] => [i, String(i + 1)]), d.man, (n) => (d.man = n)),
+        slotButton(t("designer.comp"), { kind: "comp" }, [0, ...k.comps]),
+        slotButton(t("designer.shield"), { kind: "shield" }, [0, ...k.shields]),
+        slotButton(t("designer.jammer"), { kind: "jammer" }, [0, ...k.jammers]),
+        slotButton(t("designer.armor"), { kind: "armor" }, k.armor),
+        slotButton(t("designer.engine"), { kind: "engine" }, k.engines),
+        slotButton(t("designer.man"), { kind: "man" }, Array.from({ length: d.engine + 1 }, (_, i) => i)),
       ),
       ...weapons,
       h("div", { class: "form" }, ...specials),

@@ -86,3 +86,60 @@ export function iconRow(theme: Theme, what: string, amount: number, per: number,
   const icon = (cls: string) => h("img", { src: url, alt: "", class: cls });
   return h("div", { class: `icon-row icon-${what}` }, ...Array.from({ length: n }, () => icon("")), ...Array.from({ length: room }, () => icon("room")));
 }
+
+/**
+ * A page element playing an imported animation (MOO1's frames at `scale`, or filling its box
+ * when `scale` is 0), from frame 0 to the last and then again from its loop frame, `fps`
+ * frames a second.
+ */
+export function animSprite(theme: Theme, alias: string, scale = 2, fps = 8): HTMLElement | null {
+  const a = theme.anim(alias);
+  if (!a) return null;
+  const size = scale ? `width:${a.w * scale}px;height:${a.h * scale}px;background-size:${a.w * a.frames * scale}px ${a.h * scale}px` : `background-size:${a.frames * 100}% 100%`;
+  const el = h("div", { class: "anim-sprite pixel", style: `${size};background-image:url("${a.url}")` });
+  let f = 0;
+  let shown = false;
+  const started = performance.now();
+  const tick = () => {
+    if (!el.isConnected) {
+      // Stops once removed, or if it never got shown.
+      if (shown || performance.now() - started > 10000) clearInterval(timer);
+      return;
+    }
+    shown = true;
+    el.style.backgroundPosition = scale ? `${-f * a.w * scale}px 0` : `${(f * 100) / Math.max(1, a.frames - 1)}% 0`;
+    f = f + 1 >= a.frames ? a.loop : f + 1;
+  };
+  const timer = setInterval(tick, 1000 / fps);
+  tick();
+  return el;
+}
+
+export interface Layer {
+  alias: string;
+  x?: number;
+  y?: number;
+  fps?: number;
+}
+
+/**
+ * One of MOO1's screens rebuilt from its pictures (320x200 at `scale`): still pictures and
+ * animations stacked in order at their positions. Null when a picture is missing.
+ */
+export function moo1Scene(theme: Theme, layers: Layer[], scale = 2, w = 320, hgt = 200): HTMLElement | null {
+  const box = h("div", { class: "moo1-scene pixel", style: `width:${w * scale}px;height:${hgt * scale}px` });
+  for (const l of layers) {
+    const pos = `left:${(l.x ?? 0) * scale}px;top:${(l.y ?? 0) * scale}px`;
+    if (theme.anims.has(l.alias)) {
+      const sprite = animSprite(theme, l.alias, scale, l.fps);
+      if (!sprite) return null;
+      sprite.style.cssText += `;position:absolute;${pos}`;
+      box.append(sprite);
+      continue;
+    }
+    const img = theme.img(l.alias);
+    if (!img) return null;
+    box.append(h("img", { src: img.src, alt: "", style: `position:absolute;${pos};width:${img.naturalWidth * scale}px;height:${img.naturalHeight * scale}px` }));
+  }
+  return box;
+}

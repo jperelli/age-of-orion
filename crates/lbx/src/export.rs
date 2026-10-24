@@ -61,6 +61,9 @@ pub struct Manifest {
     pub looping: Vec<String>,
     /// MOO1 fonts converted to TrueType (aliases `font/<n>`).
     pub fonts: Vec<FontInfo>,
+    /// The animations (aliases `anim/...`, horizontal sheets of equal frames): frames,
+    /// frame width and height, and the frame the loop restarts from.
+    pub frames: BTreeMap<String, [u16; 4]>,
     pub warnings: Vec<String>,
 }
 
@@ -248,6 +251,11 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
     for f in &fonts {
         aliases.insert(format!("font/{}", f.index), f.path.clone());
     }
+    let mut frames = BTreeMap::new();
+    for (alias, (path, n)) in animations(&archives) {
+        aliases.insert(alias.clone(), path);
+        frames.insert(alias, n);
+    }
     let looping = archives
         .get("MUSIC")
         .map(|m| {
@@ -267,6 +275,7 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
         text,
         looping,
         fonts,
+        frames,
         warnings,
     };
     out.push(AssetFile {
@@ -300,6 +309,62 @@ fn text_table(name: &str, archive: &Archive) -> Option<Vec<String>> {
             })
             .collect(),
     )
+}
+
+/// The animations the game plays (1oom draws them frame by frame): alias -> (sheet,
+/// [frames, width, height, loop frame]).
+/// Their first frames also have static aliases (`ship/<look>`, `star/<k>`, ...).
+fn animations(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, (String, [u16; 4])> {
+    let mut a = BTreeMap::new();
+    let sheet = |file: &str, i: usize| {
+        let e = archives.get(file)?.entries.get(i)?;
+        let g = e.gfx?;
+        let loop_frame = if g.loop_frame < g.frames {
+            g.loop_frame
+        } else {
+            0
+        };
+        if g.frames > 1 {
+            Some((e.png.clone()?, [g.frames, g.width, g.height, loop_frame]))
+        } else {
+            None
+        }
+    };
+    let mut put = |alias: String, s: Option<(String, [u16; 4])>| {
+        if let Some(s) = s {
+            a.insert(alias, s);
+        }
+    };
+    // Twinkling stars (1oom `ui_starmap_draw_starmap`), as `star/<k>`.
+    for (i, k) in [0, 1, 2, 4, 3, 5, 6, 7, 8, 10, 9, 11]
+        .into_iter()
+        .enumerate()
+    {
+        put(format!("anim/star/{k}"), sheet("STARMAP", 3 + i));
+    }
+    // Ships' engines (1oom `uibattle.c` `frame_ship`), as `ship/<look>`.
+    for look in 0..0x93 {
+        let s = match look {
+            0..=0x45 => sheet("SHIPS2", look),
+            0x48..=0x8f => sheet("SHIPS", look - 0x48),
+            0x90.. => sheet("SHIPS2", look - 0x48),
+            _ => None,
+        };
+        put(format!("anim/ship/{look}"), s);
+    }
+    // EMBASSY.LBX (1oom `uiaudience.c`): each race's ambassador 2 + race.
+    for r in 0..10 {
+        put(format!("anim/embassy/{r}"), sheet("EMBASSY", 2 + r));
+    }
+    // NEWSCAST.LBX (1oom `uinews.c`): the newscaster 2 and the globe 3.
+    put("anim/news/anchor".into(), sheet("NEWSCAST", 2));
+    put("anim/news/world".into(), sheet("NEWSCAST", 3));
+    // SPIES.LBX (1oom `uinewtech.c`): 10 * source + race; source 0 is research, 1 spies,
+    // 2 artifacts.
+    for i in 0..30 {
+        put(format!("anim/newtech/{i}"), sheet("SPIES", i));
+    }
+    a
 }
 
 /// Semantic names for the images and tunes the game UI knows how to use (indices from 1oom
@@ -402,6 +467,25 @@ fn aliases(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, String>
             a.insert(format!("ground/soldier/{r}"), p);
         }
     }
+    // EMBASSY.LBX (1oom `uiaudience.c`): the frame 0, the room 1, the player's emperor seen
+    // from behind 0xc + banner.
+    if let Some(p) = png("EMBASSY", 0) {
+        a.insert("embassy/border".into(), p);
+    }
+    if let Some(p) = png0("EMBASSY", 1) {
+        a.insert("embassy/room".into(), p);
+    }
+    for b in 0..6 {
+        if let Some(p) = png0("EMBASSY", 0xc + b) {
+            a.insert(format!("embassy/emperor/{b}"), p);
+        }
+    }
+    // TECHNO.LBX (1oom `uinewtech.c`): the laboratory 0, the spies' den 1, the ruins 2.
+    for i in 0..3 {
+        if let Some(p) = png0("TECHNO", i) {
+            a.insert(format!("newtech/lab/{i}"), p);
+        }
+    }
     // NEWSCAST.LBX (1oom `uinews.c`): the TV 0, the GNN logo 1, the newscaster 2, the
     // globe 3 and an icon per news type at 3 + type.
     for (i, k) in ["news/tv", "news/gnn", "news/anchor", "news/world"]
@@ -463,5 +547,37 @@ mod tests {
             .unwrap();
         let v: Vec<String> = serde_json::from_slice(&names.bytes).unwrap();
         assert_eq!(v, vec!["Ann", "a{planet}"]);
+    }
+
+    /// `sample_gfx` with its frame twice.
+    fn two_frames() -> Vec<u8> {
+        let one = sample_gfx();
+        let frame = one[0x12 + 8..].to_vec();
+        let mut d = one[..0x12].to_vec();
+        d[6] = 2;
+        let start = 0x12 + 12;
+        for k in 0..3 {
+            d.extend(((start + k * frame.len()) as u32).to_le_bytes());
+        }
+        d.extend(&frame);
+        d.extend(&frame);
+        d
+    }
+
+    #[test]
+    fn lists_animations_with_their_frames() {
+        let files = vec![(
+            "NEWSCAST.LBX".to_string(),
+            build_lbx(0, &[sample_gfx(), sample_gfx(), two_frames()]),
+        )];
+        let r = import(&files);
+        assert_eq!(
+            r.manifest.aliases["anim/news/anchor"],
+            "gfx/newscast/002.png"
+        );
+        assert_eq!(r.manifest.frames["anim/news/anchor"], [2, 2, 3, 0]);
+        // The still picture is the first frame alone.
+        assert_eq!(r.manifest.aliases["news/anchor"], "gfx/newscast/002-0.png");
+        assert!(!r.manifest.frames.contains_key("news/tv"));
     }
 }

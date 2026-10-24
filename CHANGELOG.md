@@ -33,6 +33,17 @@ All notable changes to this project are documented here. The format follows
 - A picture select, used in the new game screen (each empire with its coat of arms or
   portrait, each banner with its colour) and for the ship a colony builds (with its picture).
 - Dialogs have a close button (×) at the top right, except the Council's choices.
+- MOO1's animations, from the player's own LBX files (import them again to get them):
+  - the stars on the Classic map twinkle with MOO1's own star pictures;
+  - ships' engines flicker in battle;
+  - audiences and messages take place in MOO1's embassy, with the race's ambassador moving,
+    the player's emperor seen from behind and the words in the frame's panel;
+  - the newscaster talks and the globe turns on the GNN newscast;
+  - choosing a new research project shows MOO1's laboratory with the race's scientist at
+    work.
+- The ship design screen's parts open a list window, as in MOO1: every part known, with what
+  it does, its cost and the space it takes with the engines it needs, and the weapons that fit;
+  parts that do not fit are greyed out.
 
 ### Changed
 
@@ -64,6 +75,13 @@ All notable changes to this project are documented here. The format follows
   picture. Without MOO1's ship pictures, Classic draws six different ship shapes per hull
   size instead of one.
 - Cities and planets are easier to click: the map picks the nearest one within a larger radius.
+
+### Fixed
+
+- Battles drew computer-designed ships, and every ship of an empire other than the first
+  banner, as plain shapes instead of their MOO1 pictures: a design's picture number already
+  carries its banner (as in 1oom) and the battle added it again. Designs saved in the design
+  screen now carry their banner too.
 
 ## [0.11.0] - 2026-10-22
 

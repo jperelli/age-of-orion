@@ -1260,5 +1260,9 @@
  "explain.race.meklar.1": "Cada vecino maneja 2 talleres más, y los talleres no se encarecen al crecer el número por vecino.",
  "explain.race.darlok.1": "Los espías cuestan la mitad, espían con +30 y atrapan espías enemigos con +20.",
  "diplomacy.lost_contact": "Contacto perdido",
- "diplomacy.none_met": "Todavía no conoces a ningún otro imperio. Explora para encontrarlos."
+ "diplomacy.none_met": "Todavía no conoces a ningún otro imperio. Explora para encontrarlos.",
+ "designer.class": "Instrucción {n}",
+ "designer.col.space": "Lugar",
+ "designer.col.class": "Instrucción",
+ "designer.col.speed": "Paso en batalla"
 }

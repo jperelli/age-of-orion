@@ -1255,5 +1255,15 @@
  "diplomacy.lost_contact": "Lost contact",
  "diplomacy.none_met": "You have not met any other race yet. Explore to find them.",
  "designer.look_prev": "Previous picture",
- "designer.look_next": "Next picture"
+ "designer.look_next": "Next picture",
+ "designer.class": "Class {n}",
+ "designer.col.max": "Max",
+ "designer.col.name": "Name",
+ "designer.col.damage": "Damage",
+ "designer.col.range": "Range",
+ "designer.col.notes": "Notes",
+ "designer.col.cost": "Cost",
+ "designer.col.space": "Space",
+ "designer.col.class": "Class",
+ "designer.col.speed": "Combat speed"
 }

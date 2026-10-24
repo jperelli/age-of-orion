@@ -488,7 +488,9 @@ fn item_from_design(e: &Empire, d: usize, num: u32, nebula: bool, uid: u32) -> I
     let extraman = max(|s| s.extra_man);
     b.name = sd.name.clone();
     b.design = Some(d);
-    b.look = e.banner as u16 * 24 + sd.look as u16;
+    // Designs keep their banner in `look` (1oom `SHIP_LOOK_PER_BANNER`); designs saved
+    // without it still get their empire's colour.
+    b.look = e.banner as u16 * 24 + (sd.look % 24) as u16;
     b.hull = sd.hull;
     b.specials = sd.specials;
     b.hp1 = sd.hp as i32;

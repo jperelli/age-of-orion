@@ -1244,5 +1244,15 @@
  "diplomacy.lost_contact": "Contacto perdido",
  "diplomacy.none_met": "Todavía no conoces a ninguna otra raza. Explora para encontrarlas.",
  "designer.look_prev": "Imagen anterior",
- "designer.look_next": "Imagen siguiente"
+ "designer.look_next": "Imagen siguiente",
+ "designer.class": "Clase {n}",
+ "designer.col.max": "Máx.",
+ "designer.col.name": "Nombre",
+ "designer.col.damage": "Daño",
+ "designer.col.range": "Alcance",
+ "designer.col.notes": "Notas",
+ "designer.col.cost": "Costo",
+ "designer.col.space": "Espacio",
+ "designer.col.class": "Clase",
+ "designer.col.speed": "Velocidad de combate"
 }

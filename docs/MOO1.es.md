@@ -108,9 +108,11 @@ los primeros 39 turnos de la partida pequeña.
   inglés, el tema Clásico usa las noticias y las descripciones de tecnologías de MOO1 si
   importas EVENTMSG.LBX y RESEARCH.LBX.
 - **Imágenes**:
-  - el Clásico muestra el arte de MOO1 que importes: planetas, razas, naves, fondos de
-    batalla y las pantallas de desembarco y del noticiero. Sin él, el Clásico usa el arte
-    propio del juego.
+  - el Clásico muestra el arte de MOO1 que importes: planetas, razas, estrellas, naves,
+    fondos de batalla, las pantallas de desembarco, del noticiero y de la embajada y el
+    laboratorio, con las animaciones de MOO1 (estrellas que titilan, motores de las naves,
+    los embajadores, el locutor, los científicos). Sin él, el Clásico usa el arte propio del
+    juego.
   - Era tiene su propio arte y retratos pintados.
 - **Música y sonido**: las melodías y los efectos de sonido de MOO1 salen de tus MUSIC.LBX y
   SOUNDFX.LBX. Un sintetizador integrado toca las melodías, así que suenan distinto que en una

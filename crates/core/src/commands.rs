@@ -483,6 +483,8 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
         Command::SaveDesign { slot, ref design } => {
             let mut d = design.clone();
             d.name = d.name.trim().chars().take(24).collect();
+            // The picture is one of the empire's colour, as in 1oom `game_design_prepare`.
+            d.look = st.empires[empire as usize].banner * 24 + d.look % 24;
             d.update();
             if let Err(code) = design::validate(&d, &st.empires[empire as usize].tech) {
                 return Err(CommandError { code });

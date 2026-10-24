@@ -268,7 +268,7 @@ async function importer(): Promise<void> {
     const tunes = Object.keys(m.aliases).filter((a) => a.startsWith("music/")).length;
     if (tunes) gallery.append(h("p", { class: "small" }, t("import.music", { n: tunes })));
     for (const [alias, path] of Object.entries(m.aliases)) {
-      if (alias.startsWith("music/")) continue;
+      if (alias.startsWith("music/") || alias.startsWith("anim/")) continue;
       const blob = await store.get<Blob>("assets", path);
       if (blob) gallery.append(h("img", { class: "pixel", src: URL.createObjectURL(blob), title: alias }));
     }

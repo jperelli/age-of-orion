@@ -73,6 +73,18 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
   });
 }
 
+export interface Anim {
+  frames: number;
+  w: number;
+  h: number;
+  loop: number;
+}
+
+/** Draws frame `frame` of an imported animation sheet on a canvas. */
+export function drawFrame(c: CanvasRenderingContext2D, a: Anim & { img: HTMLImageElement | null }, frame: number, x: number, y: number, w = a.w, h = a.h): void {
+  if (a.img) c.drawImage(a.img, (frame % a.frames) * a.w, 0, a.w, a.h, x, y, w, h);
+}
+
 export class Theme {
   readonly urls = new Map<string, string>();
   readonly images = new Map<string, HTMLImageElement>();
@@ -113,6 +125,22 @@ export class Theme {
 
   /** Aliases whose picture is pixel art (from LBX files), drawn without smoothing. */
   readonly pixel = new Set<string>();
+
+  /** Imported animations (`anim/...`): horizontal sheets of `frames` frames of `w` x `h`,
+   * looping back to frame `loop`. */
+  readonly anims = new Map<string, Anim>();
+
+  anim(alias: string): (Anim & { url: string; img: HTMLImageElement | null }) | null {
+    const a = this.anims.get(alias);
+    const url = this.urls.get(alias);
+    return a && url ? { ...a, url, img: this.images.get(alias) ?? null } : null;
+  }
+
+  /** A picture known only by its URL, decoded by the browser when shown (big animations). */
+  addImageLazy(alias: string, blob: Blob): void {
+    this.urls.set(alias, URL.createObjectURL(blob));
+    this.pixel.add(alias);
+  }
 
   async addImage(alias: string, blob: Blob, pixel = false): Promise<void> {
     const url = URL.createObjectURL(blob);
@@ -174,12 +202,15 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
   for (const [alias, path] of Object.entries(def.images ?? {})) theme.addImageUrl(alias, `themes/${def.id}/${path}`);
 
   if (def.use_lbx) {
-    const manifest = await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json");
+    const manifest = await store.get<{ aliases: Record<string, string>; frames?: Record<string, number[]> }>("assets", "manifest.json");
+    for (const [alias, [frames, w, h, loop]] of Object.entries(manifest?.frames ?? {})) theme.anims.set(alias, { frames, w, h, loop });
     for (const [alias, path] of Object.entries(manifest?.aliases ?? {})) {
       if (alias.startsWith("music/") || alias.startsWith("sfx/")) continue;
       const blob = await store.get<Blob>("assets", path);
       if (!blob) continue;
       if (alias.startsWith("font/")) await theme.addFont(alias.slice(5), blob);
+      // Small animations are drawn on canvases (stars, ships); the big ones play in the page.
+      else if (alias.startsWith("anim/") && !/^anim\/(star|ship)\//.test(alias)) theme.addImageLazy(alias, blob);
       else await theme.addImage(alias, blob, true);
     }
     // EVENTMSG.LBX: entry (type - 1) * 7 + stage is the news of 1oom `game_news_get_msg`.

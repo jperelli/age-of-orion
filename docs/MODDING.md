@@ -92,6 +92,23 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `ground/death` | A soldier falling (LANDING.LBX 0x14) |
 | `news/tv`, `news/anchor`, `news/gnn` | The GNN newscast: the TV, the newscaster, the logo (NEWSCAST.LBX 0..2) |
 | `news/icon/<type>` | The newscast picture of news type 1..22 (1oom `GAME_NEWS_*`; NEWSCAST.LBX 3 + type) |
+| `star/<k>` | A star on the Classic map: star type 0..5 (yellow, red, green, white, blue, neutron) + 6 for the bigger look (STARMAP.LBX 3..14) |
+| `embassy/room`, `embassy/border`, `embassy/emperor/<banner>` | MOO1's audience: the room, the frame and the player's emperor seen from behind (EMBASSY.LBX 1, 0, 0x0c + banner) |
+| `newtech/lab/<n>` | The new-tech screen's background: 0 the laboratory, 1 the spies' den, 2 the ruins (TECHNO.LBX 0..2) |
+
+### Animations
+
+Aliases starting with `anim/` are animations: a horizontal sheet of equal frames. The
+importer lists each one in `manifest.json` under `frames` as `[frames, width, height, loop]`;
+after the last frame the animation goes on from frame `loop`.
+
+| Alias | Animation |
+|---|---|
+| `anim/star/<k>` | A star twinkling on the Classic map (STARMAP.LBX 3..14) |
+| `anim/ship/<look>` | A ship's engines in battle, 5 frames (SHIPS.LBX, SHIPS2.LBX) |
+| `anim/embassy/<race>` | The ambassador of race 0..9 in audiences and messages (EMBASSY.LBX 2 + race) |
+| `anim/news/anchor`, `anim/news/world` | The newscaster talking and the turning globe (NEWSCAST.LBX 2, 3) |
+| `anim/newtech/<n>` | The new-tech screen: 10 * source + race, source 0 the race's scientist, 1 its spy, 2 the ruins (SPIES.LBX) |
 | `view/<type>`, `view/orion`, `view/city/<0..2>` | Age theme: the wide painted view at the top of the side panel, for a site of that planet type, Orion, or a city by size (population under 25, under 60, more) |
 | `battle/field/<kind>` | Age theme: battlefield by land (`green`, `forest`, `dry`, `snow`, `rocky`, `ash`, `marsh`, `mists` in a nebula); takes the place of `battle/bg` |
 | `unit/<look>` | Age theme: a battle stack by its design's look 0..23 (hull * 6 + variant), drawn fitted in its square with a pennant in the empire's colour; `unit/crystal`, `unit/amoeba`, `unit/guardian` for the monsters and the Guardian |
@@ -143,7 +160,7 @@ its own as its techs improve.
 The LBX importer (`aoo import <dir> <out>` or the in-game import) writes:
 
 ```
-manifest.json        format, aliases, looping tunes, every archive and entry, warnings
+manifest.json        format, aliases, animations (frames), looping tunes, every archive and entry, warnings
 gfx/<lbx>/NNN.png    every graphics entry; animations as horizontal sheets (frame width in manifest)
 gfx/<lbx>/NNN-0.png  first frame of animations
 audio/music/NNN.mid  MUSIC.LBX tunes as standard MIDI files (alias music/<n>)

@@ -544,6 +544,8 @@ mod tests {
         d.name = "Lancer".into();
         d.hull = design::HULL_MEDIUM;
         d.weapon_counts[0] = 2;
+        // The design screen sends a picture without the banner; it gets the empire's.
+        d.look = 7;
         assert_eq!(g.design_stats(0, &d).error, None);
         g.command(
             0,
@@ -554,6 +556,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(g.st.empires[0].designs.len(), 6);
+        assert_eq!(
+            g.st.empires[0].designs[5].look,
+            g.st.empires[0].banner * 24 + 7
+        );
         assert_eq!(
             g.command(
                 0,

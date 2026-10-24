@@ -4,9 +4,10 @@
 // discovered (investment earns interest and a breakthrough becomes likely once it exceeds the
 // cost). The technology tree shows what is known, and nothing beyond.
 import type { Ctx } from "./ctx";
+import { moo1Scene } from "./pictures";
 import { sliders } from "./sliders";
 import { effectLines } from "./techinfo";
-import { FIELDS, type FieldView, type TechChoice } from "./types";
+import { FIELDS, RACES, type FieldView, type TechChoice } from "./types";
 import { clear, h, keepScroll, modal } from "./ui";
 
 export function techName(ctx: Ctx, f: FieldView | string, key: string, tech?: number): string {
@@ -73,9 +74,12 @@ async function chooseTech(ctx: Ctx, i: number): Promise<void> {
         ),
       ),
   );
+  // MOO1's laboratory with the race's scientist at work (1oom `uinewtech.c`), when imported.
+  const v = ctx.view();
+  const lab = moo1Scene(ctx.theme, [{ alias: "newtech/lab/0" }, { alias: `anim/newtech/${RACES.indexOf(v.empires[v.player].race)}`, fps: 6 }], 1.5);
   await modal(
     t("research.new_title", { field: t(`field.${f.field}`) }),
-    [h("p", {}, t("research.new_text", { field: t(`field.${f.field}`) })), list],
+    [lab, h("p", {}, t("research.new_text", { field: t(`field.${f.field}`) })), list],
     [t("research.later")],
     "wide",
     (c) => (close = c),

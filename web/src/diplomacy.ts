@@ -3,6 +3,7 @@ import { TUNE, audienceTune, audio } from "./audio";
 // rulers, their messages and proposals, spy successes and the Galactic Council.
 import type { Ctx } from "./ctx";
 import { shipParts } from "./engine";
+import { moo1Scene } from "./pictures";
 import { techName } from "./research";
 import { slider } from "./sliders";
 import { FIELDS, RACES, type AudienceOptions, type Incoming, type MsgParams, type RelationView, type Reply, type SabotageKind, type Talk, type TechRef } from "./types";
@@ -41,6 +42,35 @@ function portrait(ctx: Ctx, id: number): HTMLElement {
   return url
     ? h("img", { class: ctx.theme.pixel.has(alias) ? "portrait pixel" : "portrait painted", src: url, alt: "" })
     : h("div", { class: "crest big", style: `--banner:${ctx.theme.banner(e.banner)}` });
+}
+
+/**
+ * MOO1's embassy (1oom `uiaudience.c`), with MOO1's pictures imported: the room, the race's
+ * ambassador moving, the player's emperor seen from behind and the frame, with the
+ * ambassador's words in the frame's panel.
+ */
+function embassy(ctx: Ctx, id: number): { el: HTMLElement; say: (text: string) => void } | null {
+  const v = ctx.view();
+  const s = 1.5;
+  const el = moo1Scene(
+    ctx.theme,
+    [
+      { alias: "embassy/room" },
+      { alias: `anim/embassy/${RACES.indexOf(v.empires[id].race)}`, x: 96, y: 0, fps: 7 },
+      { alias: `embassy/emperor/${v.empires[v.player].banner}`, x: 0, y: -2 },
+      { alias: "embassy/border" },
+    ],
+    s,
+  );
+  if (!el) return null;
+  const text = h("div", { class: "scene-text", style: `left:${38 * s}px;top:${139 * s}px;width:${245 * s}px;height:${54 * s}px` });
+  el.append(text);
+  return { el, say: (t) => (text.textContent = t) };
+}
+
+/** The envoy: MOO1's embassy when imported, else the portrait in front of the throne room. */
+function envoy(ctx: Ctx, id: number): { el: HTMLElement; say?: (text: string) => void } {
+  return embassy(ctx, id) ?? { el: audienceHead(ctx, id) };
 }
 
 /** The envoy's portrait and name, in front of the empire's throne room when the theme has one. */
@@ -219,9 +249,11 @@ function audience(ctx: Ctx, ai: number): Promise<number> {
   const t = tr(ctx);
   const log = h("div", { class: "audience-log" });
   const menu = h("div", { class: "audience-menu" });
+  const head = envoy(ctx, ai);
   const say = (text: string, who: "them" | "me" = "them") => {
     append(log, h("p", { class: `say-${who}` }, text));
     log.scrollTop = log.scrollHeight;
+    if (who === "them") head.say?.(text);
   };
   const rel = () => ctx.view().relations.find((r) => r.empire === ai);
   const opts = (): AudienceOptions | null => rel()?.audience ?? null;
@@ -353,8 +385,7 @@ function audience(ctx: Ctx, ai: number): Promise<number> {
   };
 
   main();
-  const head = audienceHead(ctx, ai);
-  return modal(t("audience.title", { race: empireName(ctx, ai) }), [head, log, menu], [t("audience.goodbye")], "wide audience");
+  return modal(t("audience.title", { race: empireName(ctx, ai) }), [head.el, log, menu], [t("audience.goodbye")], "wide audience");
 }
 
 // ------------------------------------------------------------- messages
@@ -386,8 +417,12 @@ async function messages(ctx: Ctx): Promise<void> {
 
 async function showMessage(ctx: Ctx, m: Incoming): Promise<{ accept: boolean; pick: TechRef | null }> {
   const t = tr(ctx);
-  const head = audienceHead(ctx, m.from);
-  const text = h("p", { class: "say-them" }, msgText(ctx, m.kind, m.from, m.params));
+  const scene = envoy(ctx, m.from);
+  const words = msgText(ctx, m.kind, m.from, m.params);
+  scene.say?.(words);
+  const head = scene.el;
+  // In MOO1's embassy the words are in the frame's panel.
+  const text = scene.say ? null : h("p", { class: "say-them" }, words);
   const title = t("audience.from", { race: empireName(ctx, m.from) });
   if (!m.needs_answer) {
     await modal(title, [head, text], [t("btn.ok")], "audience");

@@ -6,6 +6,7 @@ import type { Ctx } from "./ctx";
 import { shipParts } from "./engine";
 import { CITY_MARKS, cityLevel } from "./map";
 import { type Battle, type BattleAction, type BattleAnim, type BattleItem, type View } from "./types";
+import { drawFrame } from "./theme";
 import { append, clear, h } from "./ui";
 
 const CW = 32;
@@ -877,6 +878,8 @@ class BattleScreen {
       c.fillRect(s.x, s.y, CW, CH);
     }
     const img = this.ctx.theme.img(`ship/${it.look}`);
+    // MOO1's ships flicker their engines (1oom `uibattle.c` `frame_ship`).
+    const engines = this.ctx.theme.anim(`anim/ship/${it.look}`);
     const unit = this.world ? this.unitPicture(s, now) : null;
     c.save();
     if (it.side === "r") {
@@ -886,7 +889,8 @@ class BattleScreen {
     if (unit) {
       this.sprite(c, unit, CW / 2 + 1, CH / 2 + 1, CW - 2, CH - 2);
       if (it.design !== null) pennant(c, 3, 9, color);
-    } else if (img) c.drawImage(img, (CW - img.width) / 2, (CH - img.height) / 2);
+    } else if (engines?.img) drawFrame(c, engines, Math.floor(now / 90), (CW - engines.w) / 2, (CH - engines.h) / 2);
+    else if (img) c.drawImage(img, (CW - img.width) / 2, (CH - img.height) / 2);
     else if (it.design === null) this.drawMonster(c, it);
     else if (this.world) drawTroop(c, it.hull, color);
     else drawShip(c, it.hull, color, it.look % 6);

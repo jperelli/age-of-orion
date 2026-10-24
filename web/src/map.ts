@@ -1,6 +1,6 @@
 // Canvas renderer of the game map: a terrain world with cities (theme map "world") or the
 // classic starfield (theme map "space"). Pan with drag, zoom with the wheel.
-import type { Theme } from "./theme";
+import { drawFrame, type Theme } from "./theme";
 import type { FleetView, MonsterView, PlanetType, StarType, TransportView, View } from "./types";
 
 /** Size of a city for its pictures: 0 village, 1 town, 2 great city. */
@@ -770,13 +770,21 @@ export class MapView {
     // Sizes in screen pixels, growing a little with the zoom.
     const k = Math.max(1, Math.min(3, this.zoom * 0.45));
     const r = this.px(1.3 * k);
-    const sprite = this.theme.img(`star/${STAR_INDEX[p.star] + (p.look ? 6 : 0)}`);
-    if (sprite) {
-      const w = this.px(sprite.width * k);
-      const hgt = this.px(sprite.height * k);
+    const star = STAR_INDEX[p.star] + (p.look ? 6 : 0);
+    const anim = this.theme.anim(`anim/star/${star}`);
+    const sprite = this.theme.img(`star/${star}`);
+    if (anim?.img || sprite) {
+      const sw = anim?.w ?? sprite!.width;
+      const sh = anim?.h ?? sprite!.height;
+      const w = this.px(sw * k);
+      const hgt = this.px(sh * k);
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sprite, p.x - w / 2, p.y - hgt / 2, w, hgt);
+      if (anim?.img) {
+        // 1oom `ui_starmap_draw_starmap`: each star now and then runs through its frames.
+        const t = (Math.floor(performance.now() / 110) + id * 13) % 50;
+        drawFrame(ctx, anim, t < anim.frames ? t : 0, p.x - w / 2, p.y - hgt / 2, w, hgt);
+      } else ctx.drawImage(sprite!, p.x - w / 2, p.y - hgt / 2, w, hgt);
       ctx.restore();
     } else {
       const c = STAR[p.star];

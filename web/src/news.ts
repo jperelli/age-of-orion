@@ -4,6 +4,7 @@
 import { audio, TUNE } from "./audio";
 import type { Ctx } from "./ctx";
 import type { GameEvent } from "./types";
+import { animSprite } from "./pictures";
 import { h } from "./ui";
 
 /** 1oom `GAME_NEWS_*` numbers (NEWSCAST.LBX icon 3 + number). */
@@ -60,7 +61,12 @@ export async function newscast(ctx: Ctx, items: NewsItem[]): Promise<void> {
     body.style.backgroundImage = `url(${theme.url("news/tv")})`;
     const anchor = theme.url("news/anchor");
     const gnn = theme.url("news/gnn");
-    if (anchor || gnn) screen.append(h("img", { class: anchor ? "news-anchor" : "news-gnn", src: (anchor ?? gnn)!, alt: "" }));
+    // The newscaster talks and the globe turns (1oom `ui_news_cb1`), when imported.
+    const talking = animSprite(theme, "anim/news/anchor", 0, 8);
+    const globe = animSprite(theme, "anim/news/world", 0, 8);
+    if (talking) screen.append(Object.assign(talking, { className: `${talking.className} news-anchor` }));
+    else if (anchor || gnn) screen.append(h("img", { class: anchor ? "news-anchor" : "news-gnn", src: (anchor ?? gnn)!, alt: "" }));
+    if (globe) screen.append(Object.assign(globe, { className: `${globe.className} news-globe` }));
   } else {
     const herald = theme.url("news/herald");
     screen.append(h("div", { class: "news-masthead" }, herald ? h("img", { class: "news-herald-figure", src: herald, alt: "" }) : null, t("news.masthead")));
