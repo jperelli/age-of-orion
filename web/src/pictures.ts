@@ -1,88 +1,84 @@
-// Pictures of ships and troops for the side panel and the city window: the theme's own
-// (Age: `unit/<look>`), MOO1's imported ones (Classic: `ship/<look>`), or the battle
-// screen's drawing.
-import { drawShip, drawTroop } from "./battle";
+// Pictures by name for the screens: the theme's file (or MOO1's imported one), and a placeholder
+// in its place when the theme does not have it, on the page and on canvases.
 import type { Theme } from "./theme";
 import { h } from "./ui";
 
-const drawn = new Map<string, string>();
+/** A missing picture: a dashed frame with a question mark (scales to any box). */
+export const MISSING_URL = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48" viewBox="0 0 64 48"><rect x="2" y="2" width="60" height="44" rx="4" fill="rgba(128,128,128,0.12)" stroke="#9a9a9a" stroke-width="2" stroke-dasharray="6 4"/><text x="32" y="33" font-family="sans-serif" font-size="22" font-weight="bold" text-anchor="middle" fill="#9a9a9a">?</text></svg>',
+)}`;
 
-/** The picture of a ship design: `look` 0..23 (hull * 6 + variant), `banner` its empire's. */
-export function designPicture(theme: Theme, look: number, hull: number, banner: number): string {
-  const world = theme.def.map === "world";
-  const own = theme.url(world ? `unit/${look % 24}` : `ship/${banner * 24 + (look % 24)}`);
-  if (own) return own;
-  const color = theme.banner(banner);
-  const key = `${world}/${hull}/${look % 6}/${color}`;
-  let url = drawn.get(key);
-  if (!url) {
-    const c = document.createElement("canvas");
-    c.width = 64;
-    c.height = 48;
-    const g = c.getContext("2d")!;
-    g.scale(2, 2);
-    if (world) drawTroop(g, hull, color);
-    else drawShip(g, hull, color, look % 6);
-    url = c.toDataURL();
-    drawn.set(key, url);
+/** The URL of picture `alias`, or the placeholder's. */
+export function picUrl(theme: Theme, alias: string): string {
+  return theme.url(alias) ?? MISSING_URL;
+}
+
+/** An image of picture `alias` (MOO1's pixel art drawn crisp); the placeholder, naming it, when missing. */
+export function picImg(theme: Theme, alias: string, cls = ""): HTMLImageElement {
+  const url = theme.url(alias);
+  const c = [cls, url ? (theme.pixel.has(alias) ? "pixel" : "") : "art-missing"].filter(Boolean).join(" ");
+  return h("img", { class: c, src: url ?? MISSING_URL, alt: "", title: url ? "" : alias }) as HTMLImageElement;
+}
+
+/** A dashed frame with a question mark filling a box of a canvas (a missing picture). */
+export function drawPlaceholder(c: CanvasRenderingContext2D, x: number, y: number, w: number, hgt: number): void {
+  const s = Math.min(w, hgt);
+  c.save();
+  c.fillStyle = "rgba(128,128,128,0.15)";
+  c.fillRect(x, y, w, hgt);
+  c.strokeStyle = "rgba(170,170,170,0.85)";
+  c.lineWidth = Math.max(s / 24, 0.2);
+  c.setLineDash([s / 8, s / 12]);
+  c.strokeRect(x + c.lineWidth / 2, y + c.lineWidth / 2, w - c.lineWidth, hgt - c.lineWidth);
+  c.setLineDash([]);
+  c.fillStyle = "rgba(170,170,170,0.95)";
+  c.font = `bold ${s * 0.6}px sans-serif`;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText("?", x + w / 2, y + hgt / 2);
+  c.restore();
+}
+
+/** Draws picture `alias` into a box of a canvas (smoothed unless it is MOO1's pixel art), or the placeholder. */
+export function drawPic(c: CanvasRenderingContext2D, theme: Theme, alias: string, x: number, y: number, w: number, hgt: number): void {
+  const img = theme.img(alias);
+  if (!img) {
+    // Still loading: nothing yet; not in the theme: the placeholder.
+    if (!theme.hasPic(alias)) drawPlaceholder(c, x, y, w, hgt);
+    return;
   }
-  return url;
+  const smooth = c.imageSmoothingEnabled;
+  c.imageSmoothingEnabled = !theme.pixel.has(alias);
+  c.imageSmoothingQuality = "high";
+  c.drawImage(img, x, y, w, hgt);
+  c.imageSmoothingEnabled = smooth;
 }
 
-/** Drawn icons (24x24) for when the theme has no `icon/<what>` picture. */
-const ICONS: Record<"world" | "space", Record<string, string>> = {
-  world: {
-    pop: '<circle cx="12" cy="6" r="3.5" fill="#e3c9a0" stroke="#3b2a16"/><path d="M6 22l2-11h8l2 11z" fill="#8a5a2b" stroke="#3b2a16"/>',
-    factory: '<path d="M3 22V12l9-6 9 6v10z" fill="#c9a36b" stroke="#3b2a16"/><rect x="15" y="3" width="3" height="7" fill="#7a6a5a" stroke="#3b2a16"/><rect x="10" y="15" width="4" height="7" fill="#5a3b1a"/>',
-    waste: '<path d="M3 22c2-6 5-8 9-8s7 2 9 8z" fill="#6b5a3a" stroke="#2b2219"/><path d="M10 12c-2-3 1-5 0-8M14 12c2-3-1-5 1-8" stroke="#555" stroke-width="2" fill="none"/>',
-    base: '<path d="M7 22V8h10v14z" fill="#b9ad97" stroke="#3d342a"/><path d="M6 8V4h2v2h2V4h4v2h2V4h2v4z" fill="#b9ad97" stroke="#3d342a"/><rect x="11" y="15" width="3" height="7" fill="#3d342a"/>',
-    shield: '<path d="M2 22V10h3V7h3v3h3V7h3v3h3V7h3v3h2v12z" fill="#a59a88" stroke="#3d342a"/>',
-  },
-  space: {
-    pop: '<circle cx="12" cy="7" r="4.5" fill="#9fc4ff" stroke="#123"/><rect x="9" y="5.5" width="6" height="3" rx="1" fill="#123"/><path d="M6 22l1-9h10l1 9z" fill="#3a66c4" stroke="#123"/>',
-    factory: '<path d="M2 22V12l6 3v-3l6 3v-3l8 4v6z" fill="#8090a0" stroke="#123"/><rect x="17" y="4" width="3" height="10" fill="#6a7888" stroke="#123"/>',
-    waste: '<rect x="6" y="6" width="12" height="16" rx="2" fill="#4caf50" stroke="#123"/><path d="M6 11h12M6 17h12" stroke="#123"/><circle cx="12" cy="14" r="2" fill="#d8ff6a"/>',
-    base: '<path d="M4 22l3-6h10l3 6z" fill="#7a8796" stroke="#123"/><path d="M11 16V6l1-4 1 4v10z" fill="#e0e6ee" stroke="#123"/>',
-    shield: '<path d="M2 21a10 10 0 0 1 20 0z" fill="rgba(90,180,255,0.45)" stroke="#5ab4ff" stroke-width="1.5"/>',
-  },
-};
+/** The picture of a ship design (`look` 0..23: hull * 6 + variant): a troop (`unit/<look>`) on a
+ * world map, MOO1's ship in its empire's colour (`ship/<banner * 24 + look>`) in space. */
+export function designAlias(theme: Theme, look: number, banner: number): string {
+  return theme.def.map === "world" ? `unit/${look % 24}` : `ship/${banner * 24 + (look % 24)}`;
+}
 
-/** Small icons of the interface (24x24): gold, research and the treasury. */
-const UI_ICONS: Record<"world" | "space", Record<string, string>> = {
-  world: {
-    gold: '<circle cx="12" cy="12" r="9" fill="#f2c14e" stroke="#7a5212" stroke-width="1.5"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="#b8862b"/><path d="M12 8.5v7M10 10h4" stroke="#7a5212" stroke-width="1.4"/>',
-    research: '<path d="M3 5c3-1 6-1 9 1v14c-3-2-6-2-9-1z" fill="#efe0bb" stroke="#4a3220"/><path d="M21 5c-3-1-6-1-9 1v14c3-2 6-2 9-1z" fill="#e3d0a3" stroke="#4a3220"/><path d="M5 8h5M5 11h5M14 8h5M14 11h5" stroke="#8a6a44"/>',
-    reserve: '<path d="M3 11h18v10H3z" fill="#8a5a2b" stroke="#3b2414"/><path d="M3 11c0-4 3-6 9-6s9 2 9 6z" fill="#a8713a" stroke="#3b2414"/><path d="M3 11h18M3 16h18" stroke="#d9a440" stroke-width="1.5"/><rect x="10.5" y="12" width="3" height="4" fill="#f2c14e" stroke="#3b2414" stroke-width="0.8"/>',
-  },
-  space: {
-    gold: '<circle cx="12" cy="12" r="9" fill="#e9c349" stroke="#6b5310" stroke-width="1.5"/><text x="12" y="15.5" font-size="9" font-family="sans-serif" font-weight="bold" text-anchor="middle" fill="#6b5310">BC</text>',
-    research: '<path d="M3 5c3-1 6-1 9 1v14c-3-2-6-2-9-1z" fill="#cfe3ff" stroke="#1d3350"/><path d="M21 5c-3-1-6-1-9 1v14c3-2 6-2 9-1z" fill="#b5d2f5" stroke="#1d3350"/><path d="M5 8h5M5 11h5M14 8h5M14 11h5" stroke="#4d6d96"/>',
-    reserve: '<rect x="3" y="4" width="18" height="17" rx="2" fill="#7d8b99" stroke="#1c2630"/><rect x="5.5" y="6.5" width="13" height="12" rx="1" fill="#5d6a77" stroke="#1c2630"/><circle cx="12" cy="12.5" r="3" fill="#c7d0d8" stroke="#1c2630"/><path d="M12 9.5v6M9 12.5h6" stroke="#1c2630"/>',
-  },
-};
+export function designPicture(theme: Theme, look: number, banner: number): string {
+  return picUrl(theme, designAlias(theme, look, banner));
+}
 
-const svgUrl = (body: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${body}</svg>`)}`;
-
-/** An interface icon: the theme's `ui/<name>` picture, or a drawn one. */
+/** An interface icon (`ui/<name>`: gold, research, reserve). */
 export function uiIcon(theme: Theme, name: string): string {
-  return theme.url(`ui/${name}`) ?? svgUrl(UI_ICONS[theme.def.map === "world" ? "world" : "space"][name] ?? "");
-}
-
-function drawnIcon(theme: Theme, what: string): string | null {
-  const body = ICONS[theme.def.map === "world" ? "world" : "space"][what];
-  return body ? svgUrl(body) : null;
+  return picUrl(theme, `ui/${name}`);
 }
 
 /**
- * A row of icons repeated to show an amount (the theme's `icon/<what>`, or a drawn one): one
- * icon per `per` (rounded up), at most `max` icons, and faded ones for the room left up to
- * `cap`; null with nothing to show.
+ * A row of icons repeated to show an amount (the theme's `icon/<what>`): one icon per `per`
+ * (rounded up), at most `max` icons, and faded ones for the room left up to `cap`; null with
+ * nothing to show.
  */
 export function iconRow(theme: Theme, what: string, amount: number, per: number, cap = 0, max = 40): HTMLElement | null {
-  const url = theme.url(`icon/${what}`) ?? drawnIcon(theme, what);
+  const url = picUrl(theme, `icon/${what}`);
   const n = Math.min(max, Math.ceil(Math.max(0, amount) / per));
   const room = Math.max(0, Math.min(max, Math.ceil(cap / per)) - n);
-  if (!url || n + room === 0) return null;
+  if (n + room === 0) return null;
   const icon = (cls: string) => h("img", { src: url, alt: "", class: cls });
   return h("div", { class: `icon-row icon-${what}` }, ...Array.from({ length: n }, () => icon("")), ...Array.from({ length: room }, () => icon("room")));
 }
@@ -129,22 +125,26 @@ export interface Layer {
 
 /**
  * One of MOO1's screens rebuilt from its pictures (320x200 at `scale`): still pictures and
- * animations stacked in order at their positions. Null when a picture is missing.
+ * animations stacked in order at their positions. An `anim/<name>` layer the theme has only as
+ * a still picture shows `<name>`. With a picture missing, the placeholder in its place.
  */
-export function moo1Scene(theme: Theme, layers: Layer[], scale = 2, w = 320, hgt = 200): HTMLElement | null {
-  const box = h("div", { class: "moo1-scene pixel", style: `width:${w * scale}px;height:${hgt * scale}px` });
+export function moo1Scene(theme: Theme, layers: Layer[], scale = 2, w = 320, hgt = 200): HTMLElement {
+  const still = (a: string) => (theme.hasPic(a) ? a : a.replace(/^anim\//, ""));
+  const missing = layers.map((l) => l.alias).find((a) => !theme.anims.has(a) && !theme.hasPic(still(a)));
+  if (missing) return placeholder(theme, missing.replace(/^anim\//, ""), w * scale, hgt * scale);
+  const box = h("div", { class: "moo1-scene", style: `width:${w * scale}px;height:${hgt * scale}px` });
   for (const l of layers) {
     const pos = `left:${(l.x ?? 0) * scale}px;top:${(l.y ?? 0) * scale}px`;
-    if (theme.anims.has(l.alias)) {
-      const sprite = animSprite(theme, l.alias, scale, l.fps);
-      if (!sprite) return null;
+    const sprite = theme.anims.has(l.alias) ? animSprite(theme, l.alias, scale, l.fps) : null;
+    if (sprite) {
       sprite.style.cssText += `;position:absolute;${pos}`;
       box.append(sprite);
       continue;
     }
-    const img = theme.img(l.alias);
-    if (!img) return null;
-    box.append(h("img", { src: img.src, alt: "", style: `position:absolute;${pos};width:${img.naturalWidth * scale}px;height:${img.naturalHeight * scale}px` }));
+    const alias = still(l.alias);
+    const img = theme.img(alias);
+    const size = img ? `;width:${img.naturalWidth * scale}px;height:${img.naturalHeight * scale}px` : "";
+    box.append(h("img", { class: theme.pixel.has(alias) ? "pixel" : "", src: theme.url(alias)!, alt: "", style: `position:absolute;${pos}${size}` }));
   }
   return box;
 }

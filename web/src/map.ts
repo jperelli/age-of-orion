@@ -1,5 +1,6 @@
 // Canvas renderer of the game map: a terrain world with cities (theme map "world") or the
 // classic starfield (theme map "space"). Pan with drag, zoom with the wheel.
+import { drawPic, drawPlaceholder } from "./pictures";
 import { drawFrame, type Theme } from "./theme";
 import type { FleetView, MonsterView, PlanetType, StarType, TransportView, View } from "./types";
 
@@ -66,17 +67,8 @@ const BIOME: Record<PlanetType, string> = {
   terran: "#6fae4a",
 };
 
-/** Star types in 1oom's order (`STAR_TYPE_*`), for the imported star sprites. */
+/** Star types in 1oom's order (`STAR_TYPE_*`): the number of their pictures (`star/<n>`). */
 const STAR_INDEX: Record<StarType, number> = { yellow: 0, red: 1, green: 2, white: 3, blue: 4, neutron: 5 };
-
-const STAR: Record<StarType, string> = {
-  yellow: "#ffe36b",
-  red: "#ff6a4d",
-  green: "#7dff8a",
-  white: "#f4f4ff",
-  blue: "#7fb6ff",
-  neutron: "#c58cff",
-};
 
 /** Deterministic PRNG (mulberry32) for terrain and decorations. */
 function prng(seed: number): () => number {
@@ -427,45 +419,21 @@ export class MapView {
     return n / this.zoom;
   }
 
-  /** Nebulae: purple clouds in space, drifting mists on the world map. */
+  /** Nebulae (`nebula/<kind>`, drawn at half their pixel size, like MOO1's over its 1oom rectangles). */
   private drawNebulae(v: View): void {
-    const ctx = this.ctx;
-    const world = this.theme.def.map === "world";
     for (const n of v.nebulae) {
       const img = this.theme.img(`nebula/${n.kind}`);
-      if (img) {
-        ctx.drawImage(img, n.x, n.y, img.width / 2, img.height / 2);
-        continue;
-      }
-      for (const [x0, y0, x1, y1] of n.rects) {
-        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-        const rx = Math.max(4, (x1 - x0) / 2 + 4), ry = Math.max(4, (y1 - y0) / 2 + 4);
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
-        g.addColorStop(0, world ? "rgba(214,214,232,0.55)" : "rgba(170,90,220,0.45)");
-        g.addColorStop(1, world ? "rgba(214,214,232,0)" : "rgba(120,50,190,0)");
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fill();
+      if (img) drawPic(this.ctx, this.theme, `nebula/${n.kind}`, n.x, n.y, img.width / 2, img.height / 2);
+      else if (!this.theme.hasPic(`nebula/${n.kind}`)) {
+        const xs = n.rects.flatMap(([x0, , x1]) => [x0, x1]);
+        const ys = n.rects.flatMap(([, y0, , y1]) => [y0, y1]);
+        drawPlaceholder(this.ctx, Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
       }
     }
   }
 
   private drawGate(x: number, y: number, u: number): void {
-    const ctx = this.ctx;
-    const img = this.theme.img("stargate");
-    if (img) {
-      ctx.drawImage(img, x - u, y - u, u * 2, u * 2);
-      return;
-    }
-    ctx.strokeStyle = this.theme.def.map === "world" ? "#e8d27a" : "#7fd8ff";
-    ctx.lineWidth = this.px(2);
-    ctx.beginPath();
-    ctx.arc(x, y, u * 0.8, Math.PI, 0);
-    ctx.lineTo(x + u * 0.8, y + u * 0.6);
-    ctx.moveTo(x - u * 0.8, y);
-    ctx.lineTo(x - u * 0.8, y + u * 0.6);
-    ctx.stroke();
+    drawPic(this.ctx, this.theme, "stargate", x - u, y - u, u * 2, u * 2);
   }
 
   private drawBiomes(v: View): void {
@@ -567,72 +535,13 @@ export class MapView {
       ctx.fillText("?", p.x, p.y + s * 0.5);
       return;
     }
-    const custom = this.theme.img(p.owner !== null ? `site/city` : `site/${p.kind}`);
-    const mark = p.owner !== null ? this.theme.img(CITY_MARKS[cityLevel(p.pop ?? 0)]) : null;
-    if (custom) {
-      ctx.drawImage(custom, p.x - u * 2, p.y - u * 2, u * 4, u * 4);
-    } else if (mark && p.owner !== null) {
+    if (p.owner !== null) {
       const s = u * (3.6 + cityLevel(p.pop ?? 0) * 0.5);
-      ctx.drawImage(mark, p.x - s / 2, p.y - s * 0.6, s, s);
+      drawPic(ctx, this.theme, CITY_MARKS[cityLevel(p.pop ?? 0)], p.x - s / 2, p.y - s * 0.6, s, s);
       this.flag(p.x, p.y - s * 0.45, u, this.theme.banner(v.empires[p.owner].banner));
-    } else if (p.owner !== null) {
-      this.drawCity(p.x, p.y, u, this.theme.banner(v.empires[p.owner].banner), p.pop ?? 0, (p.bases ?? 0) > 0);
-    } else if (p.kind === "not_habitable") {
-      ctx.fillStyle = "#6e665a";
-      ctx.beginPath();
-      ctx.moveTo(p.x - u * 1.6, p.y + u);
-      ctx.lineTo(p.x, p.y - u * 1.6);
-      ctx.lineTo(p.x + u * 1.6, p.y + u);
-      ctx.fill();
-    } else {
-      // unclaimed site: a camp of tents
-      ctx.fillStyle = "#f2e6c8";
-      ctx.strokeStyle = "#5b4630";
-      ctx.lineWidth = s;
-      for (const dx of [-0.8, 0.8]) {
-        ctx.beginPath();
-        ctx.moveTo(p.x + dx * u - u * 0.7, p.y + u * 0.6);
-        ctx.lineTo(p.x + dx * u, p.y - u * 0.7);
-        ctx.lineTo(p.x + dx * u + u * 0.7, p.y + u * 0.6);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
+    } else drawPic(ctx, this.theme, `site/${p.kind}`, p.x - u * 2, p.y - u * 2, u * 4, u * 4);
     if (p.guardian) this.drawGuardian(p.x, p.y - u * 2.2, u);
     if (p.stargate) this.drawGate(p.x - u * 2.4, p.y + u * 0.4, u);
-  }
-
-  private drawCity(x: number, y: number, u: number, color: string, pop: number, walls: boolean): void {
-    const ctx = this.ctx;
-    const s = this.px(1);
-    const houses = Math.min(6, 1 + Math.floor(pop / 15));
-    if (walls) {
-      ctx.strokeStyle = "#5c5348";
-      ctx.lineWidth = u * 0.45;
-      ctx.beginPath();
-      ctx.arc(x, y, u * 2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    for (let i = 0; i < houses; i++) {
-      const a = (i / houses) * Math.PI * 2 + 0.6;
-      const hx = x + Math.cos(a) * u * 1.25, hy = y + Math.sin(a) * u * 1.0;
-      ctx.fillStyle = "#e9dcc0";
-      ctx.fillRect(hx - u * 0.45, hy - u * 0.3, u * 0.9, u * 0.6);
-      ctx.fillStyle = "#9b3d25";
-      ctx.beginPath();
-      ctx.moveTo(hx - u * 0.55, hy - u * 0.3);
-      ctx.lineTo(hx, hy - u * 0.75);
-      ctx.lineTo(hx + u * 0.55, hy - u * 0.3);
-      ctx.fill();
-    }
-    // keep
-    ctx.fillStyle = "#b9ad97";
-    ctx.strokeStyle = "#3d342a";
-    ctx.lineWidth = s;
-    ctx.fillRect(x - u * 0.6, y - u * 0.9, u * 1.2, u * 1.5);
-    ctx.strokeRect(x - u * 0.6, y - u * 0.9, u * 1.2, u * 1.5);
-    this.flag(x, y - u * 0.9, u, color);
   }
 
   /** An empire's pennant on a pole standing at (x, y). */
@@ -652,117 +561,21 @@ export class MapView {
     ctx.fill();
   }
 
+  /** The Guardian's standard over the place it guards (world map). */
   private drawGuardian(x: number, y: number, u: number): void {
-    const ctx = this.ctx;
-    const img = this.theme.img("guardian");
-    if (img) {
-      ctx.drawImage(img, x - u * 2, y - u * 2, u * 4, u * 4);
-      return;
-    }
-    if (this.theme.def.map === "world") {
-      // The Immortals' standard: a golden eagle with spread wings on a lance.
-      ctx.strokeStyle = "#3b2a16";
-      ctx.lineWidth = this.px(1.5);
-      ctx.beginPath();
-      ctx.moveTo(x, y - u * 0.6);
-      ctx.lineTo(x, y + u * 1.6);
-      ctx.stroke();
-      ctx.fillStyle = "#e0b43a";
-      ctx.strokeStyle = "#5a3d0c";
-      ctx.lineWidth = this.px(0.8);
-    } else ctx.fillStyle = "#8f1d14";
-    ctx.beginPath();
-    ctx.moveTo(x - u * 2, y - u * 0.4);
-    ctx.lineTo(x - u * 0.4, y - u * 0.2);
-    ctx.lineTo(x, y - u * 0.9);
-    ctx.lineTo(x + u * 0.4, y - u * 0.2);
-    ctx.lineTo(x + u * 2, y - u * 0.4);
-    ctx.lineTo(x + u * 0.5, y + u * 0.5);
-    ctx.lineTo(x - u * 0.5, y + u * 0.5);
-    ctx.closePath();
-    ctx.fill();
-    if (this.theme.def.map === "world") ctx.stroke();
+    drawPic(this.ctx, this.theme, "guardian", x - u * 2, y - u * 2, u * 4, u * 4);
   }
 
-  /** A mercenary company's banner on a pole (the Age theme's monsters). */
-  private drawCompany(kind: string, u: number): void {
-    const ctx = this.ctx;
-    ctx.strokeStyle = "#2b2219";
-    ctx.lineWidth = this.px(1.5);
-    ctx.beginPath();
-    ctx.moveTo(-u * 1.2, -u * 2);
-    ctx.lineTo(-u * 1.2, u * 1.8);
-    ctx.stroke();
-    const [w, h] = [u * 2.6, u * 1.8];
-    ctx.save();
-    ctx.translate(-u * 1.2, -u * 2);
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(w, 0);
-    ctx.lineTo(w * 0.8, h / 2);
-    ctx.lineTo(w, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
-    ctx.clip();
-    if (kind === "crystal") {
-      // The Catalan Company: the four red bars on gold of the Crown of Aragon.
-      ctx.fillStyle = "#e3b528";
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = "#b8231c";
-      for (let i = 0; i < 4; i++) ctx.fillRect(0, (h / 9) * (2 * i + 1), w, h / 9);
-    } else {
-      // The Great Company: black and white.
-      ctx.fillStyle = "#1c1c1c";
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = "#eeeeee";
-      ctx.fillRect(0, 0, w / 2, h / 2);
-      ctx.fillRect(w / 2, h / 2, w / 2, h / 2);
-    }
-    ctx.restore();
-  }
-
-  /** Space monsters (1oom crystal and amoeba): a blue crystal and a green blob. */
+  /** Space monsters and the Age theme's free companies (1oom crystal and amoeba). */
   private drawMonster(m: MonsterView): void {
-    const ctx = this.ctx;
     const u = Math.max(1.6, Math.min(4, 12 / this.zoom + 1.2));
-    const img = this.theme.img(`monster/${m.kind}`);
-    if (img) {
-      ctx.drawImage(img, m.x - u * 2, m.y - u * 2, u * 4, u * 4);
-      return;
-    }
-    ctx.save();
-    ctx.translate(m.x, m.y);
-    if (this.theme.def.map === "world") this.drawCompany(m.kind, u);
-    else if (m.kind === "crystal") {
-      ctx.fillStyle = "#7fd3ff";
-      ctx.strokeStyle = "#e8f8ff";
-      ctx.lineWidth = this.px(1);
-      ctx.beginPath();
-      ctx.moveTo(0, -u * 1.8);
-      ctx.lineTo(u * 1.1, 0);
-      ctx.lineTo(0, u * 1.8);
-      ctx.lineTo(-u * 1.1, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = "rgba(90, 210, 90, 0.85)";
-      ctx.beginPath();
-      for (let i = 0; i <= 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        const r = u * (1.3 + 0.35 * Math.sin(i * 2.7));
-        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-      }
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
+    drawPic(this.ctx, this.theme, `monster/${m.kind}`, m.x - u * 2, m.y - u * 2, u * 4, u * 4);
   }
 
   /**
-   * A star as MOO1 draws it: small, a bright point with a soft glow and a faint four-pointed
-   * glint that twinkles. With MOO1's files imported, its own star sprite (STARMAP.LBX).
+   * A star as MOO1 draws it: its small picture by colour (`star/<k>`, 1oom's star type, plus 6
+   * for the bigger look), now and then twinkling: MOO1's animation when imported, else a
+   * flicker of the picture.
    */
   private drawStar(v: View, id: number): void {
     const p = v.planets[id];
@@ -773,48 +586,22 @@ export class MapView {
     const star = STAR_INDEX[p.star] + (p.look ? 6 : 0);
     const anim = this.theme.anim(`anim/star/${star}`);
     const sprite = this.theme.img(`star/${star}`);
-    if (anim?.img || sprite) {
-      const sw = anim?.w ?? sprite!.width;
-      const sh = anim?.h ?? sprite!.height;
-      const w = this.px(sw * k);
-      const hgt = this.px(sh * k);
+    const sw = anim?.w ?? sprite?.width ?? (p.look ? 13 : 7);
+    const sh = anim?.h ?? sprite?.height ?? (p.look ? 11 : 7);
+    const w = this.px(sw * k);
+    const hgt = this.px(sh * k);
+    if (anim?.img) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      if (anim?.img) {
-        // 1oom `ui_starmap_draw_starmap`: each star now and then runs through its frames.
-        const t = (Math.floor(performance.now() / 110) + id * 13) % 50;
-        drawFrame(ctx, anim, t < anim.frames ? t : 0, p.x - w / 2, p.y - hgt / 2, w, hgt);
-      } else ctx.drawImage(sprite!, p.x - w / 2, p.y - hgt / 2, w, hgt);
+      // 1oom `ui_starmap_draw_starmap`: each star now and then runs through its frames.
+      const t = (Math.floor(performance.now() / 110) + id * 13) % 50;
+      drawFrame(ctx, anim, t < anim.frames ? t : 0, p.x - w / 2, p.y - hgt / 2, w, hgt);
       ctx.restore();
     } else {
-      const c = STAR[p.star];
-      const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2);
-      glow.addColorStop(0, "#ffffff");
-      glow.addColorStop(0.25, c);
-      glow.addColorStop(0.6, c + "55");
-      glow.addColorStop(1, c + "00");
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r * 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      const tw = 0.75 + 0.25 * Math.sin(performance.now() / 700 + id * 1.7);
-      const len = r * (p.look ? 6.5 : 5) * tw;
-      ctx.lineWidth = this.px(0.8);
-      for (const [dx, dy] of [[1, 0], [0, 1]]) {
-        const g = ctx.createLinearGradient(p.x - dx * len, p.y - dy * len, p.x + dx * len, p.y + dy * len);
-        g.addColorStop(0, c + "00");
-        g.addColorStop(0.5, "#ffffffcc");
-        g.addColorStop(1, c + "00");
-        ctx.strokeStyle = g;
-        ctx.beginPath();
-        ctx.moveTo(p.x - dx * len, p.y - dy * len);
-        ctx.lineTo(p.x + dx * len, p.y + dy * len);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r * 0.7, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.save();
+      ctx.globalAlpha = 0.8 + 0.2 * Math.sin(performance.now() / 700 + id * 1.7);
+      drawPic(ctx, this.theme, `star/${star}`, p.x - w / 2, p.y - hgt / 2, w, hgt);
+      ctx.restore();
     }
     if (p.owner !== null) {
       ctx.strokeStyle = this.theme.banner(v.empires[p.owner].banner);
@@ -845,23 +632,9 @@ export class MapView {
     const ctx = this.ctx;
     const u = Math.max(1.2, Math.min(3, 9 / this.zoom + 0.9));
     const color = this.theme.banner(v.empires[f.owner].banner);
-    const custom = this.theme.img("army");
-    if (custom) {
-      ctx.drawImage(custom, x - u * 1.7, y - u * 1.9, u * 3.4, u * 3.4);
+    if (this.theme.def.map === "world") {
+      drawPic(ctx, this.theme, "army", x - u * 1.7, y - u * 1.9, u * 3.4, u * 3.4);
       this.flag(x + u * 0.9, y - u * 0.6, u * 0.8, color);
-    } else if (this.theme.def.map === "world") {
-      ctx.strokeStyle = "#2b2219";
-      ctx.lineWidth = this.px(1.2);
-      ctx.beginPath();
-      ctx.moveTo(x, y + u);
-      ctx.lineTo(x, y - u * 1.4);
-      ctx.stroke();
-      ctx.fillStyle = color;
-      ctx.strokeStyle = "#1a140e";
-      ctx.beginPath();
-      ctx.rect(x, y - u * 1.4, u * 1.5, u * 1.1);
-      ctx.fill();
-      ctx.stroke();
     } else {
       ctx.fillStyle = color;
       ctx.beginPath();
@@ -888,23 +661,8 @@ export class MapView {
   private drawCaravan(v: View, t: TransportView): void {
     const ctx = this.ctx;
     const u = Math.max(1.2, Math.min(3, 9 / this.zoom + 0.9));
-    const custom = this.theme.img("caravan");
-    if (custom) {
-      ctx.drawImage(custom, t.x - u * 1.6, t.y - u * 1.6, u * 3.2, u * 3.2);
-      this.flag(t.x + u * 0.8, t.y - u * 0.5, u * 0.7, this.theme.banner(v.empires[t.owner].banner));
-      return;
-    }
-    ctx.fillStyle = this.theme.banner(v.empires[t.owner].banner);
-    ctx.strokeStyle = "#1a140e";
-    ctx.lineWidth = this.px(1);
-    ctx.fillRect(t.x - u, t.y - u * 0.7, u * 2, u);
-    ctx.strokeRect(t.x - u, t.y - u * 0.7, u * 2, u);
-    ctx.fillStyle = "#2b2219";
-    for (const dx of [-0.6, 0.6]) {
-      ctx.beginPath();
-      ctx.arc(t.x + dx * u, t.y + u * 0.45, u * 0.35, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    drawPic(ctx, this.theme, "caravan", t.x - u * 1.6, t.y - u * 1.6, u * 3.2, u * 3.2);
+    this.flag(t.x + u * 0.8, t.y - u * 0.5, u * 0.7, this.theme.banner(v.empires[t.owner].banner));
   }
 
   private drawSelection(v: View): void {

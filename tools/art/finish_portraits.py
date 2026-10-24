@@ -4,11 +4,10 @@
 
 The SRC_DIRs hold `<theme>-<race index>-<race>-s<seed>.png` (from gen_portraits.py); when
 several seeds exist for one portrait, the one named in PICK below wins, else the lowest
-seed. Writes web/public/themes/<age|classic>/images/race/<n>.webp (384x480) and lists them
-in each theme.json. The bottom strip is cropped away: the model sometimes signs there.
+seed. Writes themes/<age|classic>/images/race/<n>.webp (384x480). The bottom strip is
+cropped away: the model sometimes signs there.
 """
 
-import json
 import os
 import re
 import sys
@@ -42,7 +41,7 @@ def main(srcs: list[str]) -> None:
             if m:
                 found.setdefault(f"{m[1]}-{m[2]}", {})[int(m[3])] = os.path.join(src, name)
     for theme in THEMES:
-        out_dir = os.path.join(ROOT, "web/public/themes", theme, "images/race")
+        out_dir = os.path.join(ROOT, "themes", theme, "images/race")
         os.makedirs(out_dir, exist_ok=True)
         images = {}
         for n in range(10):
@@ -57,15 +56,8 @@ def main(srcs: list[str]) -> None:
             cut = h // 20
             im = im.crop((cut * w // h // 2, 0, w - cut * w // h // 2, h - cut))
             im = im.resize((384, 480), Image.LANCZOS)
-            path = f"images/race/{n}.webp"
-            im.save(os.path.join(ROOT, "web/public/themes", theme, path), "WEBP", quality=82, method=6)
-            images[f"race/{n}"] = path
-        tj = os.path.join(ROOT, "web/public/themes", theme, "theme.json")
-        d = json.load(open(tj))
-        d.setdefault("images", {}).update(images)
-        with open(tj, "w") as f:
-            json.dump(d, f, indent=1, ensure_ascii=False)
-            f.write("\n")
+            im.save(os.path.join(out_dir, f"{n}.webp"), "WEBP", quality=82, method=6)
+            images[f"race/{n}"] = n
         print(theme, len(images), "portraits")
 
 

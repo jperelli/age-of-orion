@@ -5,6 +5,7 @@ import { audio, TUNE } from "./audio";
 import type { Ctx } from "./ctx";
 import { techRefName } from "./diplomacy";
 import { shipParts } from "./engine";
+import { drawPic } from "./pictures";
 import type { GameEvent, TechRef } from "./types";
 import { PLANET_TYPES, RACES } from "./types";
 import { h } from "./ui";
@@ -82,44 +83,18 @@ export async function groundScreen(ctx: Ctx, e: GroundEvent): Promise<void> {
   );
   document.body.append(overlay);
 
-  const bg = theme.img(`landing/invade/${PLANET_TYPES.indexOf(p.kind ?? "terran")}`);
+  const bg = `landing/invade/${PLANET_TYPES.indexOf(p.kind ?? "terran")}`;
   const soldierAlias = (i: number) => `ground/soldier/${RACES.indexOf(v.empires[i].race)}`;
   const soldier = (i: number) => theme.img(soldierAlias(i));
   const deathImg = theme.img("ground/death");
   /** Painted pictures (not MOO1's pixel art) are drawn at a fixed height, smoothed. */
   const painted = (alias: string) => !theme.pixel.has(alias);
-  const world = theme.def.map !== "space";
   const left = [e.attacker, e.attackers];
   const right = [e.defender, e.defenders];
   let alive = [e.attackers, e.defenders];
   let fallen: [number, number] | null = null;
 
-  const drawBackground = () => {
-    if (bg) {
-      g.drawImage(bg, 0, 0, W * SCALE, H * SCALE);
-      return;
-    }
-    const sky = g.createLinearGradient(0, 0, 0, H * SCALE);
-    if (world) {
-      sky.addColorStop(0, "#7fa6c9");
-      sky.addColorStop(0.55, "#d9c99a");
-      sky.addColorStop(0.56, "#6b7f3a");
-      sky.addColorStop(1, "#3f4f22");
-    } else {
-      sky.addColorStop(0, "#050815");
-      sky.addColorStop(0.55, "#1b2a44");
-      sky.addColorStop(0.56, "#4a4038");
-      sky.addColorStop(1, "#2a231d");
-    }
-    g.fillStyle = sky;
-    g.fillRect(0, 0, W * SCALE, H * SCALE);
-    // Walls of the city in the distance.
-    g.fillStyle = world ? "#5b5148" : "#3a4658";
-    for (let x = 90; x < 230; x += 14) {
-      const hgt = 18 + ((x * 7) % 13);
-      g.fillRect(x * SCALE, (110 - hgt) * SCALE, 12 * SCALE, hgt * SCALE);
-    }
-  };
+  const drawBackground = () => drawPic(g, theme, bg, 0, 0, W * SCALE, H * SCALE);
 
   const drawSoldier = (owner: number, x: number, y: number, flip: boolean) => {
     const img = soldier(owner);
@@ -136,18 +111,7 @@ export async function groundScreen(ctx: Ctx, e: GroundEvent): Promise<void> {
       g.drawImage(img, (x + 4 - wid / 2) * SCALE, (y + 16 - hgt) * SCALE, wid * SCALE, hgt * SCALE);
     } else if (img) {
       g.drawImage(img, x * SCALE, y * SCALE, img.width * SCALE, img.height * SCALE);
-    } else {
-      const c = theme.banner(v.empires[owner].banner);
-      g.fillStyle = "#1a1410";
-      g.fillRect((x + 2) * SCALE, (y + 2) * SCALE, 4 * SCALE, 4 * SCALE);
-      g.fillStyle = c;
-      g.fillRect((x + 1) * SCALE, (y + 6) * SCALE, 6 * SCALE, 6 * SCALE);
-      g.fillStyle = "#2a2018";
-      g.fillRect((x + 2) * SCALE, (y + 12) * SCALE, 1 * SCALE, 4 * SCALE);
-      g.fillRect((x + 5) * SCALE, (y + 12) * SCALE, 1 * SCALE, 4 * SCALE);
-      g.fillStyle = world ? "#c9c3b8" : "#9fe0ff";
-      g.fillRect((x + 7) * SCALE, (y + 1) * SCALE, 1 * SCALE, 11 * SCALE);
-    }
+    } else drawPic(g, theme, soldierAlias(owner), x * SCALE, y * SCALE, 8 * SCALE, 16 * SCALE);
     g.restore();
   };
 
@@ -173,12 +137,7 @@ export async function groundScreen(ctx: Ctx, e: GroundEvent): Promise<void> {
       } else if (deathImg) {
         const fw = Math.min(deathImg.width, 16);
         g.drawImage(deathImg, 0, 0, fw, deathImg.height, x * SCALE, y * SCALE, fw * SCALE, deathImg.height * SCALE);
-      } else {
-        g.fillStyle = "rgba(255,180,60,0.85)";
-        g.beginPath();
-        g.arc((x + 4) * SCALE, (y + 8) * SCALE, 6 * SCALE, 0, Math.PI * 2);
-        g.fill();
-      }
+      } else drawPic(g, theme, "ground/death", x * SCALE, y * SCALE, 16 * SCALE, 16 * SCALE);
     }
     g.fillStyle = "#fff";
     g.strokeStyle = "#000";

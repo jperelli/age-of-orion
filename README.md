@@ -58,7 +58,10 @@ in MOO1 and what differs, with tables of the Age theme's empires, words and tech
   Age of Orion and diffs the game state and every random number
   ([docs/HARNESS.md](docs/HARNESS.md)).
 - Two themes: **Age** (medieval world map, the default) and **Classic** (starfield, with
-  your original MOO1 art when imported). Every text and picture can be replaced by a mod.
+  your original MOO1 art when imported). Each theme is a folder of `themes/` with all its
+  pictures, music, sounds and texts; Classic's has every one the game uses (drawn as SVG,
+  with its own music), so a new theme can start as a copy of it. Every text and picture can
+  also be replaced by a mod.
 - The MOO1 soundtrack from your own MUSIC.LBX, converted to MIDI and played by a built-in
   synthesizer; MOO1's sound effects (SOUNDFX.LBX) and fonts (FONTS.LBX, converted to
   TrueType); tech descriptions from RESEARCH.LBX.
@@ -118,10 +121,11 @@ aoo sim --seed 7 --size medium --players 4 --turns 300 --save end.json
 | `crates/harness` | `aoo-harness`: comparison against C 1oom (save decoder, state diff, random number diff) |
 | `tools/harness/` | Patch and scripts to build and run 1oom for the harness |
 | `tools/gen_1oom_tables.py` | Generates the ship part and tech tables (`crates/core/src/data.rs`) from a 1oom checkout |
-| `web/` | HTML/CSS/canvas UI (TypeScript, Vite), themes and texts in `web/public/` |
+| `web/` | HTML/CSS/canvas UI (TypeScript, Vite) |
+| `themes/` | One folder per theme: pictures, music, sounds, texts and colours (`docs/MODDING.md`) |
 | `desktop/` | Tauri shell that packages `web/dist` as a native app |
 | `docs/` | Plan, MOO1 comparison, modding guide, comparison harness, MOO1 quirks, art |
-| `tools/art/` | Scripts that generate the theme pictures |
+| `tools/art/`, `tools/sound/` | Scripts that make the theme pictures, music and sound effects |
 
 ## Releases
 

@@ -3,7 +3,7 @@ import { TUNE, audienceTune, audio } from "./audio";
 // rulers, their messages and proposals, spy successes and the Galactic Council.
 import type { Ctx } from "./ctx";
 import { shipParts } from "./engine";
-import { moo1Scene } from "./pictures";
+import { moo1Scene, picImg, picUrl } from "./pictures";
 import { techName } from "./research";
 import { slider } from "./sliders";
 import { FIELDS, RACES, type AudienceOptions, type Incoming, type MsgParams, type RelationView, type Reply, type SabotageKind, type Talk, type TechRef } from "./types";
@@ -36,12 +36,8 @@ export function attitude(rel: number): string {
 }
 
 function portrait(ctx: Ctx, id: number): HTMLElement {
-  const e = ctx.view().empires[id];
-  const alias = `race/${RACES.indexOf(e.race)}`;
-  const url = ctx.theme.url(alias);
-  return url
-    ? h("img", { class: ctx.theme.pixel.has(alias) ? "portrait pixel" : "portrait painted", src: url, alt: "" })
-    : h("div", { class: "crest big", style: `--banner:${ctx.theme.banner(e.banner)}` });
+  const alias = `race/${RACES.indexOf(ctx.view().empires[id].race)}`;
+  return picImg(ctx.theme, alias, ctx.theme.pixel.has(alias) ? "portrait" : "portrait painted");
 }
 
 /**
@@ -49,7 +45,7 @@ function portrait(ctx: Ctx, id: number): HTMLElement {
  * ambassador moving, the player's emperor seen from behind and the frame, with the
  * ambassador's words in the frame's panel.
  */
-function embassy(ctx: Ctx, id: number): { el: HTMLElement; say: (text: string) => void } | null {
+function embassy(ctx: Ctx, id: number): { el: HTMLElement; say: (text: string) => void } {
   const v = ctx.view();
   const s = 1.5;
   const el = moo1Scene(
@@ -62,32 +58,30 @@ function embassy(ctx: Ctx, id: number): { el: HTMLElement; say: (text: string) =
     ],
     s,
   );
-  if (!el) return null;
   const text = h("div", { class: "scene-text", style: `left:${38 * s}px;top:${139 * s}px;width:${245 * s}px;height:${54 * s}px` });
   el.append(text);
   return { el, say: (t) => (text.textContent = t) };
 }
 
-/** The envoy: MOO1's embassy when imported, else the portrait in front of the throne room. */
+/** The envoy: MOO1's embassy in space, the portrait in front of the empire's throne room on a world map. */
 function envoy(ctx: Ctx, id: number): { el: HTMLElement; say?: (text: string) => void } {
-  return embassy(ctx, id) ?? { el: audienceHead(ctx, id) };
+  return ctx.theme.def.map === "space" ? embassy(ctx, id) : { el: audienceHead(ctx, id) };
 }
 
-/** The envoy's portrait and name, in front of the empire's throne room when the theme has one. */
+/** The envoy's portrait and name, in front of the empire's throne room (`hall/<race>`). */
 function audienceHead(ctx: Ctx, id: number): HTMLElement {
-  const hall = ctx.theme.url(`hall/${RACES.indexOf(ctx.view().empires[id].race)}`);
+  const hall = picUrl(ctx.theme, `hall/${RACES.indexOf(ctx.view().empires[id].race)}`);
   return h(
     "div",
-    { class: hall ? "audience-head hall" : "audience-head", style: hall ? `background-image: url("${hall}")` : "" },
+    { class: "audience-head hall", style: `background-image: url("${hall}")` },
     portrait(ctx, id),
     h("div", {}, h("b", {}, ctx.view().empires[id].leader), h("div", { class: "muted" }, empireName(ctx, id))),
   );
 }
 
-/** The Great Council's hall, when the theme has one. */
-function councilHall(ctx: Ctx): HTMLElement | null {
-  const url = ctx.theme.url("council/hall");
-  return url ? h("img", { class: "council-hall", src: url, alt: "" }) : null;
+/** The Great Council's hall. */
+function councilHall(ctx: Ctx): HTMLElement {
+  return picImg(ctx.theme, "council/hall", "council-hall");
 }
 
 function offerText(ctx: Ctx, bc: number, tech: TechRef | null): string {
@@ -201,8 +195,7 @@ function card(ctx: Ctx, id: number, r: RelationView | null, render: () => void):
       }
     }
   }
-  const arms = ctx.theme.url(`arms/${RACES.indexOf(e.race)}`);
-  if (arms) lines.unshift(h("img", { class: "arms big", src: arms, alt: "" }));
+  lines.unshift(picImg(ctx.theme, `arms/${RACES.indexOf(e.race)}`, "arms big"));
   return h("div", { class: `rival ${e.alive ? "" : "dead"} ${lost ? "lost" : ""}` }, portrait(ctx, id), h("div", { class: "rival-info" }, ...lines), extra.length ? h("div", { class: "rival-actions" }, ...extra) : null);
 }
 

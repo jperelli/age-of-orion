@@ -6,6 +6,7 @@ import type { Ctx } from "./ctx";
 import { shipParts } from "./engine";
 import { CITY_MARKS, cityLevel } from "./map";
 import { type Battle, type BattleAction, type BattleAnim, type BattleItem, type View } from "./types";
+import { drawPic } from "./pictures";
 import { drawFrame } from "./theme";
 import { append, clear, h } from "./ui";
 
@@ -60,7 +61,6 @@ class BattleScreen {
   private resolveAction: ((a: BattleAction | null) => void) | null = null;
   private keyHandler = (e: KeyboardEvent) => this.onKey(e);
   private raf = 0;
-  private stars: [number, number, number][] = [];
   private world: boolean;
 
   constructor(private ctx: Ctx) {
@@ -90,9 +90,6 @@ class BattleScreen {
     this.canvas.addEventListener("mouseleave", () => (this.hover = null));
     this.canvas.addEventListener("click", (e) => this.onClick(e));
     window.addEventListener("resize", () => this.resize());
-    let seed = this.bt.planet * 7919 + 13;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 90; i++) this.stars.push([rnd() * W * CW, rnd() * H * CH, rnd()]);
     this.sync();
     this.resize();
     const loop = () => {
@@ -618,7 +615,7 @@ class BattleScreen {
   /** The troop picture of a stack now: a frame of its animation, else its still picture. */
   private unitPicture(s: Shown, now: number): HTMLImageElement | null {
     const it = s.item;
-    const base = it.design === null ? `unit/${it.name}` : `unit/${it.look % 24}`;
+    const base = unitAlias(it);
     const a = s.anim;
     if (a && a.until > now) {
       const f =
@@ -728,44 +725,11 @@ class BattleScreen {
     for (const e of this.effects) e.draw(c, e.until - now);
   }
 
+  /** The battlefield: its kind of land on a world map (`battle/field/<x>`), MOO1's space (`battle/bg/<n>`, 0 in a nebula). */
   private drawBackground(c: CanvasRenderingContext2D): void {
     const p = this.view.planets[this.bt.planet];
-    const n = p.nebula ? 0 : 1 + (this.bt.planet % 4);
-    const field = this.world ? this.ctx.theme.img(`battle/field/${p.nebula ? "mists" : FIELD[p.kind ?? "terran"] ?? "green"}`) : null;
-    const img = field ?? this.ctx.theme.img(`battle/bg/${n}`) ?? this.ctx.theme.img("battle/bg");
-    if (img) {
-      this.paint(c, img, 0, 0, W * CW, H * CH, field !== null);
-      return;
-    }
-    if (this.world) {
-      const g = c.createLinearGradient(0, 0, 0, H * CH);
-      g.addColorStop(0, p.nebula ? "#8d9a92" : "#9db467");
-      g.addColorStop(1, p.nebula ? "#6f7d77" : "#73914a");
-      c.fillStyle = g;
-      c.fillRect(0, 0, W * CW, H * CH);
-      for (const [x, y, b] of this.stars) {
-        c.fillStyle = b > 0.5 ? "rgba(60,80,30,0.35)" : "rgba(200,210,120,0.25)";
-        c.fillRect(x, y, 2 + b * 3, 1);
-      }
-      if (p.nebula) {
-        c.fillStyle = "rgba(230,235,240,0.25)";
-        c.fillRect(0, 0, W * CW, H * CH);
-      }
-    } else {
-      c.fillStyle = p.nebula ? "#1b0f2a" : "#05070f";
-      c.fillRect(0, 0, W * CW, H * CH);
-      for (const [x, y, b] of this.stars) {
-        c.fillStyle = `rgba(255,255,255,${0.3 + b * 0.7})`;
-        c.fillRect(x, y, b > 0.9 ? 1.5 : 0.8, b > 0.9 ? 1.5 : 0.8);
-      }
-      if (p.nebula) {
-        const g = c.createRadialGradient(W * CW * 0.6, H * CH * 0.4, 10, W * CW * 0.6, H * CH * 0.4, 200);
-        g.addColorStop(0, "rgba(160,60,200,0.35)");
-        g.addColorStop(1, "rgba(160,60,200,0)");
-        c.fillStyle = g;
-        c.fillRect(0, 0, W * CW, H * CH);
-      }
-    }
+    const alias = this.world ? `battle/field/${p.nebula ? "mists" : (FIELD[p.kind ?? "terran"] ?? "green")}` : `battle/bg/${p.nebula ? 0 : 1 + (this.bt.planet % 4)}`;
+    drawPic(c, this.ctx.theme, alias, 0, 0, W * CW, H * CH);
   }
 
   /** Draws a picture; painted (not pixel art) ones are smoothed. */
@@ -789,31 +753,8 @@ class BattleScreen {
       c.drawImage(img, x + (CW - img.width) / 2, y + (CH - img.height) / 2);
       return;
     }
-    if (img) {
-      this.sprite(c, img, x + CW / 2, y + CH / 2, CW, CH);
-      return;
-    }
-    c.fillStyle = this.world ? "#7c766a" : "#5b544c";
-    c.strokeStyle = this.world ? "#3d382f" : "#2a2622";
-    c.lineWidth = 0.8;
-    c.beginPath();
-    const pts = 7;
-    for (let i = 0; i <= pts; i++) {
-      const a = (i / pts) * Math.PI * 2;
-      const r = 8 + ((look * 5 + i * 3) % 4);
-      const px = x + CW / 2 + Math.cos(a) * r;
-      const py = y + CH / 2 + Math.sin(a) * r * 0.75;
-      if (i === 0) c.moveTo(px, py);
-      else c.lineTo(px, py);
-    }
-    c.fill();
-    c.stroke();
-    if (this.world) {
-      c.fillStyle = "#4f7a35";
-      c.beginPath();
-      c.arc(x + CW / 2 + 6, y + CH / 2 - 5, 4, 0, Math.PI * 2);
-      c.fill();
-    }
+    if (img) this.sprite(c, img, x + CW / 2, y + CH / 2, CW, CH);
+    else drawPic(c, this.ctx.theme, alias, x + 2, y + 2, CW - 4, CH - 4);
   }
 
   private drawPlanet(c: CanvasRenderingContext2D, s: Shown): void {
@@ -822,43 +763,13 @@ class BattleScreen {
     const color = this.partyColor(party);
     const cx = s.x + CW / 2;
     const cy = s.y + CH / 2;
-    const img = p.image !== null ? this.ctx.theme.img(`planet/${p.image}`) : null;
-    const mark = this.world ? this.ctx.theme.img(CITY_MARKS[cityLevel(p.pop ?? 0)]) : null;
-    if (img && !this.world) {
-      c.drawImage(img, cx - 15, cy - 11, 30, 22);
-    } else if (mark) {
-      this.sprite(c, mark, cx, cy + 1, CW + 4, CH + 2);
+    if (this.world) {
+      const mark = CITY_MARKS[cityLevel(p.pop ?? 0)];
+      const img = this.ctx.theme.img(mark);
+      if (img) this.sprite(c, img, cx, cy + 1, CW + 4, CH + 2);
+      else drawPic(c, this.ctx.theme, mark, s.x + 2, s.y + 2, CW - 4, CH - 4);
       pennant(c, cx - 9, cy - 4, color);
-    } else if (this.world) {
-      // A walled town that fits its square.
-      c.fillStyle = "#b9a37a";
-      c.strokeStyle = "#4a3b26";
-      c.lineWidth = 0.8;
-      c.fillRect(cx - 11, cy - 6, 22, 15);
-      c.strokeRect(cx - 11, cy - 6, 22, 15);
-      for (const tx of [-14, 10]) {
-        c.fillRect(cx + tx, cy - 9, 4, 18);
-        c.strokeRect(cx + tx, cy - 9, 4, 18);
-      }
-      c.strokeStyle = "#2b2219";
-      c.beginPath();
-      c.moveTo(cx, cy - 6);
-      c.lineTo(cx, cy - 12);
-      c.stroke();
-      c.fillStyle = color;
-      c.fillRect(cx, cy - 12, 6, 3.5);
-    } else {
-      const g = c.createRadialGradient(cx - 4, cy - 4, 1, cx, cy, 12);
-      g.addColorStop(0, "#9fc4ff");
-      g.addColorStop(1, "#1d3a7a");
-      c.fillStyle = g;
-      c.beginPath();
-      c.arc(cx, cy, 11, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = color;
-      c.lineWidth = 1.2;
-      c.stroke();
-    }
+    } else drawPic(c, this.ctx.theme, `planet/${p.image ?? 0}`, cx - 15, cy - 11, 30, 22);
     this.label(c, s.x + CW - 1, s.y + CH - 1, s.item.num > 0 ? `${s.item.num}` : "", color);
   }
 
@@ -877,9 +788,10 @@ class BattleScreen {
       c.fillStyle = "rgba(255,255,255,0.25)";
       c.fillRect(s.x, s.y, CW, CH);
     }
-    const img = this.ctx.theme.img(`ship/${it.look}`);
+    const ship = `ship/${it.look}`;
+    const img = this.ctx.theme.img(ship);
     // MOO1's ships flicker their engines (1oom `uibattle.c` `frame_ship`).
-    const engines = this.ctx.theme.anim(`anim/ship/${it.look}`);
+    const engines = this.ctx.theme.anim(`anim/${ship}`);
     const unit = this.world ? this.unitPicture(s, now) : null;
     c.save();
     if (it.side === "r") {
@@ -889,11 +801,10 @@ class BattleScreen {
     if (unit) {
       this.sprite(c, unit, CW / 2 + 1, CH / 2 + 1, CW - 2, CH - 2);
       if (it.design !== null) pennant(c, 3, 9, color);
-    } else if (engines?.img) drawFrame(c, engines, Math.floor(now / 90), (CW - engines.w) / 2, (CH - engines.h) / 2);
-    else if (img) c.drawImage(img, (CW - img.width) / 2, (CH - img.height) / 2);
-    else if (it.design === null) this.drawMonster(c, it);
-    else if (this.world) drawTroop(c, it.hull, color);
-    else drawShip(c, it.hull, color, it.look % 6);
+    } else if (this.world) drawPic(c, this.ctx.theme, unitAlias(it), 2, 2, CW - 4, CH - 4);
+    else if (engines?.img) drawFrame(c, engines, Math.floor(now / 90), (CW - engines.w) / 2, (CH - engines.h) / 2);
+    else if (img) drawPic(c, this.ctx.theme, ship, (CW - img.width) / 2, (CH - img.height) / 2, img.width, img.height);
+    else drawPic(c, this.ctx.theme, ship, 2, 2, CW - 4, CH - 4);
     c.restore();
     if (it.stasisby) {
       c.fillStyle = "rgba(150,220,255,0.35)";
@@ -908,52 +819,6 @@ class BattleScreen {
       c.fillRect(s.x + 3, s.y + 1, CW - 6, 2);
       c.fillStyle = k > 0.5 ? "#4cd14c" : k > 0.25 ? "#e6c33a" : "#e6463a";
       c.fillRect(s.x + 3, s.y + 1, (CW - 6) * k, 2);
-    }
-  }
-
-  private drawMonster(c: CanvasRenderingContext2D, it: BattleItem): void {
-    if (this.world) {
-      // Catalan Company (gold and red), Great Company (black), the Immortals (Persian purple).
-      drawTroop(c, 3, it.name === "crystal" ? "#d9a21f" : it.name === "amoeba" ? "#262626" : "#6a2c91");
-      return;
-    }
-    if (it.name === "crystal") {
-      c.fillStyle = "#7fd3ff";
-      c.strokeStyle = "#e8f8ff";
-      c.lineWidth = 0.8;
-      c.beginPath();
-      c.moveTo(16, 1);
-      c.lineTo(26, 12);
-      c.lineTo(16, 23);
-      c.lineTo(6, 12);
-      c.closePath();
-      c.fill();
-      c.stroke();
-    } else if (it.name === "amoeba") {
-      c.fillStyle = "rgba(90,210,90,0.9)";
-      c.beginPath();
-      for (let i = 0; i <= 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        const r = 9 + 2.5 * Math.sin(i * 2.7 + performance.now() / 400);
-        const x = 16 + Math.cos(a) * r;
-        const y = 12 + Math.sin(a) * r * 0.8;
-        if (i === 0) c.moveTo(x, y);
-        else c.lineTo(x, y);
-      }
-      c.fill();
-    } else {
-      // The Guardian.
-      c.fillStyle = "#8f1d14";
-      c.beginPath();
-      c.moveTo(2, 10);
-      c.lineTo(12, 11);
-      c.lineTo(16, 4);
-      c.lineTo(20, 11);
-      c.lineTo(30, 10);
-      c.lineTo(20, 18);
-      c.lineTo(12, 18);
-      c.closePath();
-      c.fill();
     }
   }
 
@@ -1015,79 +880,9 @@ function beamColor(tech: number, world: boolean): string {
   return "#ff4a3a";
 }
 
-/** A spaceship silhouette by hull size (facing right), in a 32x24 cell. */
-/** Six ship silhouettes (nose to the right), one per picture of a hull size (MOO1 has six). */
-const SHIP_SHAPES: number[][] = [
-  [14, 0, -8, -8, -4, -2, -13, -4, -13, 4, -4, 2, -8, 8],
-  [14, 0, -12, -9, -8, 0, -12, 9],
-  [12, 0, 6, -6, -6, -7, -12, -3, -12, 3, -6, 7, 6, 6],
-  [14, -2, 2, -9, -12, -9, -12, -4, -4, 0, -12, 4, -12, 9, 2, 9, 14, 2],
-  [15, 0, 0, -3, -6, -10, -10, -10, -6, -2, -13, -2, -13, 2, -6, 2, -10, 10, -6, 10, 0, 3],
-  [12, -3, 8, -7, -10, -7, -13, -3, -13, 3, -10, 7, 8, 7, 12, 3],
-];
-
-export function drawShip(c: CanvasRenderingContext2D, hull: number, color: string, variant = 0): void {
-  const s = [0.45, 0.62, 0.8, 1][hull] ?? 0.6;
-  const shape = SHIP_SHAPES[variant % SHIP_SHAPES.length];
-  c.save();
-  c.translate(16, 12);
-  c.scale(s, s);
-  c.fillStyle = color;
-  c.strokeStyle = "#0b0b0b";
-  c.lineWidth = 1.2;
-  c.beginPath();
-  c.moveTo(shape[0], shape[1]);
-  for (let i = 2; i < shape.length; i += 2) c.lineTo(shape[i], shape[i + 1]);
-  c.closePath();
-  c.fill();
-  c.stroke();
-  c.fillStyle = "rgba(255,255,255,0.6)";
-  c.fillRect(2, -1.2, 5, 2.4);
-  c.fillStyle = "#ffb347";
-  c.fillRect(-15, -2, 2, 4);
-  c.restore();
-}
-
-/** A unit of soldiers under a banner; bigger hulls are bigger formations. */
-export function drawTroop(c: CanvasRenderingContext2D, hull: number, color: string): void {
-  const n = [2, 3, 4, 6][hull] ?? 3;
-  const cols = Math.min(3, n);
-  for (let i = 0; i < n; i++) {
-    const x = 9 + (i % cols) * 6 + Math.floor(i / cols) * 3;
-    const y = 9 + Math.floor(i / cols) * 6;
-    c.fillStyle = "#2b2219";
-    c.fillRect(x - 1, y + 2, 3, 6);
-    c.fillStyle = "#e3c9a0";
-    c.beginPath();
-    c.arc(x + 0.5, y + 1, 1.6, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = color;
-    c.fillRect(x - 2, y + 3, 5, 3);
-    c.strokeStyle = "#5a4a32";
-    c.lineWidth = 0.6;
-    c.beginPath();
-    c.moveTo(x + 3, y - 3);
-    c.lineTo(x + 3, y + 8);
-    c.stroke();
-  }
-  // Banner.
-  c.strokeStyle = "#2b2219";
-  c.lineWidth = 0.8;
-  c.beginPath();
-  c.moveTo(5, 3);
-  c.lineTo(5, 20);
-  c.stroke();
-  c.fillStyle = color;
-  c.fillRect(5, 3, 6, 4);
-  if (hull >= 3) {
-    c.fillStyle = "#6d5a3c";
-    c.fillRect(22, 13, 8, 6);
-    c.fillStyle = "#3b2f20";
-    c.beginPath();
-    c.arc(23.5, 20, 1.6, 0, Math.PI * 2);
-    c.arc(28.5, 20, 1.6, 0, Math.PI * 2);
-    c.fill();
-  }
+/** A stack's troop picture on a world map: its design's (`unit/<look>`) or the monster's (`unit/<name>`). */
+function unitAlias(it: BattleItem): string {
+  return it.design === null ? `unit/${it.name}` : `unit/${it.look % 24}`;
 }
 
 /** The battlefield of each kind of land (the Age theme's `battle/field/*`). */

@@ -4,8 +4,8 @@
     python3 tools/gen_moo1_doc.py
 
 Each table sits between `<!-- generated:NAME -->` and `<!-- end generated -->`. The names
-come from web/public/text (MOO1, the Classic theme) and web/public/themes/age/text (the Age
-theme), the tech levels from crates/core/src/data.rs (1oom's tech tables). Run it after
+come from themes/classic/text (MOO1, the Classic theme, the base of every theme) and
+themes/age/text (the Age theme), the tech levels from crates/core/src/data.rs (1oom's tech tables). Run it after
 changing a name of either theme.
 """
 
@@ -73,18 +73,13 @@ def load(path):
 
 
 def texts(lang):
-    base = load("web/public/text/en.json")
+    classic = load("themes/classic/text/en.json")
     if lang != "en":
-        base.update(load(f"web/public/text/{lang}.json"))
-    classic = dict(base)
-    classic.update(load("web/public/themes/classic/text/en.json"))
-    age = dict(base)
-    age.update(load("web/public/themes/age/text/en.json"))
-    if lang != "en":
-        for theme, d in (("classic", classic), ("age", age)):
-            p = f"web/public/themes/{theme}/text/{lang}.json"
-            if os.path.exists(os.path.join(ROOT, p)):
-                d.update(load(p))
+        classic.update(load(f"themes/classic/text/{lang}.json"))
+    age = dict(classic)
+    age.update(load("themes/age/text/en.json"))
+    if lang != "en" and os.path.exists(os.path.join(ROOT, f"themes/age/text/{lang}.json")):
+        age.update(load(f"themes/age/text/{lang}.json"))
     classic.setdefault("names.orion", "Orion")
     return classic, age
 

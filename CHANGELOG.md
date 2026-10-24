@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The Classic theme has pictures and music of its own, so it no longer needs MOO1's files:
+  every picture the game uses is drawn as SVG (planets, ships in the six empire colours,
+  stars, nebulae, the ten races' envoys, scientists, spies and soldiers, the embassy, the
+  GNN newscast and its 22 news pictures, the laboratories, a blueprint for each tech, the
+  colonization and invasion scenes...), and 19 tunes are composed for it (one per screen,
+  one per race for audiences). Imported MOO1 files still take their place.
 - Animated troops in Age theme battles: each of the 27 troop types marches while it moves
   and plays a four-frame attack when it shoots or strikes (made with Nano Banana from the
   troop's own picture).
@@ -45,14 +51,25 @@ All notable changes to this project are documented here. The format follows
   discovered is shown in the laboratory (the spies' den for a stolen one, the ruins for a found
   one) with its own blueprint on the table and the scientist at work, then what it gives. Each
   tech's blueprint also appears on its card in the Tech screen, the tree and the research
-  choices. Themes without these pictures (Age, or Classic before importing) show the same
-  screen with a placeholder in their place.
+  choices; the Classic theme has its own blueprints without MOO1's files.
 - The ship design screen's parts open a list window, as in MOO1: every part known, with what
   it does, its cost and the space it takes with the engines it needs, and the weapons that fit;
   parts that do not fit are greyed out.
 
 ### Changed
 
+- Each theme is a folder of `themes/` with all its pictures, music, sound effects, texts and
+  colours, each file named as what the game asks for (`images/ship/3.svg`); a new folder is a
+  new theme in the menu. Pictures may be SVG, PNG, JPG or WebP. Classic's folder has every
+  file the game uses and is the starting point of a new theme; `tools/themes_check.py` lists
+  what another theme lacks.
+- Every theme shows the same screens: a picture the theme lacks shows a placeholder in its
+  place instead of a drawing made by the game or a skipped screen (the Age theme now has the
+  new-tech screen and tech cards with placeholders). The kind of map (space or world) picks
+  the newscast (GNN or the Herald) and the audiences (embassy or throne room).
+- Sound effects are files of each theme; MOO1's music and samples play only in the Classic
+  theme, which they belong to (the Age theme has no music of its own yet).
+- The Classic theme plays its button click on every button, as with MOO1's files.
 - The screen is laid out like MOO1's: the buttons are at the bottom, in MOO1's order (Game,
   Design, Fleet, Map, Races, Planets, Tech, Next turn), and the year and treasury sit at the
   top of the side panel.

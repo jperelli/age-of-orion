@@ -72,7 +72,7 @@ export function designDialog(ctx: Ctx): Promise<number> {
         h(
           "div",
           { class: `design-item ${slot === i ? "selected" : ""}` },
-          h("img", { class: "design-pic", src: designPicture(ctx.theme, dv.look, dv.hull, banner), alt: "" }),
+          h("img", { class: "design-pic", src: designPicture(ctx.theme, dv.look, banner), alt: "" }),
           h("b", {}, dv.name),
           h("span", { class: "muted" }, ` ${part("hull", parts.hulls[dv.hull].key)}`),
           h("div", { class: "small" }, statsLine(dv.stats, dv)),
@@ -247,7 +247,7 @@ export function designDialog(ctx: Ctx): Promise<number> {
       "div",
       { class: "ship-look" },
       h("button", { class: "mini", title: t("designer.look_prev"), onclick: () => turn(-1) }, "‹"),
-      h("img", { src: designPicture(ctx.theme, lookAt(d.hull, variant), d.hull, banner), alt: "", title: t("designer.look_next"), onclick: () => turn(1) }),
+      h("img", { src: designPicture(ctx.theme, lookAt(d.hull, variant), banner), alt: "", title: t("designer.look_next"), onclick: () => turn(1) }),
       h("button", { class: "mini", title: t("designer.look_next"), onclick: () => turn(1) }, "›"),
     );
     const hulls = h(
@@ -264,7 +264,7 @@ export function designDialog(ctx: Ctx): Promise<number> {
               keepScroll(editor, renderEditor);
             },
           },
-          h("img", { src: designPicture(ctx.theme, lookAt(i, variant), i, banner), alt: "" }),
+          h("img", { src: designPicture(ctx.theme, lookAt(i, variant), banner), alt: "" }),
           h("span", {}, part("hull", hl.key)),
           h("small", {}, t("designer.space", { n: hl.space })),
         ),

@@ -6,7 +6,7 @@ Usage: tools/gen_1oom_tables.py <path to a 1oom checkout>
 Writes:
   crates/core/src/data.rs     ship parts (game_shiptech.c), techs (game_techtypes.h),
                               tech groups (derived from the names), research flags (game_num.c)
-  web/public/text/en.json     English names of techs and ship parts (merged into the file)
+  themes/classic/text/en.json English names of techs and ship parts (merged into the file)
 
 The data was ported from 1oom commit 42e9c0b. Rerun after changing the generator.
 """
@@ -321,7 +321,7 @@ def main(root):
     out = os.path.join(here, "..", "crates", "core", "src", "data.rs")
     with open(out, "w") as f:
         f.write("\n".join(rs) + "\n")
-    en_path = os.path.join(here, "..", "web", "public", "text", "en.json")
+    en_path = os.path.join(here, "..", "themes", "classic", "text", "en.json")
     en = json.load(open(en_path))
     en.update(text)
     with open(en_path, "w") as f:

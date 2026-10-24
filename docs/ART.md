@@ -1,14 +1,35 @@
 # Art
 
-The pictures shipped with the themes are made for Age of Orion. None comes from Master of
-Orion: the Classic theme shows MOO1's own pictures only when the player imports their LBX
-files, and those take the place of the shipped ones.
+The pictures, music and sounds shipped with the themes (`themes/<theme>/`) are made for Age
+of Orion. None comes from Master of Orion: the Classic theme shows MOO1's own pictures only
+when the player imports their LBX files, and those take the place of the shipped ones.
+
+## Classic theme: drawn pictures, composed music
+
+Every picture of the Classic theme but the race portraits is an SVG drawn by
+`tools/art/gen_svg.py` (the drawing code is in `tools/art/svgart/`): planets, ships in the
+six empire colours, stars, nebulae, the battle screen's pieces, the ten races' envoys,
+scientists, spies and soldiers, the embassy, the newscast and its 22 news pictures, the
+laboratories, a blueprint for each of the 193 techs, the colonization and invasion scenes,
+and the pictures only a world map uses (sites, colonies, views, battlefields, throne rooms).
+It also writes the few pictures of the Age theme the game used to draw itself (interface
+icons, camps, the Guardian's standard, the free companies' banners, mists).
+
+The music is composed by `tools/sound/gen_music.py`: MIDI files for the game's synthesizer, a
+tune per screen and one per race for audiences. `tools/sound/gen_sfx.py` renders the sound
+effects (tones and filtered noise) to WAV files for both themes.
+
+```sh
+python3 tools/art/gen_svg.py
+python3 tools/sound/gen_music.py
+python3 tools/sound/gen_sfx.py
+python3 tools/themes_check.py   # what each theme lacks of Classic's files
+```
 
 ## Race portraits
 
-`web/public/themes/<age|classic>/images/race/<n>.webp` (n in race order: Human, Mrrshan,
-Silicoid, Sakkra, Psilon, Alkari, Klackon, Bulrathi, Meklar, Darlok), listed under `images`
-in each `theme.json`.
+`themes/<age|classic>/images/race/<n>.webp` (n in race order: Human, Mrrshan, Silicoid,
+Sakkra, Psilon, Alkari, Klackon, Bulrathi, Meklar, Darlok).
 
 In the Age theme each player is a real medieval empire, painted with a hint of the MOO1
 race it stands for:
@@ -32,8 +53,7 @@ The Classic theme keeps MOO1's aliens. What each empire takes from its race:
 They are made with Google's Nano Banana 2.1 (`gemini-nano-banana-2.1`) by
 `tools/art/gen_gemini.py portraits/` from the descriptions in `tools/art/subjects.py`; the
 first portrait of each theme is the style reference for the other nine.
-`tools/art/finish_portraits.py` crops them to 384x480 WebP and lists them in `theme.json`
-(`PICK` chooses among tries). Google's terms leave the generated pictures to the user; every
+`tools/art/finish_portraits.py` crops them to 384x480 WebP (`PICK` chooses among tries). Google's terms leave the generated pictures to the user; every
 picture carries Google's invisible SynthID watermark.
 
 ```sh
@@ -65,12 +85,12 @@ Made with Google's Nano Banana 2.1 (`gemini-nano-banana-2.1`, Gemini API) by
 `tools/art/gen_gemini.py`, from the subjects in `tools/art/subjects.py`. The troops, map
 markers and coats of arms are drawn with one approved picture of their kind as a style
 reference (the halberdiers, the castle, the Holy Roman arms), so each set looks alike.
-`tools/art/finish_art.py` crops them, cuts the sprites out of their white background, writes
-WebP files to `web/public/themes/age/images/` and lists them in `theme.json`.
+`tools/art/finish_art.py` crops them, cuts the sprites out of their white background and
+writes WebP files to `themes/age/images/`, each named as its picture.
 `tools/art/gen_art.py` makes the same set with the local Stable Diffusion model, without an
 API key, at lower quality.
 
-| Alias | Picture | Where |
+| Name | Picture | Where |
 | --- | --- | --- |
 | `view/<land>`, `view/orion` | 14 landscapes (one per kind of land) and the ruins of Persepolis, 768x384 | top of the side panel when a site is selected |
 | `view/city/0..2` | a village, a walled town, a great city | top of the panel of a city, by population (under 25, under 60, more) |
@@ -102,5 +122,5 @@ invisible SynthID watermark.
 
 ## Mods
 
-A mod overrides any picture with `images/<alias>.png` (`docs/MODDING.md`), with the aliases
+A mod overrides any picture with `images/<name>.png` (`docs/MODDING.md`), with the names
 above: `race/<n>` for portraits, `unit/<look>` for battle troops, and so on.

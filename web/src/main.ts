@@ -3,10 +3,11 @@ import { TUNE, audio } from "./audio";
 import { Game, engineVersion, importLbxAsync, loadEngine } from "./engine";
 import { AUTOSAVE, GameScreen } from "./game";
 import * as store from "./storage";
-import { LANGS, THEMES, loadSettings, loadTheme, readModFolder, saveSettings, type ModData, type Settings, type Theme } from "./theme";
+import { LANGS, loadSettings, loadTheme, readModFolder, saveSettings, themeLabel, themeList, type ModData, type Settings, type Theme } from "./theme";
 import { RACES, type Difficulty, type GalaxySize, type NewGameOptions, type Race } from "./types";
 import { moo1Dialog } from "./about";
 import { slider } from "./sliders";
+import { picUrl } from "./pictures";
 import { pictureSelect } from "./widgets";
 import { clear, h, modal, pickFiles, setCloseLabel, toast } from "./ui";
 
@@ -23,18 +24,21 @@ async function applyTheme(): Promise<void> {
   theme?.dispose();
   theme = await loadTheme(settings);
   document.documentElement.dataset.theme = theme.def.id;
+  // The theme's own colours and fonts (`themes/<id>/theme.css`).
+  document.getElementById("theme-css")?.remove();
+  if (theme.css) document.head.append(h("link", { id: "theme-css", rel: "stylesheet", href: theme.css }));
   document.documentElement.lang = settings.lang;
   // MOO1's own fonts, when imported (FONTS.LBX).
   if (theme.fonts.has("3") && theme.fonts.has("4")) document.documentElement.dataset.moofonts = "1";
   else delete document.documentElement.dataset.moofonts;
-  audio.useSamples(theme.def.use_lbx);
+  audio.setTheme(theme);
   document.title = t("app.title");
   setCloseLabel(t("btn.close"));
 }
 
-// MOO1 clicks every button (1oom `ui_sound_play_sfx_24`), with the imported samples.
+// MOO1 clicks every button (1oom `ui_sound_play_sfx_24`): the theme's `sfx/button`.
 document.addEventListener("click", (e) => {
-  if ((e.target as Element | null)?.closest?.("button")) audio.sample(0x24);
+  if ((e.target as Element | null)?.closest?.("button")) audio.sfx("button");
 });
 
 function show(el: HTMLElement): void {
@@ -63,6 +67,8 @@ async function menu(): Promise<void> {
   const autosave = await store.get<string>("kv", AUTOSAVE);
   const assets = await store.get<{ archives: Record<string, unknown> }>("assets", "manifest.json");
   const mods = (await store.keys("mods")).map(String);
+  const themes = await themeList();
+  const current = themes.find((e) => e.id === theme.def.id);
   const themeSelect = h(
     "select",
     {
@@ -73,7 +79,7 @@ async function menu(): Promise<void> {
         void menu();
       },
     },
-    ...THEMES.map((id) => h("option", { value: id, selected: id === theme.def.id }, t(`theme.${id}`))),
+    ...themes.map((e) => h("option", { value: e.id, selected: e.id === theme.def.id }, themeLabel(theme, e, "name"))),
   );
   themeSelect.disabled = !!theme.mod?.theme;
   const langSelect = h(
@@ -146,7 +152,7 @@ async function menu(): Promise<void> {
           volume("menu.music", "music"),
           volume("menu.sfx", "sfx"),
         ),
-        h("p", { class: "muted small" }, t(`theme.${theme.def.id}.description`)),
+        h("p", { class: "muted small" }, current ? themeLabel(theme, current, "description") : ""),
         h("p", { class: "muted small" }, assets ? t("menu.assets_imported", { n: Object.keys(assets.archives).length }) : t("menu.assets_none")),
         h(
           "p",
@@ -171,10 +177,7 @@ function newGame(): void {
   const diff = select<Difficulty>(["simple", "easy", "average", "hard", "impossible"], "newgame.difficulty.", "easy");
   const players = h("select", {}, ...[2, 3, 4, 5, 6].map((n) => h("option", { value: n, selected: n === 4 }, t("newgame.opponents_n", { n: n - 1 }))));
   const ai = h("select", {}, ...[0, 1].map((n) => h("option", { value: n }, t(`newgame.ai.${n}`))));
-  const emblem = (i: number) => {
-    const alias = theme.url(`arms/${i}`) ? `arms/${i}` : `race/${i}`;
-    return { img: theme.url(alias), pixel: theme.pixel.has(alias) };
-  };
+  const emblem = (i: number) => ({ img: picUrl(theme, `arms/${i}`), pixel: theme.pixel.has(`arms/${i}`) });
   const race = pictureSelect<Race | "">(
     [
       { value: "", label: t("newgame.random") },

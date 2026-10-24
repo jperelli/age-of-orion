@@ -1,21 +1,41 @@
-// Themes, texts, images and mods. Every word and picture the UI shows comes from here:
-// base texts < theme texts < mod texts, and mod images < imported LBX images < the theme's
-// own pictures < procedural art.
+// Themes, texts, images, sounds and mods. Every word, picture and sound the UI uses comes from
+// here. Each theme is a folder of `themes/` (listed in `themes/index.json` at build time):
+// `images/<name>.<svg|png|jpg|webp>`, `audio/<music|sfx>/<name>.<ogg|mp3|wav|mid>` and
+// `text/<lang>.json`. Classic's folder has everything and its texts are the base of every theme.
+// A picture comes from the mod if it has it, else from the player's MOO1 files (Classic), else
+// from the theme's folder; with none of them the screen shows a placeholder.
 import * as store from "./storage";
 
 export type Text = string | string[];
 
 export interface ThemeDef {
   id: string;
-  name: string;
-  description: string;
+  /** Shown when the texts have no `theme.<id>` key; a string or one per language. */
+  name: string | Record<string, string>;
+  description: string | Record<string, string>;
   /** "world": terrain map with cities; "space": starfield with planets. */
   map: "world" | "space";
-  /** Use images converted from the player's LBX files when available. */
+  /** Lay MOO1's pictures, sounds and texts (imported from the player's LBX files) over the theme. */
   use_lbx: boolean;
   banners: string[];
-  /** Pictures shipped with the theme: alias -> path inside the theme folder. */
-  images?: Record<string, string>;
+}
+
+export interface Anim {
+  frames: number;
+  w: number;
+  h: number;
+  loop: number;
+}
+
+/** A theme folder as listed in `themes/index.json`: its files by name. */
+export interface ThemeEntry {
+  id: string;
+  def: ThemeDef;
+  images: Record<string, string>;
+  anims: Record<string, Anim>;
+  audio: Record<string, string>;
+  langs: string[];
+  css: boolean;
 }
 
 export interface ModData {
@@ -37,8 +57,9 @@ export interface Settings {
   sfx: number;
 }
 
-export const THEMES = ["age", "classic"];
-/** Languages with a text file (`text/<lang>.json`). */
+/** The theme whose texts are the base of every other and whose folder has every file. */
+export const BASE_THEME = "classic";
+/** Languages with a text file (`themes/classic/text/<lang>.json`). */
 export const LANGS = ["en", "es"];
 
 const DEFAULT_SETTINGS: Settings = {
@@ -64,6 +85,22 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
+let index: Promise<ThemeEntry[]> | null = null;
+
+/** Every theme folder. */
+export function themeList(): Promise<ThemeEntry[]> {
+  index ??= fetchJson<{ themes: ThemeEntry[] }>("themes/index.json").then((i) => i?.themes ?? []);
+  return index;
+}
+
+/** A theme's name or description in `lang`, from its texts or its theme.json. */
+export function themeLabel(theme: Theme, entry: ThemeEntry, what: "name" | "description"): string {
+  const key = what === "name" ? `theme.${entry.id}` : `theme.${entry.id}.description`;
+  if (theme.has(key)) return theme.t(key);
+  const v = entry.def[what];
+  return typeof v === "string" ? v : (v[theme.lang] ?? v.en ?? Object.values(v)[0] ?? entry.id);
+}
+
 function loadImage(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -71,13 +108,6 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
     img.onerror = () => resolve(null);
     img.src = url;
   });
-}
-
-export interface Anim {
-  frames: number;
-  w: number;
-  h: number;
-  loop: number;
 }
 
 /** Draws frame `frame` of an imported animation sheet on a canvas. */
@@ -88,11 +118,16 @@ export function drawFrame(c: CanvasRenderingContext2D, a: Anim & { img: HTMLImag
 export class Theme {
   readonly urls = new Map<string, string>();
   readonly images = new Map<string, HTMLImageElement>();
+  /** Sounds by name (`music/<tune>`, `sfx/<effect>`): URL of the theme's file. */
+  readonly sounds = new Map<string, string>();
+  /** The theme's own stylesheet (colours, fonts), if it has one. */
+  css: string | null = null;
 
   constructor(
     readonly def: ThemeDef,
     readonly text: Record<string, Text>,
     readonly mod: ModData | null,
+    readonly lang: string,
   ) {}
 
   /** Text for `key` with `{name}` placeholders replaced; the key itself when missing. */
@@ -119,6 +154,11 @@ export class Theme {
     return this.urls.get(alias) ?? null;
   }
 
+  /** Whether some layer has the picture `alias` (it may still be loading). */
+  hasPic(alias: string): boolean {
+    return this.urls.has(alias);
+  }
+
   banner(i: number): string {
     return this.def.banners[i % this.def.banners.length];
   }
@@ -126,8 +166,8 @@ export class Theme {
   /** Aliases whose picture is pixel art (from LBX files), drawn without smoothing. */
   readonly pixel = new Set<string>();
 
-  /** Imported animations (`anim/...`): horizontal sheets of `frames` frames of `w` x `h`,
-   * looping back to frame `loop`. */
+  /** Animations (`anim/...`): horizontal sheets of `frames` frames of `w` x `h`, looping back
+   * to frame `loop`. A theme's own come with a .json beside the picture. */
   readonly anims = new Map<string, Anim>();
 
   anim(alias: string): (Anim & { url: string; img: HTMLImageElement | null }) | null {
@@ -153,7 +193,7 @@ export class Theme {
     }
   }
 
-  /** A picture shipped with the theme (not a blob: no URL to revoke). Its URL is usable at
+  /** A picture of the theme's folder (not a blob: no URL to revoke). Its URL is usable at
    * once; canvas drawing gets it when it has loaded, unless an imported or mod picture took
    * its place meanwhile. */
   addImageUrl(alias: string, url: string): void {
@@ -186,20 +226,24 @@ export class Theme {
 
 export async function loadTheme(settings: Settings): Promise<Theme> {
   const mod = settings.mod ? ((await store.get<ModData>("mods", settings.mod)) ?? null) : null;
-  const id = mod?.theme && THEMES.includes(mod.theme) ? mod.theme : settings.theme;
-  const def = (await fetchJson<ThemeDef>(`themes/${id}/theme.json`)) ?? (await fetchJson<ThemeDef>("themes/age/theme.json"))!;
+  const themes = await themeList();
+  const wanted = mod?.theme && themes.some((e) => e.id === mod.theme) ? mod.theme : settings.theme;
+  const entry = themes.find((e) => e.id === wanted) ?? themes.find((e) => e.id === DEFAULT_SETTINGS.theme) ?? themes[0];
+  const base = themes.find((e) => e.id === BASE_THEME);
+  const def = entry.def;
   const text: Record<string, Text> = {};
-  for (const url of [
-    "text/en.json",
-    `text/${settings.lang}.json`,
-    `themes/${def.id}/text/en.json`,
-    `themes/${def.id}/text/${settings.lang}.json`,
-  ]) {
-    Object.assign(text, (await fetchJson<Record<string, Text>>(url)) ?? {});
+  const layers = [...(base && base !== entry ? [base] : []), entry];
+  for (const e of layers) {
+    for (const lang of ["en", ...(settings.lang !== "en" ? [settings.lang] : [])]) {
+      if (e.langs.includes(lang)) Object.assign(text, (await fetchJson<Record<string, Text>>(`themes/${e.id}/text/${lang}.json`)) ?? {});
+    }
   }
   if (mod) Object.assign(text, mod.text);
-  const theme = new Theme(def, text, mod);
-  for (const [alias, path] of Object.entries(def.images ?? {})) theme.addImageUrl(alias, `themes/${def.id}/${path}`);
+  const theme = new Theme(def, text, mod, settings.lang);
+  theme.css = entry.css ? `themes/${entry.id}/theme.css` : null;
+  for (const [alias, a] of Object.entries(entry.anims)) theme.anims.set(alias, a);
+  for (const [alias, path] of Object.entries(entry.images)) theme.addImageUrl(alias, `themes/${entry.id}/${path}`);
+  for (const [alias, path] of Object.entries(entry.audio)) theme.sounds.set(alias, new URL(`themes/${entry.id}/${path}`, document.baseURI).href);
 
   if (def.use_lbx) {
     const manifest = await store.get<{ aliases: Record<string, string>; frames?: Record<string, number[]> }>("assets", "manifest.json");

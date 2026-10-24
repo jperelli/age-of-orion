@@ -4,7 +4,7 @@
 import { audio, TUNE } from "./audio";
 import type { Ctx } from "./ctx";
 import type { GameEvent } from "./types";
-import { animSprite } from "./pictures";
+import { animSprite, picImg, picUrl } from "./pictures";
 import { h } from "./ui";
 
 /** 1oom `GAME_NEWS_*` numbers (NEWSCAST.LBX icon 3 + number). */
@@ -52,24 +52,21 @@ export async function newscast(ctx: Ctx, items: NewsItem[]): Promise<void> {
   if (!items.length) return;
   const { theme } = ctx;
   const t = (k: string, p?: Record<string, string | number>) => theme.t(k, p);
-  const tv = theme.img("news/tv");
+  // MOO1's GNN newscast in space, the Herald on a world map.
+  const tv = theme.def.map === "space";
   const screen = h("div", { class: "news-screen" });
   const text = h("div", { class: "news-text" });
   const next = h("button", { class: "primary" }, t("btn.next"));
   const body = h("div", { class: `news ${tv ? "news-tv" : "news-herald"}` });
   if (tv) {
-    body.style.backgroundImage = `url(${theme.url("news/tv")})`;
-    const anchor = theme.url("news/anchor");
-    const gnn = theme.url("news/gnn");
-    // The newscaster talks and the globe turns (1oom `ui_news_cb1`), when imported.
+    body.style.backgroundImage = `url("${picUrl(theme, "news/tv")}")`;
+    // The newscaster talks and the globe turns (1oom `ui_news_cb1`), when animated.
     const talking = animSprite(theme, "anim/news/anchor", 0, 8);
     const globe = animSprite(theme, "anim/news/world", 0, 8);
-    if (talking) screen.append(Object.assign(talking, { className: `${talking.className} news-anchor` }));
-    else if (anchor || gnn) screen.append(h("img", { class: anchor ? "news-anchor" : "news-gnn", src: (anchor ?? gnn)!, alt: "" }));
-    if (globe) screen.append(Object.assign(globe, { className: `${globe.className} news-globe` }));
+    screen.append(talking ? Object.assign(talking, { className: `${talking.className} news-anchor` }) : picImg(theme, "news/anchor", "news-anchor"));
+    screen.append(globe ? Object.assign(globe, { className: `${globe.className} news-globe` }) : picImg(theme, "news/world", "news-globe"));
   } else {
-    const herald = theme.url("news/herald");
-    screen.append(h("div", { class: "news-masthead" }, herald ? h("img", { class: "news-herald-figure", src: herald, alt: "" }) : null, t("news.masthead")));
+    screen.append(h("div", { class: "news-masthead" }, picImg(theme, "news/herald", "news-herald-figure"), t("news.masthead")));
   }
   const icon = h("img", { class: "news-icon", alt: "" }) as HTMLImageElement;
   screen.append(icon);
@@ -84,10 +81,8 @@ export async function newscast(ctx: Ctx, items: NewsItem[]): Promise<void> {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const alias = `news/icon/${it.type}`;
-    const url = theme.url(alias);
-    icon.style.display = url ? "" : "none";
     icon.classList.toggle("painted", !theme.pixel.has(alias));
-    if (url) icon.src = url;
+    icon.src = picUrl(theme, alias);
     text.replaceChildren(
       h("p", {}, it.text),
       it.ranking.length ? h("ol", { class: "news-ranking" }, ...it.ranking.map((r) => h("li", {}, r))) : "",

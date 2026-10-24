@@ -1,9 +1,13 @@
-// Music and sound effects, synthesized with WebAudio.
+// Music and sound effects, played with WebAudio.
 //
-// Music: the tunes of MUSIC.LBX, converted to MIDI by the importer (crates/lbx/src/music.rs),
-// played by a small General MIDI style synthesizer (no SoundFont needed). Sound effects
-// are procedural. Nothing plays until the first click or key press (browser autoplay rules).
+// Music: each theme's `audio/music/<tune>` file, a MIDI file played by a small General MIDI
+// style synthesizer (no SoundFont needed) or a recording (ogg, mp3, wav). In the Classic theme
+// the tunes of the player's MUSIC.LBX (converted to MIDI by the importer, crates/lbx/src/music.rs)
+// take their place, as do SOUNDFX.LBX's samples for the theme's `audio/sfx/<effect>` files.
+// A sound the theme does not have stays silent. Nothing plays until the first click or key
+// press (browser autoplay rules).
 import * as store from "./storage";
+import type { Theme } from "./theme";
 import { RACES, type Race } from "./types";
 
 export interface AudioPrefs {
@@ -11,25 +15,41 @@ export interface AudioPrefs {
   sfx: number;
 }
 
-// 1oom ui/classic: which tune each screen plays.
+/** The tunes the game plays (`audio/music/<name>`); audiences play `audience/<race>`. */
 export const TUNE = {
-  menu: 1,
-  ending_win: 2,
-  ending_lose: 3,
-  battle: 8,
-  news: 9,
-  ground: 0x26,
-  ground_win: 0xc,
-  ground_lose: 0xb,
-  council: 0x27,
+  menu: "menu",
+  ending_win: "ending_win",
+  ending_lose: "ending_lose",
+  battle: "battle",
+  news: "news",
+  ground: "ground",
+  ground_win: "ground_win",
+  ground_lose: "ground_lose",
+  council: "council",
 } as const;
 
-/** 1oom `tbl_audience_music`, by race (MOO1 order, as `RACES`). */
-export const AUDIENCE_TUNE = [0x16, 0x14, 0x22, 0x20, 0x1c, 0x12, 0x18, 0x24, 0x1a, 0x1e];
+/** Tunes played once (the others loop). */
+const ONCE = new Set<string>([TUNE.ending_win, TUNE.ending_lose, TUNE.ground_win, TUNE.ground_lose]);
 
-export function audienceTune(race: Race): number {
-  return AUDIENCE_TUNE[RACES.indexOf(race)] ?? AUDIENCE_TUNE[0];
+// 1oom ui/classic: which MUSIC.LBX tune each screen plays.
+const LBX_TUNE: Record<string, number> = { menu: 1, ending_win: 2, ending_lose: 3, battle: 8, news: 9, ground: 0x26, ground_win: 0xc, ground_lose: 0xb, council: 0x27 };
+
+/** 1oom `tbl_audience_music`, by race (MOO1 order, as `RACES`). */
+const AUDIENCE_TUNE = [0x16, 0x14, 0x22, 0x20, 0x1c, 0x12, 0x18, 0x24, 0x1a, 0x1e];
+
+export function audienceTune(race: Race): string {
+  return `audience/${Math.max(0, RACES.indexOf(race))}`;
 }
+
+function lbxTune(name: string): number | undefined {
+  return name.startsWith("audience/") ? AUDIENCE_TUNE[Number(name.slice(9))] : LBX_TUNE[name];
+}
+
+export type Effect = "beam" | "heavy_beam" | "missile" | "explosion" | "hit" | "bomb" | "special" | "click" | "arrow" | "clash" | "button";
+
+/** SOUNDFX.LBX samples standing for the theme's effects (1oom: 0x24 click, 2 hit, 0x11
+ * explosion, 0x13 special, 0x25 bomb). */
+const LBX_SFX: Partial<Record<Effect, number>> = { click: 0x24, button: 0x24, hit: 2, explosion: 0x11, special: 0x13, bomb: 0x25 };
 
 // ------------------------------------------------------------- MIDI
 
@@ -297,21 +317,36 @@ class AudioOut {
   private sfxGain: GainNode | null = null;
   private synth: Synth | null = null;
   private prefs: AudioPrefs = { music: 0.5, sfx: 0.5 };
+  private theme: Theme | null = null;
   private tune: Tune | null = null;
-  private tuneId = -1;
+  private recording: AudioBufferSourceNode | null = null;
+  private tuneId: string | null = null;
   private loops = false;
   private next = 0;
   private startAt = 0;
   private timer: number | null = null;
   private manifest: { aliases: Record<string, string>; looping?: string[] } | null | undefined;
-  private wanted = -1;
+  private wanted: string | null = null;
+  private lbx = false;
+  private sounds = new Map<string, AudioBuffer | null>();
 
   setPrefs(p: AudioPrefs): void {
     this.prefs = p;
     if (this.musicGain) this.musicGain.gain.value = p.music;
     if (this.sfxGain) this.sfxGain.gain.value = p.sfx;
     if (p.music === 0) this.stopMusic();
-    else if (this.wanted >= 0 && this.tuneId !== this.wanted) void this.play(this.wanted);
+    else if (this.wanted !== null && this.tuneId !== this.wanted) void this.play(this.wanted);
+  }
+
+  /** The theme whose sounds play; MOO1's imported ones take their place when it uses them. */
+  setTheme(theme: Theme): void {
+    this.theme = theme;
+    this.lbx = theme.def.use_lbx;
+    this.sounds.clear();
+    this.preload();
+    const wanted = this.wanted;
+    this.stopMusic();
+    if (wanted !== null) void this.play(wanted);
   }
 
   /** Creates the audio context on the first user gesture. */
@@ -329,8 +364,8 @@ class AudioOut {
       this.sfxGain.gain.value = this.prefs.sfx;
       this.sfxGain.connect(this.ctx.destination);
       this.synth = new Synth(this.ctx, this.musicGain);
-      if (this.wanted >= 0) void this.play(this.wanted);
-      this.preloadSamples([0x24, 2, 0x11, 0x13, 0x25, 6]);
+      if (this.wanted !== null) void this.play(this.wanted);
+      this.preload();
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
   }
@@ -338,29 +373,60 @@ class AudioOut {
   /** Forgets the cached asset list (after an import). */
   reload(): void {
     this.manifest = undefined;
-    this.samples.clear();
+    this.sounds.clear();
   }
 
-  async hasMusic(): Promise<boolean> {
-    this.manifest ??= (await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json")) ?? null;
-    return !!this.manifest && Object.keys(this.manifest.aliases).some((a) => a.startsWith("music/"));
-  }
-
-  /** Plays MUSIC.LBX tune `n` (if imported); the same tune keeps playing. */
-  async play(n: number): Promise<void> {
-    this.wanted = n;
-    if (!this.ctx || !this.synth || this.prefs.music === 0 || this.tuneId === n) return;
+  private async lbxManifest(): Promise<{ aliases: Record<string, string>; looping?: string[] } | null> {
     this.manifest ??= (await store.get<{ aliases: Record<string, string>; looping?: string[] }>("assets", "manifest.json")) ?? null;
-    const path = this.manifest?.aliases[`music/${n}`];
-    if (!path) return this.stopMusic();
-    const blob = await store.get<Blob>("assets", path);
-    if (!blob || this.wanted !== n) return;
-    const tune = parseMidi(new Uint8Array(await blob.arrayBuffer()));
+    return this.manifest;
+  }
+
+  /** The bytes of tune `name` and whether it loops: MOO1's when imported (Classic), else the theme's. */
+  private async tuneFile(name: string): Promise<{ bytes: ArrayBuffer; midi: boolean; loops: boolean } | null> {
+    const n = lbxTune(name);
+    if (this.lbx && n !== undefined) {
+      const m = await this.lbxManifest();
+      const path = m?.aliases[`music/${n}`];
+      const blob = path ? await store.get<Blob>("assets", path) : null;
+      if (blob) return { bytes: await blob.arrayBuffer(), midi: true, loops: !!m?.looping?.includes(`music/${n}`) };
+    }
+    const url = this.theme?.sounds.get(`music/${name}`);
+    if (!url) return null;
+    try {
+      const r = await fetch(url);
+      return r.ok ? { bytes: await r.arrayBuffer(), midi: /\.midi?$/i.test(url), loops: !ONCE.has(name) } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Plays tune `name` (see `TUNE`), if the theme has it; the same tune keeps playing. */
+  async play(name: string): Promise<void> {
+    this.wanted = name;
+    if (!this.ctx || !this.synth || this.prefs.music === 0 || this.tuneId === name) return;
+    const file = await this.tuneFile(name);
+    if (this.wanted !== name) return;
+    if (!file) return this.stopMusic();
     this.stopMusic();
-    this.wanted = n;
-    this.tune = tune;
-    this.tuneId = n;
-    this.loops = !!this.manifest?.looping?.includes(`music/${n}`);
+    this.wanted = name;
+    this.tuneId = name;
+    this.loops = file.loops;
+    if (!file.midi) {
+      try {
+        const buf = await this.ctx.decodeAudioData(file.bytes);
+        if (this.tuneId !== name) return;
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = file.loops;
+        src.connect(this.musicGain!);
+        src.start();
+        this.recording = src;
+      } catch {
+        this.tuneId = null;
+      }
+      return;
+    }
+    this.tune = parseMidi(new Uint8Array(file.bytes));
     this.synth.reset();
     this.next = 0;
     this.startAt = this.ctx.currentTime + 0.1;
@@ -372,7 +438,9 @@ class AudioOut {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.tune = null;
-    this.tuneId = -1;
+    this.tuneId = null;
+    this.recording?.stop();
+    this.recording = null;
     if (this.ctx && this.synth) this.synth.allOff(this.ctx.currentTime);
   }
 
@@ -400,67 +468,41 @@ class AudioOut {
 
   // --------------------------------------------------------- effects
 
-  private env(dur: number, peak: number): GainNode | null {
-    if (!this.ctx || !this.sfxGain || this.prefs.sfx === 0) return null;
-    const g = this.ctx.createGain();
-    const t = this.ctx.currentTime;
-    g.gain.setValueAtTime(peak, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    g.connect(this.sfxGain);
-    return g;
-  }
-
-  private tone(type: OscillatorType, f0: number, f1: number, dur: number, peak: number): void {
-    const g = this.env(dur, peak);
-    if (!g || !this.ctx) return;
-    const o = this.ctx.createOscillator();
-    const t = this.ctx.currentTime;
-    o.type = type;
-    o.frequency.setValueAtTime(f0, t);
-    o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-    o.connect(g);
-    o.start(t);
-    o.stop(t + dur + 0.02);
-  }
-
-  private noise(dur: number, peak: number, freq: number, type: BiquadFilterType = "lowpass"): void {
-    const g = this.env(dur, peak);
-    if (!g || !this.ctx) return;
-    const ctx = this.ctx;
-    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const f = ctx.createBiquadFilter();
-    f.type = type;
-    f.frequency.value = freq;
-    src.connect(f);
-    f.connect(g);
-    src.start();
-  }
-
-  // ------------------------------------------------------ MOO1 samples
-
-  private samplesOn = false;
-  private samples = new Map<number, AudioBuffer | null>();
-
-  /** Plays the imported SOUNDFX.LBX samples instead of synthesized effects (Classic theme). */
-  useSamples(on: boolean): void {
-    this.samplesOn = on;
-    this.samples.clear();
-  }
-
-  /** Plays SOUNDFX.LBX sample `n` (1oom `ui_sound_play_sfx`); false if not available. */
-  sample(n: number): boolean {
-    if (!this.samplesOn || !this.ctx || !this.sfxGain || this.prefs.sfx === 0) return false;
-    const buf = this.samples.get(n);
-    if (buf === undefined) {
-      this.samples.set(n, null);
-      void this.loadSample(n);
-      return false;
+  /** Decodes a sound once: SOUNDFX.LBX sample `n` (`lbx:<n>`) or the theme's `sfx/<effect>`. */
+  private async load(key: string): Promise<AudioBuffer | null> {
+    if (this.sounds.has(key)) return this.sounds.get(key) ?? null;
+    this.sounds.set(key, null);
+    if (!this.ctx) return null;
+    let bytes: ArrayBuffer | null = null;
+    if (key.startsWith("lbx:")) {
+      const path = (await this.lbxManifest())?.aliases[`sfx/${key.slice(4)}`];
+      const blob = path ? await store.get<Blob>("assets", path) : null;
+      bytes = blob ? await blob.arrayBuffer() : null;
+    } else {
+      const url = this.theme?.sounds.get(`sfx/${key}`);
+      bytes = url ? await fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null), () => null) : null;
     }
-    if (!buf) return false;
+    if (!bytes) return null;
+    try {
+      const buf = await this.ctx.decodeAudioData(bytes);
+      this.sounds.set(key, buf);
+      return buf;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Decodes the common effects ahead, so the first one is not silent. */
+  private preload(): void {
+    if (!this.ctx) return;
+    for (const e of ["button", "click", "hit", "explosion", "special", "beam"]) void this.load(e);
+    if (this.lbx) for (const n of [0x24, 2, 0x11, 0x13, 0x25, 6]) void this.load(`lbx:${n}`);
+  }
+
+  private playBuffer(key: string): boolean {
+    const buf = this.sounds.get(key);
+    if (buf === undefined) void this.load(key);
+    if (!buf || !this.ctx || !this.sfxGain) return false;
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.connect(this.sfxGain);
@@ -468,60 +510,15 @@ class AudioOut {
     return true;
   }
 
-  private async loadSample(n: number): Promise<void> {
-    this.manifest ??= (await store.get<{ aliases: Record<string, string> }>("assets", "manifest.json")) ?? null;
-    const path = this.manifest?.aliases[`sfx/${n}`];
-    const blob = path ? await store.get<Blob>("assets", path) : null;
-    if (!blob || !this.ctx) return;
-    try {
-      this.samples.set(n, await this.ctx.decodeAudioData(await blob.arrayBuffer()));
-    } catch {
-      this.samples.set(n, null);
-    }
-  }
-
-  /** Preloads the samples the game uses, so the first effect is not silent. */
-  preloadSamples(ns: number[]): void {
-    if (!this.samplesOn || !this.ctx) return;
-    for (const n of ns) if (!this.samples.has(n)) {
-      this.samples.set(n, null);
-      void this.loadSample(n);
-    }
-  }
-
   /**
-   * A sound effect: MOO1's sample `sample` when imported (Classic theme), otherwise a
-   * synthesized one. 1oom numbers: 0x24 click, 2 hit, 0x11 explosion, 0x13 special,
-   * weapons their own (`tbl_shiptech_weap[].sound`).
+   * A sound effect: in the Classic theme MOO1's sample `sample` (weapons have their own, 1oom
+   * `tbl_shiptech_weap[].sound`) or the effect's, when imported; otherwise the theme's file.
    */
-  sfx(kind: "beam" | "heavy_beam" | "missile" | "explosion" | "hit" | "bomb" | "special" | "click" | "arrow" | "clash", sample?: number): void {
-    const def: Partial<Record<typeof kind, number>> = { click: 0x24, hit: 2, explosion: 0x11, special: 0x13, bomb: 0x25 };
-    const n = sample ?? def[kind];
-    if (n !== undefined && this.sample(n)) return;
-    switch (kind) {
-      case "beam":
-        return this.tone("sawtooth", 1400, 300, 0.18, 0.12);
-      case "heavy_beam":
-        return this.tone("sawtooth", 600, 80, 0.4, 0.18);
-      case "missile":
-        return this.noise(0.35, 0.15, 900, "bandpass");
-      case "explosion":
-        this.noise(0.8, 0.4, 600);
-        return this.tone("sine", 90, 30, 0.6, 0.3);
-      case "hit":
-        return this.noise(0.12, 0.2, 2500, "bandpass");
-      case "bomb":
-        return this.tone("square", 300, 40, 0.5, 0.15);
-      case "special":
-        return this.tone("sine", 200, 1600, 0.5, 0.15);
-      case "click":
-        return this.tone("square", 900, 900, 0.04, 0.05);
-      case "arrow":
-        return this.noise(0.15, 0.18, 4000, "highpass");
-      case "clash":
-        this.tone("square", 1800, 1200, 0.08, 0.08);
-        return this.noise(0.1, 0.12, 3000, "bandpass");
-    }
+  sfx(kind: Effect, sample?: number): void {
+    if (!this.ctx || this.prefs.sfx === 0) return;
+    const n = sample ?? LBX_SFX[kind];
+    if (this.lbx && n !== undefined && this.playBuffer(`lbx:${n}`)) return;
+    this.playBuffer(kind);
   }
 }
 

@@ -6,9 +6,9 @@ import { designDialog } from "./designer";
 import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefName } from "./diplomacy";
 import type { Game } from "./engine";
 import { groundScreen, isGroundScreen } from "./ground";
-import { MapView, cityLevel, etaTurns } from "./map";
+import { CITY_MARKS, MapView, cityLevel, etaTurns } from "./map";
 import { growthLines, kindLines, raceLines, specialLines, starLines } from "./explain";
-import { designPicture, iconRow, uiIcon } from "./pictures";
+import { designPicture, iconRow, picImg, picUrl, uiIcon } from "./pictures";
 import { explained, pictureSelect } from "./widgets";
 import { newscast, newsType } from "./news";
 import { adjustGroup, slider, sliders } from "./sliders";
@@ -195,26 +195,23 @@ export class GameScreen {
     );
   }
 
-  /** The theme's painted view of a place, shown wide above its panel (the Age theme). */
+  /** The painted view of a place, shown wide above its panel on a world map. */
   private placeView(p: PlanetView): HTMLElement | null {
-    if (!p.explored || this.theme.def.use_lbx) return null;
+    if (!p.explored || this.theme.def.map !== "world") return null;
     const alias = p.owner !== null ? `view/city/${cityLevel(p.pop ?? 0)}` : p.orion ? "view/orion" : `view/${p.kind}`;
-    const url = this.theme.url(alias);
-    return url ? h("img", { class: "planet-view", src: url, alt: "" }) : null;
+    return picImg(this.theme, alias, "planet-view");
   }
 
-  /** An empire's coat of arms, when the theme has one. */
-  private arms(owner: number): HTMLElement | null {
-    const url = this.theme.url(`arms/${RACES.indexOf(this.view.empires[owner].race)}`);
-    return url ? h("img", { class: "arms", src: url, alt: "" }) : null;
+  /** An empire's coat of arms. */
+  private arms(owner: number): HTMLElement {
+    return picImg(this.theme, `arms/${RACES.indexOf(this.view.empires[owner].race)}`, "arms");
   }
 
+  /** The place's picture: the planet in space, the site or the city on a world map. */
   private planetPicture(p: PlanetView): HTMLElement {
-    const url = p.image !== null ? this.theme.url(`planet/${p.image}`) : null;
-    if (url && this.theme.def.use_lbx) return h("img", { class: "planet-pic pixel", src: url, alt: "" });
-    const site = p.kind ? this.theme.url(p.owner !== null ? "site/city" : `site/${p.kind}`) : null;
-    if (site) return h("img", { class: "planet-pic", src: site, alt: "" });
-    return h("div", { class: `planet-pic swatch kind-${p.kind ?? "unknown"} star-${p.star}` });
+    if (!p.explored || !p.kind) return h("div", { class: "planet-pic swatch kind-unknown" });
+    if (this.theme.def.map === "world") return picImg(this.theme, p.owner !== null ? CITY_MARKS[cityLevel(p.pop ?? 0)] : `site/${p.kind}`, "planet-pic");
+    return picImg(this.theme, `planet/${p.image ?? 0}`, "planet-pic");
   }
 
   /** Rows of facts about a place; land, climate, resources, soil and owner explain themselves when clicked. */
@@ -314,9 +311,9 @@ export class GameScreen {
     const banner = v.empires[v.player].banner;
     const select = pictureSelect(
       [
-        ...v.designs.map((d, i) => ({ value: i, label: d.name, sub: `${d.stats.cost} ${this.t("unit.bc")}`, img: designPicture(this.theme, d.look, d.hull, banner) })),
+        ...v.designs.map((d, i) => ({ value: i, label: d.name, sub: `${d.stats.cost} ${this.t("unit.bc")}`, img: designPicture(this.theme, d.look, banner) })),
         ...(gate || c.build === BUILD_STARGATE
-          ? [{ value: BUILD_STARGATE, label: this.t("colony.stargate"), sub: `${v.stargate_cost} ${this.t("unit.bc")}`, img: this.theme.url("stargate") }]
+          ? [{ value: BUILD_STARGATE, label: this.t("colony.stargate"), sub: `${v.stargate_cost} ${this.t("unit.bc")}`, img: picUrl(this.theme, "stargate") }]
           : []),
       ],
       c.build,
@@ -427,8 +424,8 @@ export class GameScreen {
     const banner = v.empires[f.owner].banner;
     const rows = f.ships.map((n, i) => {
       if (n <= 0) return null;
-      const [look, hull] = f.looks[i] ?? [0, 0];
-      const pic = h("img", { class: "ship-pic", src: designPicture(this.theme, look, hull, banner), alt: "" });
+      const [look] = f.looks[i] ?? [0, 0];
+      const pic = h("img", { class: "ship-pic", src: designPicture(this.theme, look, banner), alt: "" });
       const count = chosen ? chosen[i] : n;
       const counter = onChange
         ? h(
@@ -586,9 +583,9 @@ export class GameScreen {
   /** MOO1's planet screen: the land, the ships in orbit and how much it has of everything. */
   private async planetWindow(p: PlanetView): Promise<void> {
     const v = this.view;
-    // Classic: MOO1's own picture of the planet's surface (its colonization scene), if imported.
-    const scene = this.theme.def.use_lbx && p.kind ? this.theme.url(`landing/colonize/${PLANET_TYPES.indexOf(p.kind)}`) : null;
-    const big = scene ? h("img", { class: "pixel", src: scene, alt: "" }) : (this.placeView(p) ?? this.planetPicture(p));
+    // In space MOO1's picture of the planet's surface (its colonization scene); on a world map the place's view.
+    const scene = this.theme.def.map === "space" && p.kind ? picImg(this.theme, `landing/colonize/${PLANET_TYPES.indexOf(p.kind)}`) : null;
+    const big = scene ?? this.placeView(p) ?? this.planetPicture(p);
     big.classList.add("window-picture");
     const stat = (label: string, value: string | number, row: HTMLElement | null) =>
       h("div", { class: "window-stat" }, h("div", {}, h("b", {}, label), " ", h("span", {}, String(value))), row);
@@ -622,8 +619,8 @@ export class GameScreen {
                 { class: "window-ships" },
                 ...f.ships.map((n, i) => {
                   if (n <= 0) return null;
-                  const [look, hull] = f.looks[i] ?? [0, 0];
-                  const src = designPicture(this.theme, look, hull, v.empires[f.owner].banner);
+                  const [look] = f.looks[i] ?? [0, 0];
+                  const src = designPicture(this.theme, look, v.empires[f.owner].banner);
                   return h("div", { class: "window-ship", title: this.designName(f, i) }, h("img", { src, alt: "" }), h("b", {}, `× ${n}`), h("div", { class: "small" }, this.designName(f, i)));
                 }),
               ),
@@ -665,7 +662,7 @@ export class GameScreen {
         h(
           "td",
           {},
-          ...f.ships.map((n, i) => (n > 0 ? h("span", { class: "fleet-chip", title: this.designName(f, i) }, h("img", { src: designPicture(this.theme, f.looks[i]?.[0] ?? 0, f.looks[i]?.[1] ?? 0, v.empires[v.player].banner), alt: "" }), `${n}`) : null)),
+          ...f.ships.map((n, i) => (n > 0 ? h("span", { class: "fleet-chip", title: this.designName(f, i) }, h("img", { src: designPicture(this.theme, f.looks[i]?.[0] ?? 0, v.empires[v.player].banner), alt: "" }), `${n}`) : null)),
         ),
       );
     });

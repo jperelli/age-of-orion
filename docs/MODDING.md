@@ -1,22 +1,43 @@
 # Modding
 
-Everything the player reads or sees comes from data files, layered in this order (later
-wins):
+Everything the player reads, sees or hears comes from data files: the theme folders of
+`themes/`, the player's imported MOO1 files and the active mod.
 
-1. `web/public/text/en.json`: base texts (Master of Orion wording), then the chosen
-   language's `web/public/text/<lang>.json` (`es` for Spanish).
-2. `web/public/themes/<theme>/text/en.json`: the theme's texts (`age` renames planets to
-   cities, ships to units, and so on), then `themes/<theme>/text/<lang>.json`.
-3. The active mod's `text/*.json`.
+## Themes
 
-A missing key in a language falls back to English. A new language is a new
-`text/<lang>.json` (and `themes/age/text/<lang>.json`) plus its code in `LANGS` in
-`web/src/theme.ts` and a `lang.<code>` name in every text file.
+Each theme is a folder of `themes/`; a new folder is a new theme in the menu (the build lists
+them in `themes/index.json`). The folders have the same layout:
 
-Images are looked up by **alias**: the active mod's `images/<alias>.png` first, then images
-converted from the player's LBX files (Classic theme), then the theme's own pictures
-(`images` in `web/public/themes/<theme>/theme.json`, alias -> file in the theme folder), then
-procedural art drawn by the map.
+```
+themes/<id>/
+  theme.json        {"name": "...", "description": "...", "map": "space" or "world",
+                     "use_lbx": false, "banners": ["#4f7dff", ... six colours]}
+  theme.css         colours and fonts (the CSS variables of web/src/style.css)
+  text/en.json      texts, and text/<lang>.json for other languages
+  images/<name>.svg every picture, named as the game asks for it (images/ship/3.svg is `ship/3`)
+  audio/music/<tune>.mid   music: MIDI for the game's synthesizer, or .ogg, .mp3, .wav
+  audio/sfx/<effect>.wav   sound effects
+```
+
+A picture may be `.svg`, `.png`, `.jpg` or `.webp`; with several of one name the first of
+that order wins. **Classic's folder has every picture, tune and sound the game uses** (drawn
+as SVG by `tools/art/gen_svg.py`, composed by `tools/sound/gen_music.py`), so it is the
+starting point of a new theme. Another theme may lack some: a missing picture shows a
+placeholder (a dashed frame with a question mark) in its place, and a missing sound stays
+silent. `python3 tools/themes_check.py` lists what each theme lacks of Classic's files.
+
+- `map` picks the map and the screens drawn around it: `space` (stars, the GNN newscast,
+  MOO1's embassy, ships in battle) or `world` (sites and cities on a land map, the Herald,
+  throne rooms, troops). The pictures marked *world* or *space* below are used by one kind.
+- `use_lbx`: the player's MOO1 files, once imported, take the place of the theme's
+  pictures, music, sounds and texts (Classic).
+- Texts: Classic's are the base of every theme, then the theme's, then the mod's. A missing
+  key in a language falls back to English. A new language is a new `text/<lang>.json` in
+  Classic's folder (and Age's), its code in `LANGS` in `web/src/theme.ts` and a
+  `lang.<code>` name in every text file.
+
+A picture comes from the active mod's `images/<name>.png` first, then from the player's MOO1
+files (when the theme uses them), then from the theme's folder.
 
 ## Mod folder
 
@@ -29,12 +50,12 @@ my-mod/
 ```
 
 Install it from **Mods > Install mod folder**; it is stored in the browser (IndexedDB) and
-becomes active. `theme` picks the base theme (`age` or `classic`). See
+becomes active. `theme` picks the base theme (a folder of `themes/`). See
 [examples/mods/legions](../examples/mods/legions).
 
 ## Text keys
 
-All keys are in `web/public/text/en.json`. The most useful groups:
+All keys are in `themes/classic/text/en.json`. The most useful groups:
 
 | Keys | What |
 |---|---|
@@ -66,17 +87,21 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `names.orion` | Name of Orion |
 | `help.lines` | How to play, one paragraph per entry |
 
-## Image aliases
+## Pictures
 
-| Alias | Used for |
+The name of each picture (its path in `images/`), with MOO1's file when it has one:
+
+| Name | Used for |
 |---|---|
-| `planet/<n>` | Planet picture `n` (0 to 34) in the side panel (Classic theme; PLANETS.LBX 0..34) |
-| `race/<n>` | Race portrait `n` (0 to 9, race order) in the Races dialog (PLANETS.LBX 35..44) |
-| `site/<type>` | Map icon of an unclaimed site of that planet type (Age map) |
-| `site/city` | Map icon of a colony |
-| `army` | Fleets on the map |
-| `caravan` | Transports on the map |
-| `guardian` | The Guardian of Orion |
+| `planet/<n>` | *space*: planet picture `n` (0 to 34) in the side panel and in battle (PLANETS.LBX 0..34) |
+| `race/<n>` | Race portrait `n` (0 to 9, race order) in audiences and the empires screen (PLANETS.LBX 35..44) |
+| `arms/<race>` | A coat of arms (0..9, race order): the owner in the side panel, the empires screen, the new game's empire choice |
+| `ui/gold`, `ui/research`, `ui/reserve` | Icons of the side panel's header (24x24) |
+| `icon/pop`, `icon/factory`, `icon/waste`, `icon/base`, `icon/shield` | Icons repeated in the planet window's rows (24x24) |
+| `site/<type>` | *world*: map marker of a free site of that planet type |
+| `army` | *world*: armies on the map |
+| `caravan` | Transports on the map, with the owner's pennant |
+| `guardian` | *world*: the Guardian's mark over Orion |
 | `monster/crystal`, `monster/amoeba` | The two space monsters on the map |
 | `ship/<look>` | A stack in battle (look = banner * 24 + hull * 6 + variant, 144..146 the crystal, amoeba and Guardian), facing right (SHIPS.LBX, SHIPS2.LBX) |
 | `battle/bg/<n>` | Battle background, 0 in a nebula, 1..4 otherwise (SPACE.LBX 0x1a..) |
@@ -85,45 +110,56 @@ All keys are in `web/public/text/en.json`. The most useful groups:
 | `missile/<kind>/<dir>` | Missiles in flight: kind 0..4 (missile, antimatter, hellfire, proton, plasma), direction 0 up, 1 up-right ... 7 up-left (MISSILE.LBX) |
 | `nebula/<n>` | Nebula of type `n` (0 to 9), drawn at half its size in map units (STARMAP.LBX 0x0f..) |
 | `stargate` | Stargate next to a planet (STARMAP.LBX 0x2d) |
-| `map/background` | Whole map background (stretched to the map size) |
+| `map/background` | Optional: the whole map's background (stretched to the map size), in place of the one the map draws |
 | `landing/invade/<type>` | Ground battle background for a planet type 1..13 (LANDING.LBX 0x24 + type) |
 | `landing/colonize/<type>`, `landing/transport` | Colonization scenes and the landing transport (LANDING.LBX) |
 | `ground/soldier/<race>` | A soldier of race 0..9 on the ground battle screen, facing right (LANDING.LBX 0x1b + race) |
 | `ground/death` | A soldier falling (LANDING.LBX 0x14) |
-| `news/tv`, `news/anchor`, `news/gnn` | The GNN newscast: the TV, the newscaster, the logo (NEWSCAST.LBX 0..2) |
+| `news/tv`, `news/anchor`, `news/world`, `news/gnn` | *space*: the GNN newscast: the TV (its screen at 14,14 292x105), the newscaster, the globe, the logo (NEWSCAST.LBX 0..3) |
 | `news/icon/<type>` | The newscast picture of news type 1..22 (1oom `GAME_NEWS_*`; NEWSCAST.LBX 3 + type) |
 | `star/<k>` | A star on the Classic map: star type 0..5 (yellow, red, green, white, blue, neutron) + 6 for the bigger look (STARMAP.LBX 3..14) |
-| `embassy/room`, `embassy/border`, `embassy/emperor/<banner>` | MOO1's audience: the room, the frame and the player's emperor seen from behind (EMBASSY.LBX 1, 0, 0x0c + banner) |
-| `newtech/lab/<n>` | The new-tech screen's background: 0 the laboratory, 1 the spies' den, 2 the ruins (TECHNO.LBX 0..2) |
+| `embassy/room`, `embassy/<race>`, `embassy/emperor/<banner>`, `embassy/border` | *space*: MOO1's audience: the room, the envoy of race 0..9 (175x130 at 96,0), the player's emperor seen from behind and the frame (EMBASSY.LBX 1, 2 + race, 0x0c + banner, 0) |
+| `newtech/lab/<n>` | The new-tech screen's background: 0 the laboratory, 1 the spies' den, 2 the ruins (TECHNO.LBX 0..2); the tech's picture goes at 145,54 |
+| `newtech/<n>` | Who brought the tech, over the background: 10 * source + race, source 0 the race's scientist, 1 its spy, 2 an explorer (SPIES.LBX) |
 | `tech/<field>/<n>`, `tech/<field>/advanced` | The blueprint of tech `n` of field 0..5, and the one of a field's advanced techs, shown on the new-tech screen and the research cards (TECHNO.LBX, picture from RESEARCH.LBX entry 0) |
+
+| `view/<type>`, `view/orion`, `view/city/<0..2>` | *world*: the wide view at the top of the side panel and in the planet window, for a site of that planet type, Orion, or a city by size (population under 25, under 60, more) |
+| `battle/field/<kind>` | *world*: battlefield by land (`green`, `forest`, `dry`, `snow`, `rocky`, `ash`, `marsh`, `mists` in a nebula), in place of `battle/bg` |
+| `unit/<look>` | *world*: a battle stack by its design's look 0..23 (hull * 6 + variant), drawn fitted in its square with a pennant in the empire's colour; `unit/crystal`, `unit/amoeba`, `unit/guardian` for the monsters and the Guardian |
+| `mark/village`, `mark/town`, `mark/castle` | *world*: a city on the map and in battle, by size, with the owner's pennant over it |
+| `news/herald` | *world*: the herald next to the Herald's masthead |
+| `hall/<race>` | *world*: the throne room behind an empire's envoy (0..9, race order) |
+| `council/hall` | The Great Council's hall |
 
 ### Animations
 
-Aliases starting with `anim/` are animations: a horizontal sheet of equal frames. The
-importer lists each one in `manifest.json` under `frames` as `[frames, width, height, loop]`;
-after the last frame the animation goes on from frame `loop`.
+Names starting with `anim/` are animations: a horizontal strip of equal frames, played over
+the still picture of the same name without `anim/` (shown when the theme has no animation).
+The importer lists MOO1's in `manifest.json` under `frames` as `[frames, width, height,
+loop]`; a theme's own come with a `.json` beside the picture (`images/anim/star/3.json`:
+`{"frames": 4, "w": 13, "h": 11, "loop": 0}`). After the last frame the animation goes on
+from frame `loop`.
 
-| Alias | Animation |
+| Name | Animation |
 |---|---|
-| `anim/star/<k>` | A star twinkling on the Classic map (STARMAP.LBX 3..14) |
+| `anim/star/<k>` | A star twinkling on the map (STARMAP.LBX 3..14) |
 | `anim/ship/<look>` | A ship's engines in battle, 5 frames (SHIPS.LBX, SHIPS2.LBX) |
-| `anim/embassy/<race>` | The ambassador of race 0..9 in audiences and messages (EMBASSY.LBX 2 + race) |
+| `anim/embassy/<race>` | The envoy of race 0..9 in audiences and messages (EMBASSY.LBX 2 + race) |
 | `anim/news/anchor`, `anim/news/world` | The newscaster talking and the turning globe (NEWSCAST.LBX 2, 3) |
-| `anim/newtech/<n>` | The new-tech screen: 10 * source + race, source 0 the race's scientist, 1 its spy, 2 the ruins (SPIES.LBX) |
-| `view/<type>`, `view/orion`, `view/city/<0..2>` | Age theme: the wide painted view at the top of the side panel, for a site of that planet type, Orion, or a city by size (population under 25, under 60, more) |
-| `battle/field/<kind>` | Age theme: battlefield by land (`green`, `forest`, `dry`, `snow`, `rocky`, `ash`, `marsh`, `mists` in a nebula); takes the place of `battle/bg` |
-| `unit/<look>` | Age theme: a battle stack by its design's look 0..23 (hull * 6 + variant), drawn fitted in its square with a pennant in the empire's colour; `unit/crystal`, `unit/amoeba`, `unit/guardian` for the monsters and the Guardian |
-| `mark/village`, `mark/town`, `mark/castle` | Age theme: a city on the map and in battle, by size, with the owner's pennant over it |
-| `arms/<race>` | A coat of arms (0..9, race order), in the city panel and the empires screen |
-| `unit/<look>/march/<0..3>`, `unit/<look>/attack/<0..3>` | Age theme: animation frames of a battle stack, played while it moves and when it shoots or strikes (missing frames: the still `unit/<look>`) |
-| `news/herald` | Age theme: the herald next to the Herald's masthead |
-| `hall/<race>` | Age theme: the throne room behind an empire's envoy (0..9, race order) |
-| `council/hall` | Age theme: the Great Council's hall |
+| `anim/newtech/<n>` | Who brought a tech (SPIES.LBX) |
+| `unit/<look>/march/<0..3>`, `unit/<look>/attack/<0..3>` | *world*: frames of a battle stack, played while it moves and when it shoots or strikes |
 
-Fonts and sounds: `font/<n>` (n = 0..5) are TrueType fonts the Classic theme uses when fonts
-3 and 4 are present (`--font`, `--title-font`, `--button-font` in `style.css`), and `sfx/<n>`
-are WAV sound effects played instead of the synthesized ones in the Classic theme (1oom
-numbers: 0x24 button, 2 hit, 0x11 explosion, 0x13 special, weapons their `sound`).
+## Sounds
+
+| Name | Used for |
+|---|---|
+| `music/<tune>` | `menu`, `battle`, `news`, `ground` (siege), `ground_win`, `ground_lose`, `council`, `ending_win`, `ending_lose`, and `audience/<race>` (0..9) for audiences; the endings and the siege's outcome play once, the others loop |
+| `sfx/<effect>` | `button` (every button), `click`, `beam`, `heavy_beam`, `missile`, `explosion`, `hit`, `bomb`, `special`, and on a world map `arrow` and `clash` |
+
+With `use_lbx`, MOO1's tunes (MUSIC.LBX) and samples (SOUNDFX.LBX, weapons with their own,
+1oom `tbl_shiptech_weap[].sound`) take their place, and `font/<n>` (n = 0..5) are MOO1's
+fonts as TrueType, used when fonts 3 and 4 are present (`--font`, `--title-font`,
+`--button-font`).
 
 ## Rules
 

@@ -1,23 +1,5 @@
-/* Age theme (default): parchment, wood and stone. The classic theme overrides the variables. */
+/* The theme's colours and fonts: these are Classic's; each theme's themes/<id>/theme.css sets its own. */
 :root {
-  --bg: #1d150d;
-  --wood: linear-gradient(180deg, #6b4a2b 0%, #4f3520 55%, #3d2817 100%);
-  --parchment: #ecdcb4;
-  --parchment-dark: #d8c08a;
-  --ink: #2b1e12;
-  --muted: #6d5a43;
-  --accent: #8f2d1a;
-  --gold: #ffd34d;
-  --button: linear-gradient(180deg, #a69a86, #7b705f);
-  --button-hover: linear-gradient(180deg, #bcb09b, #8c8170);
-  --primary: linear-gradient(180deg, #b0452c, #7d2614);
-  --border: #3d2817;
-  --font: Georgia, "Palatino Linotype", "Book Antiqua", Palatino, serif;
-  --good: #2f6b2a;
-  --warn: #9b3d1a;
-}
-
-:root[data-theme="classic"] {
   --bg: #000;
   --wood: linear-gradient(180deg, #2a3646 0%, #18202b 100%);
   --parchment: #1b2531;
@@ -32,6 +14,9 @@
   --font: "Trebuchet MS", Verdana, sans-serif;
   --good: #7ee07e;
   --warn: #ff9a6b;
+  --on-wood: #d6e4f0;
+  --menu-bg: radial-gradient(ellipse at 50% 40%, #16253a, #000 70%);
+  --ship-look-bg: radial-gradient(circle, #10213a, #000);
 }
 
 /* MOO1's bitmap fonts (FONTS.LBX, imported): font 3 for text, 4 for titles, 5 for buttons.
@@ -87,13 +72,7 @@ input[type="range"] { accent-color: var(--accent); }
   align-items: center;
   justify-content: center;
   padding: 2rem 1rem;
-  background:
-    radial-gradient(ellipse at 50% 30%, rgba(255, 220, 140, 0.25), transparent 60%),
-    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 6px),
-    linear-gradient(160deg, #3f5a2c, #24371b 60%, #1b2a14);
-}
-:root[data-theme="classic"] .menu-screen {
-  background: radial-gradient(ellipse at 50% 40%, #16253a, #000 70%);
+  background: var(--menu-bg);
 }
 .menu-card {
   background: var(--parchment);
@@ -155,10 +134,9 @@ input[type="range"] { accent-color: var(--accent); }
   gap: 0.2em 0.6em;
   padding: 0.45em 0.8em;
   background: var(--wood);
-  color: #f5e7c6;
+  color: var(--on-wood);
   border-bottom: 3px solid var(--border);
 }
-:root[data-theme="classic"] .panel-head { color: var(--ink); }
 .panel-head .year { color: var(--gold); font-size: 1.15em; }
 .panel-head .stats { display: flex; gap: 0.7em; margin: 0 0 0 auto; padding: 0.1em 0.3em; background: none; border: 1px solid transparent; box-shadow: none; color: inherit; text-shadow: 0 1px 1px #000; }
 .panel-head .stats:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); border-color: rgba(0, 0, 0, 0.3); }
@@ -297,9 +275,8 @@ button.explain:hover:not(:disabled) { background: none; color: var(--accent); }
 .dialog h2 { margin: 0; padding: 0.6em 1em; background: var(--wood); color: #f5e7c6; border-bottom: 2px solid var(--border); font-size: 1.25em; }
 .dialog-head { display: flex; align-items: center; background: var(--wood); border-bottom: 2px solid var(--border); border-radius: 4px 4px 0 0; }
 .dialog-head h2 { flex: 1; border-bottom: 0; min-width: 0; }
-.dialog-close { margin: 0 0.5em 0 0; padding: 0 0.45em; font-size: 1.4em; line-height: 1.2; background: transparent; border-color: transparent; box-shadow: none; color: #f5e7c6; }
+.dialog-close { margin: 0 0.5em 0 0; padding: 0 0.45em; font-size: 1.4em; line-height: 1.2; background: transparent; border-color: transparent; box-shadow: none; color: var(--on-wood); }
 .dialog-close:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); border-color: rgba(0, 0, 0, 0.3); }
-:root[data-theme="classic"] .dialog-close { color: var(--ink); }
 .dialog-body { padding: 0.8em 1em; overflow-y: auto; }
 .dialog-buttons { display: flex; gap: 0.5em; justify-content: flex-end; padding: 0.6em 1em; border-top: 1px solid var(--parchment-dark); flex-wrap: wrap; }
 .events { margin: 0; padding-left: 1.2em; }
@@ -421,10 +398,9 @@ table.part-list td { font-variant-numeric: tabular-nums; }
 .design-pic { float: left; width: 56px; height: 42px; object-fit: contain; margin: 0 0.5em 0.2em 0; }
 .design-item .row { clear: both; }
 .design-top { display: grid; grid-template-columns: auto 1fr; gap: 1em; align-items: start; margin: 0.4em 0; }
-.ship-look { display: flex; align-items: center; gap: 0.3em; padding: 0.4em; border: 2px solid var(--border); border-radius: 4px; background: radial-gradient(circle, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.25)); }
-:root[data-theme="classic"] .ship-look { background: radial-gradient(circle, #10213a, #000); }
+.ship-look { display: flex; align-items: center; gap: 0.3em; padding: 0.4em; border: 2px solid var(--border); border-radius: 4px; background: var(--ship-look-bg); }
 .ship-look img { width: 132px; height: 99px; object-fit: contain; cursor: pointer; }
-.ship-look img.pixel, :root[data-theme="classic"] .ship-look img { image-rendering: pixelated; }
+.ship-look img.pixel { image-rendering: pixelated; }
 .hull-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3em; margin-top: 0.4em; }
 .hull-buttons button { display: flex; flex-direction: column; align-items: center; padding: 0.2em; margin: 0; }
 .hull-buttons img { width: 56px; height: 42px; object-fit: contain; }
@@ -489,13 +465,14 @@ label.checkbox { display: block; margin-top: 0.8em; }
 .news { position: relative; }
 .news-tv { width: 640px; max-width: 100%; aspect-ratio: 320 / 200; background-size: 100% 100%; image-rendering: pixelated; }
 .news-tv .news-screen { position: absolute; left: 4.375%; top: 7%; width: 91.25%; height: 52.5%; overflow: hidden; background: #000; }
-.news-tv .news-gnn, .news-tv .news-anchor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; image-rendering: pixelated; object-fit: cover; }
+.news-tv .news-gnn, .news-tv .news-anchor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+.news-tv .pixel { image-rendering: pixelated; }
 .moo1-scene { position: relative; overflow: hidden; margin: 0 auto 0.5em; background: #000; max-width: 100%; }
 .moo1-scene .scene-text { position: absolute; overflow-y: auto; color: #f0e6d0; font-size: 0.9em; line-height: 1.25; text-shadow: 0 1px 2px #000; }
 .anim-sprite { background-repeat: no-repeat; }
 .art-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3em; margin: 0 auto 0.5em; max-width: 100%; border: 2px dashed var(--parchment-dark); border-radius: 4px; color: var(--muted); background: repeating-linear-gradient(45deg, transparent 0 12px, rgba(127, 127, 127, 0.08) 12px 24px); }
 .art-placeholder code { font-size: 0.8em; opacity: 0.8; }
-.pixel.anim-sprite, .moo1-scene img { image-rendering: pixelated; }
+.pixel.anim-sprite, .moo1-scene img.pixel { image-rendering: pixelated; }
 .news-tv .news-globe { position: absolute; left: 21.2%; top: 21%; width: 16.8%; height: 40%; }
 .news-tv .news-icon { position: absolute; left: 66.4%; top: 22.9%; width: 14%; image-rendering: pixelated; }
 .news-tv .news-text { position: absolute; left: 10%; top: 71%; width: 79.7%; height: 24.5%; overflow-y: auto; color: #e8f0ff; background: #000; padding: 0.2em 0.5em; font-size: 0.95em; }

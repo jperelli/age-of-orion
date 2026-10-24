@@ -4,7 +4,7 @@
 // discovered (investment earns interest and a breakthrough becomes likely once it exceeds the
 // cost). The technology tree shows what is known, and nothing beyond.
 import type { Ctx } from "./ctx";
-import { moo1Scene, placeholder } from "./pictures";
+import { moo1Scene, picImg } from "./pictures";
 import { sliders } from "./sliders";
 import { effectLines } from "./techinfo";
 import { shipParts } from "./engine";
@@ -22,10 +22,9 @@ function info(ctx: Ctx, field: number, tech: number): string | null {
   return tech > 0 && ctx.theme.has(key) ? ctx.theme.t(key) : null;
 }
 
-/** MOO1's blueprint of a tech (TECHNO.LBX, imported), if any. */
-function techPicture(ctx: Ctx, field: number, tech: number): HTMLElement | null {
-  const url = ctx.theme.url(`tech/${field}/${tech > 50 ? "advanced" : tech}`);
-  return url ? h("img", { class: "tech-pic pixel", src: url, alt: "" }) : null;
+/** The picture of a tech (`tech/<field>/<n>`, MOO1's blueprints of TECHNO.LBX when imported). */
+function techPicture(ctx: Ctx, field: number, tech: number): HTMLElement {
+  return picImg(ctx.theme, `tech/${field}/${tech > 50 ? "advanced" : tech}`, "tech-pic");
 }
 
 /** A tech with its cost and what it gives. */
@@ -98,9 +97,9 @@ async function chooseTech(ctx: Ctx, i: number): Promise<void> {
 const SOURCE_SCENE: Record<string, number> = { research: 0, espionage: 1, artifacts: 2, orion: 2, trade: 4 };
 
 /**
- * MOO1's new-tech screen (1oom `ui_newtech`), with MOO1's pictures imported: the laboratory
+ * MOO1's new-tech screen (1oom `ui_newtech`): the laboratory
  * (the spies' den for a stolen tech, the ruins for a found one) with the tech's blueprint on
- * the table, the scientist (or spy) at work, then what the tech gives. A theme without the
+ * the table, the scientist (or spy) at work, then what the tech gives. A theme without these
  * pictures shows the same screen with a placeholder in their place.
  */
 export async function newTechScreen(ctx: Ctx, e: GameEvent, text: string): Promise<void> {
@@ -111,14 +110,11 @@ export async function newTechScreen(ctx: Ctx, e: GameEvent, text: string): Promi
   const race = RACES.indexOf(v.empires[source === 4 && typeof e.from === "number" ? e.from : v.player].race);
   const picture = `tech/${field}/${tech > 50 ? "advanced" : tech}`;
   if (field < 0) return;
-  const scene =
-    (ctx.theme.img(picture) &&
-      moo1Scene(
-        ctx.theme,
-        [{ alias: `newtech/lab/${source === 4 ? 0 : source}` }, { alias: picture, x: 145, y: 54 }, { alias: `anim/newtech/${source === 4 ? race : source * 10 + race}`, fps: 6 }],
-        1.5,
-      )) ||
-    placeholder(ctx.theme, picture, 480, 300);
+  const scene = moo1Scene(
+    ctx.theme,
+    [{ alias: `newtech/lab/${source === 4 ? 0 : source}` }, { alias: picture, x: 145, y: 54 }, { alias: `anim/newtech/${source === 4 ? race : source * 10 + race}`, fps: 6 }],
+    1.5,
+  );
   const f = v.tech[field];
   const c = f.completed.find((x) => x.tech === tech);
   const key = tech > 50 ? "advanced" : (shipParts().techs?.[field]?.[tech] ?? "");

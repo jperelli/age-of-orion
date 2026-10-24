@@ -4,11 +4,10 @@
 
 The SRC_DIRs hold `<name>-s<seed>.png` (gen_gemini.py numbers its tries 1, 2...; gen_art.py
 uses its seeds); when several exist, PICK names the one to use, else the lowest wins. Landscapes are resized; sprites (units, rocks, markers, arms) are
-cut out of their white background and cropped. Writes web/public/themes/age/images/... and
-lists every picture under `images` in web/public/themes/age/theme.json.
+cut out of their white background and cropped. Writes themes/age/images/<name>.webp (the
+file's path is the picture's name).
 """
 
-import json
 import os
 import re
 import sys
@@ -17,7 +16,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
-THEME = os.path.join(ROOT, "web/public/themes/age")
+THEME = os.path.join(ROOT, "themes/age")
 RACES = ["human", "mrrshan", "silicoid", "sakkra", "psilon", "alkari", "klackon", "bulrathi", "meklar", "darlok"]
 PLANET_TYPES = ["not_habitable", "radiated", "toxic", "inferno", "dead", "tundra", "barren", "minimal", "desert", "steppe", "arid", "ocean", "jungle", "terran"]
 # 1oom GAME_NEWS_* numbers (web/src/news.ts).
@@ -26,38 +25,38 @@ NEWS_TYPES = ["", "plague", "quake", "nova", "accident", "assassin", "virus", "c
 PICK: dict[str, int] = {"anim-01-attack": 2, "anim-06-march": 2, "anim-16-attack": 2, "anim-23-march": 3}
 
 
-def alias_of(name: str) -> tuple[str, str, str]:
-    """(alias, file, kind) of a generated picture."""
+def alias_of(name: str) -> tuple[str, str]:
+    """(picture name, kind) of a generated picture."""
     kind, _, key = name.partition("-")
     if kind == "view":
         if key.startswith("city"):
-            return f"view/city/{key[4:]}", f"images/view/city{key[4:]}.webp", "view"
-        return f"view/{key}", f"images/view/{key}.webp", "view"
+            return f"view/city/{key[4:]}", "view"
+        return f"view/{key}", "view"
     if kind == "field":
-        return f"battle/field/{key}", f"images/battle/field-{key}.webp", "field"
+        return f"battle/field/{key}", "field"
     if kind == "unit":
-        return f"unit/{int(key) if key.isdigit() else key}", f"images/unit/{key}.webp", "unit"
+        return f"unit/{int(key) if key.isdigit() else key}", "unit"
     if kind == "rock":
-        return f"battle/rock/{key}", f"images/battle/rock{key}.webp", "rock"
+        return f"battle/rock/{key}", "rock"
     if kind == "mark":
         alias = {"army": "army", "caravan": "caravan", "canal": "stargate"}.get(key, f"mark/{key}")
-        return alias, f"images/map/{key}.webp", "mark"
+        return alias, "mark"
     if kind == "arms":
-        return f"arms/{RACES.index(key)}", f"images/arms/{key}.webp", "arms"
+        return f"arms/{RACES.index(key)}", "arms"
     if kind == "siege":
-        return f"landing/invade/{PLANET_TYPES.index(key)}", f"images/siege/{key}.webp", "siege"
+        return f"landing/invade/{PLANET_TYPES.index(key)}", "siege"
     if kind == "soldier":
-        return f"ground/soldier/{RACES.index(key)}", f"images/ground/{key}.webp", "soldier"
+        return f"ground/soldier/{RACES.index(key)}", "soldier"
     if name == "fallen":
-        return "ground/death", "images/ground/fallen.webp", "soldier"
+        return "ground/death", "soldier"
     if name == "herald":
-        return "news/herald", "images/news/herald.webp", "soldier"
+        return "news/herald", "soldier"
     if kind == "news":
-        return f"news/icon/{NEWS_TYPES.index(key)}", f"images/news/{key}.webp", "vignette"
+        return f"news/icon/{NEWS_TYPES.index(key)}", "vignette"
     if kind == "hall":
-        return f"hall/{RACES.index(key)}", f"images/hall/{key}.webp", "hall"
+        return f"hall/{RACES.index(key)}", "hall"
     if name == "council":
-        return "council/hall", "images/hall/council.webp", "hall"
+        return "council/hall", "hall"
     raise ValueError(name)
 
 
@@ -157,7 +156,7 @@ def main(srcs: list[str]) -> None:
             m = re.match(r"(.+)-s(\d+)\.png$", name)
             if m:
                 found.setdefault(m[1], {})[int(m[2])] = os.path.join(src, name)
-    images = {}
+    done = 0
     only = [o for o in os.environ.get("ONLY", "").split(",") if o]  # name prefixes, to redo a few
     for name in sorted(found):
         if only and not any(name.startswith(o) for o in only):
@@ -169,11 +168,12 @@ def main(srcs: list[str]) -> None:
             _, key, anim = name.split("-")
             unit = f"unit/{int(key) if key.isdigit() else key}"
             for n, frame in enumerate(sheet_frames(im)):
-                path = f"images/unit/{key}-{anim}{n}.webp"
-                fit(frame, 192, 144).save(os.path.join(THEME, path), "WEBP", quality=80, method=6)
-                images[f"{unit}/{anim}/{n}"] = path
+                path = os.path.join(THEME, f"images/{unit}/{anim}/{n}.webp")
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                fit(frame, 192, 144).save(path, "WEBP", quality=80, method=6)
+                done += 1
             continue
-        alias, path, kind = alias_of(name)
+        alias, kind = alias_of(name)
         if kind not in ("view", "field", "siege", "vignette", "hall"):
             im.thumbnail((640, 640), Image.LANCZOS)  # far above the sizes shown, and quick to cut out
         if kind == "view":
@@ -194,17 +194,11 @@ def main(srcs: list[str]) -> None:
             im = fit(cut_out(im), 160, 160)
         else:
             im = fit(cut_out(im, gaps=False), 128, 128)
-        out = os.path.join(THEME, path)
+        out = os.path.join(THEME, f"images/{alias}.webp")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         im.save(out, "WEBP", quality=82, method=6)
-        images[alias] = path
-    tj = os.path.join(THEME, "theme.json")
-    d = json.load(open(tj))
-    d.setdefault("images", {}).update(images)
-    with open(tj, "w") as f:
-        json.dump(d, f, indent=1, ensure_ascii=False)
-        f.write("\n")
-    print(len(images), "pictures")
+        done += 1
+    print(done, "pictures")
 
 
 if __name__ == "__main__":
