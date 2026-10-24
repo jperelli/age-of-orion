@@ -4,7 +4,7 @@
 // discovered (investment earns interest and a breakthrough becomes likely once it exceeds the
 // cost). The technology tree shows what is known, and nothing beyond.
 import type { Ctx } from "./ctx";
-import { moo1Scene } from "./pictures";
+import { moo1Scene, placeholder } from "./pictures";
 import { sliders } from "./sliders";
 import { effectLines } from "./techinfo";
 import { shipParts } from "./engine";
@@ -100,7 +100,8 @@ const SOURCE_SCENE: Record<string, number> = { research: 0, espionage: 1, artifa
 /**
  * MOO1's new-tech screen (1oom `ui_newtech`), with MOO1's pictures imported: the laboratory
  * (the spies' den for a stolen tech, the ruins for a found one) with the tech's blueprint on
- * the table, the scientist (or spy) at work, then what the tech gives.
+ * the table, the scientist (or spy) at work, then what the tech gives. A theme without the
+ * pictures shows the same screen with a placeholder in their place.
  */
 export async function newTechScreen(ctx: Ctx, e: GameEvent, text: string): Promise<void> {
   const v = ctx.view();
@@ -109,13 +110,15 @@ export async function newTechScreen(ctx: Ctx, e: GameEvent, text: string): Promi
   const source = SOURCE_SCENE[e.source as string] ?? 0;
   const race = RACES.indexOf(v.empires[source === 4 && typeof e.from === "number" ? e.from : v.player].race);
   const picture = `tech/${field}/${tech > 50 ? "advanced" : tech}`;
-  if (field < 0 || !ctx.theme.img(picture)) return;
-  const scene = moo1Scene(
-    ctx.theme,
-    [{ alias: `newtech/lab/${source === 4 ? 0 : source}` }, { alias: picture, x: 145, y: 54 }, { alias: `anim/newtech/${source === 4 ? race : source * 10 + race}`, fps: 6 }],
-    1.5,
-  );
-  if (!scene) return;
+  if (field < 0) return;
+  const scene =
+    (ctx.theme.img(picture) &&
+      moo1Scene(
+        ctx.theme,
+        [{ alias: `newtech/lab/${source === 4 ? 0 : source}` }, { alias: picture, x: 145, y: 54 }, { alias: `anim/newtech/${source === 4 ? race : source * 10 + race}`, fps: 6 }],
+        1.5,
+      )) ||
+    placeholder(ctx.theme, picture, 480, 300);
   const f = v.tech[field];
   const c = f.completed.find((x) => x.tech === tech);
   const key = tech > 50 ? "advanced" : (shipParts().techs?.[field]?.[tech] ?? "");

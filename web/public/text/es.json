@@ -1255,5 +1255,6 @@
  "designer.col.space": "Espacio",
  "designer.col.class": "Clase",
  "designer.col.speed": "Velocidad de combate",
- "newtech.title": "Nueva tecnología"
+ "newtech.title": "Nueva tecnología",
+ "art.missing": "Todavía sin imagen"
 }

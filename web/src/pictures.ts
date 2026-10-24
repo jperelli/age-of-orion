@@ -115,6 +115,11 @@ export function animSprite(theme: Theme, alias: string, scale = 2, fps = 8): HTM
   return el;
 }
 
+/** The space of a picture the theme does not have yet (`w` x `h`), naming the missing one. */
+export function placeholder(theme: Theme, alias: string, w: number, hgt: number): HTMLElement {
+  return h("div", { class: "art-placeholder", style: `width:${w}px;height:${hgt}px` }, h("span", {}, theme.t("art.missing")), h("code", {}, alias));
+}
+
 export interface Layer {
   alias: string;
   x?: number;
