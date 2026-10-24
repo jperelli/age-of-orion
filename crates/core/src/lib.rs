@@ -286,6 +286,7 @@ mod tests {
         )
         .unwrap();
         for _ in 0..40 {
+            choose_research(&mut g, 0);
             g.end_turn_auto();
         }
         assert!(g.state().empires[0].tech.level.iter().any(|&l| l > 1));
@@ -587,14 +588,41 @@ mod tests {
         );
     }
 
+    /// What the new-tech dialogs do: the first choice of every field without a project.
+    fn choose_research(g: &mut Game, empire: EmpireId) {
+        for (field, f) in g.view(empire).tech.iter().enumerate() {
+            if f.project == 0 {
+                if let Some(c) = f.choices.first() {
+                    g.command(
+                        empire,
+                        &Command::SetResearchProject {
+                            field,
+                            tech: c.tech,
+                        },
+                    )
+                    .unwrap();
+                }
+            }
+        }
+    }
+
     #[test]
     fn research_projects_follow_the_list() {
         let mut g = Game::new(&opts(14)).unwrap();
         let v = g.view(0);
         let f = &v.tech[FIELD_WEAPON];
-        assert!(f.project > 1 && !f.choices.is_empty());
-        let first = f.project;
-        let other = f.choices.iter().find(|c| c.tech != f.project).unwrap().tech;
+        // As in MOO1, a human starts without projects and chooses them.
+        assert!(f.project == 0 && f.choices.len() > 1);
+        let first = f.choices[0].tech;
+        let other = f.choices[1].tech;
+        g.command(
+            0,
+            &Command::SetResearchProject {
+                field: FIELD_WEAPON,
+                tech: first,
+            },
+        )
+        .unwrap();
         // A project in progress is locked until it is discovered.
         assert_eq!(
             g.command(

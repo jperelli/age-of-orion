@@ -41,7 +41,8 @@ All notable changes to this project are documented here. The format follows
   left, with what the selected tech gives, and the research sliders on the right, each with
   its project and progress.
 - A field's research project can no longer be changed once chosen, as in MOO1: it is chosen
-  in a dialog when the field has none (after a discovery) and stays until it is discovered.
+  in a dialog when the field has none (at the start of the game and after each discovery)
+  and stays until it is discovered.
 - Theme pictures load in the background instead of delaying the start of the game.
 
 ## [0.11.0] - 2026-10-22

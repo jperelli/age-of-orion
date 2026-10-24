@@ -1061,18 +1061,9 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         }
     }
     // First research projects: computers pick at random (1oom
-    // `game_ai_classic_new_game_tech`); humans get the first tech of each list and can
-    // change it at no cost before any investment.
+    // `game_ai_classic_new_game_tech`); humans start without any and choose them in the
+    // new-tech dialogs, as in MOO1.
     crate::ai::new_game_tech(&mut st);
-    for i in 0..st.empires.len() {
-        if st.empires[i].ai {
-            continue;
-        }
-        for f in 0..NUM_FIELDS {
-            let tech = st.empires[i].tech.list[f][0][0];
-            crate::tech::start_project(&mut st, i as u8, f, tech);
-        }
-    }
     for (i, &home) in homes.iter().enumerate() {
         st.empires[i].explored[home] = true;
     }

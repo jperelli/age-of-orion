@@ -26,8 +26,8 @@ random numbers.
   base upkeep.
 - **Research**: each field's tech tree and the random list of techs each empire can research.
   Also research costs, interest and breakthroughs, and field levels, which make ship parts
-  cheaper and smaller. A field's project is chosen when it has none and cannot be changed
-  until it is discovered.
+  cheaper and smaller. A field's project is chosen when it has none (at the start and after
+  each discovery) and cannot be changed until it is discovered.
 - **Ship design**: every hull and part, with MOO1's cost, space and combat values. The five
   starting designs cost 8, 14, 74, 65 and 570 BC, as in MOO1.
 - **Movement**: map distances, speeds, fuel range and reserve tanks, nebulae, stargates and

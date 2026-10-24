@@ -29,7 +29,8 @@ mismos números aleatorios.
 - **Investigación**: el árbol de cada campo y la lista al azar de tecnologías que cada imperio
   puede investigar. También los costos, los intereses y los avances, y los niveles de campo,
   que abaratan y achican las piezas de las naves. El proyecto de un campo se elige cuando no
-  tiene ninguno y no se puede cambiar hasta descubrirlo.
+  tiene ninguno (al empezar y después de cada descubrimiento) y no se puede cambiar hasta
+  descubrirlo.
 - **Diseño de naves**: cada casco y cada pieza, con el costo, el espacio y los valores de
   combate de MOO1. Los cinco diseños iniciales cuestan 8, 14, 74, 65 y 570 BC, como en MOO1.
 - **Movimiento**: las distancias del mapa, las velocidades, el alcance de combustible y los
