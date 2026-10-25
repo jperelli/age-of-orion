@@ -18,12 +18,10 @@ export type Selection =
   | { kind: "transport"; id: number }
   /** Ships of `owner` in orbit of planet `id`. */
   | { kind: "orbit"; id: number; owner: number }
+  /** Nebula `id` of the view (clicked where no planet is). */
+  | { kind: "nebula"; id: number }
   | null;
 
-/** Turns to travel from (x, y) to a planet at `speed` (the map's estimate). */
-export function etaTurns(from: { x: number; y: number }, to: { x: number; y: number }, speed: number): number {
-  return Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (11 * Math.max(1, speed))));
-}
 
 /** Where the marker of the `i`-th fleet in orbit of a planet is drawn. */
 function orbitSpot(p: { x: number; y: number }, i: number): [number, number] {
@@ -34,6 +32,8 @@ export interface Targeting {
   from: { x: number; y: number };
   range: number;
   speed: number;
+  /** Transports travel at their own pace inside nebulae. */
+  transport?: boolean;
   ok: (planet: number) => boolean;
   pick: (planet: number) => void;
   /** Text shown in the side panel while choosing. */
@@ -105,6 +105,8 @@ export class MapView {
   selection: Selection = null;
   targeting: Targeting | null = null;
   onSelect: (s: Selection) => void = () => {};
+  /** Turns from a point to a planet at a speed (the core's count, slower in nebulae). */
+  eta: ((from: { x: number; y: number }, dest: number, speed: number, transport: boolean) => number) | null = null;
   private zoom = 1;
   private panX = 0;
   private panY = 0;
@@ -209,7 +211,9 @@ export class MapView {
         best = p.id;
       }
     }
-    return best === null ? null : { kind: "planet", id: best };
+    if (best !== null) return { kind: "planet", id: best };
+    const neb = v.nebulae.findIndex((n) => n.rects.some(([x0, y0, x1, y1]) => mx >= x0 && mx <= x1 && my >= y0 && my <= y1));
+    return !this.targeting && neb >= 0 ? { kind: "nebula", id: neb } : null;
   }
 
   private bind(): void {
@@ -719,7 +723,7 @@ export class MapView {
     ctx.moveTo(t.from.x, t.from.y);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
-    const eta = etaTurns(t.from, p, t.speed);
+    const eta = this.eta?.(t.from, id, t.speed, !!t.transport) ?? 1;
     const label = ok ? (t.label?.(id) ?? this.theme.t("map.eta", { turns: eta })) : this.theme.t("map.out_of_range");
     ctx.font = `bold ${this.px(13)}px sans-serif`;
     ctx.textAlign = "left";

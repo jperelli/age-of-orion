@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- MOO1's screens around a turn, with MOO1's pictures and tunes when imported and Classic's
+  own otherwise:
+  - exploration: each star system the scouts or scanners explore is shown with its planet;
+  - with a colony ship in orbit the turn asks "Build a new colony?", as in MOO1, instead of
+    settling by itself; then the transport lands, the colonists walk out with their banner and
+    the new colony gets the name you type (also when transports settle an empty planet);
+  - bombing: the turn asks before bombing an enemy colony, as in MOO1, then the bombs fall and
+    the losses show (also when your colonies are bombed);
+  - espionage: MOO1's panel with the target's portrait and a button per field to steal from,
+    then the stolen tech in the spies' den; a notice when a tech is stolen from you;
+  - sabotage: choose one of the target's colonies (with its last report) and what to destroy,
+    then the missile bases or factories blow up; the same result when you are sabotaged;
+  - the ships built this year, and the spies caught on both sides.
+- Clicking a nebula on the map explains it: ships and transports move at half speed inside,
+  planets inside cannot build planetary shields, and ship shields do not work in battles
+  there. Travel times on the map count the slower travel inside nebulae.
+- With MOO1's files imported (English), the rulers speak with MOO1's own words (DIPLOMAT.LBX),
+  and every computer ruler gets one of its race's six MOO1 names (NAMES.LBX). Import the files
+  again to get them.
+- Classic has its own pictures and six new tunes for all of these.
+
 ## [0.12.0] - 2026-10-24
 
 ### Added

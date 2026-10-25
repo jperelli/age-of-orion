@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Composes the Classic theme's music as MIDI files, for the game's General MIDI style
 synthesizer: themes/classic/audio/music/<tune>.mid, one per screen (menu, battle, news,
-ground, council, endings) and one per race for audiences (audience/<race>, MOO1 order).
+ground, council, endings, colonization, bombing, espionage, sabotage) and one per race for
+audiences (audience/<race>, MOO1 order).
 
     python3 tools/sound/gen_music.py
 
@@ -227,6 +228,12 @@ TUNES = {
     "council": (64, 55, "major", [0, 3, 4, 0, 5, 1, 4, 0], [("pads", "organ", 0, 90), ("melody", "choir", 1), ("bass", "organ", -1)], 4, 2),
     "ending_win": (92, 60, "major", [0, 4, 5, 3, 0, 3, 4, 0], [("pads", "strings", 0), ("melody", "brass", 1), ("arps", "harp", 1, 80, 0.5), ("bass", "tuba", -1), ("drums", "timpani")], 4, 2),
     "ending_lose": (58, 48, "minor", [0, 5, 3, 4, 0, 5, 6, 0], [("pads", "strings", 0, 80), ("melody", "reed", 1), ("bass", "bass", -1)], 4, 1),
+    "colonize": (100, 55, "major", [0, 4, 5, 3, 0, 3, 4, 0], [("pads", "strings", 0, 80), ("melody", "horn", 1), ("arps", "harp", 1, 80, 0.5), ("bass", "bass", -1)], 4, 1),
+    "bomb": (88, 50, "minor", [0, 0, 5, 4, 0, 6, 4, 4], [("stabs", "brass", 0, 100, [0, 2.5]), ("pads", "tremolo", 0, 70), ("bass", "tuba", -1), ("drums", "timpani")], 4, 1),
+    "bomb_destroyed": (60, 48, "harmonic", [0, 5, 3, 4, 0, 5, 4, 0], [("pads", "strings", 0, 80), ("melody", "choir", 1), ("bass", "bass", -1), ("drums", "timpani")], 4, 1),
+    "espionage": (112, 50, "dorian", [0, 0, 3, 3, 0, 0, 4, 3], [("bass", "bass", -1, 100, "walk"), ("arps", "vibes", 1, 70, 0.5), ("melody", "reed", 1), ("drums", "light")], 4, 1),
+    "sabotage": (124, 52, "phrygian", [0, 1, 0, 6, 0, 1, 4, 0], [("bass", "synbass", -1, 100, "eighths"), ("stabs", "strings", 0, 90, [0, 1.5, 3]), ("melody", "lead", 1), ("drums", "battle")], 4, 1),
+    "sabotage_done": (96, 50, "minor", [0, 5, 4, 0], [("stabs", "brass", 0, 110, [0, 1, 2]), ("melody", "trumpet", 1), ("bass", "tuba", -1), ("drums", "timpani")], 4, 1),
 }
 # Audiences, by race (MOO1 order): a short loop in each race's character.
 AUDIENCE = [

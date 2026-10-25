@@ -84,15 +84,15 @@ export function iconRow(theme: Theme, what: string, amount: number, per: number,
 }
 
 /**
- * A page element playing an imported animation (MOO1's frames at `scale`, or filling its box
- * when `scale` is 0), from frame 0 to the last and then again from its loop frame, `fps`
- * frames a second.
+ * A page element playing an animation (MOO1's frames at `scale`, or filling its box when
+ * `scale` is 0), from frame 0 to the last and then again from its loop frame, `fps` frames a
+ * second; `onFrame` hears each frame shown (sounds on given frames).
  */
-export function animSprite(theme: Theme, alias: string, scale = 2, fps = 8): HTMLElement | null {
+export function animSprite(theme: Theme, alias: string, scale = 2, fps = 8, onFrame?: (frame: number) => void): HTMLElement | null {
   const a = theme.anim(alias);
   if (!a) return null;
   const size = scale ? `width:${a.w * scale}px;height:${a.h * scale}px;background-size:${a.w * a.frames * scale}px ${a.h * scale}px` : `background-size:${a.frames * 100}% 100%`;
-  const el = h("div", { class: "anim-sprite pixel", style: `${size};background-image:url("${a.url}")` });
+  const el = h("div", { class: `anim-sprite${theme.pixel.has(alias) ? " pixel" : ""}`, style: `${size};background-image:url("${a.url}")` });
   let f = 0;
   let shown = false;
   const started = performance.now();
@@ -104,11 +104,31 @@ export function animSprite(theme: Theme, alias: string, scale = 2, fps = 8): HTM
     }
     shown = true;
     el.style.backgroundPosition = scale ? `${-f * a.w * scale}px 0` : `${(f * 100) / Math.max(1, a.frames - 1)}% 0`;
+    onFrame?.(f);
     f = f + 1 >= a.frames ? a.loop : f + 1;
   };
   const timer = setInterval(tick, 1000 / fps);
   tick();
   return el;
+}
+
+/**
+ * A picture whose frame the caller sets (`anim/<name>` when the theme animates it, else the
+ * still `<name>`, else the placeholder), `w` x `h` MOO1 pixels at `scale`.
+ */
+export function sprite(theme: Theme, name: string, w: number, hgt: number, scale: number): { el: HTMLElement; frames: number; loop: number; set: (frame: number) => void } {
+  const a = theme.anim(`anim/${name}`);
+  if (a) {
+    const el = h("div", {
+      class: `anim-sprite${theme.pixel.has(`anim/${name}`) ? " pixel" : ""}`,
+      style: `width:${a.w * scale}px;height:${a.h * scale}px;background-size:${a.w * a.frames * scale}px ${a.h * scale}px;background-image:url("${a.url}")`,
+    });
+    return { el, frames: a.frames, loop: a.loop, set: (f) => (el.style.backgroundPosition = `${-(f % a.frames) * a.w * scale}px 0`) };
+  }
+  const el = theme.hasPic(name) ? picImg(theme, name) : placeholder(theme, name, w * scale, hgt * scale);
+  el.style.width = `${w * scale}px`;
+  el.style.height = `${hgt * scale}px`;
+  return { el, frames: 1, loop: 0, set: () => {} };
 }
 
 /** The space of a picture the theme does not have yet (`w` x `h`), naming the missing one. */

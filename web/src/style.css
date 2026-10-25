@@ -470,6 +470,35 @@ label.checkbox { display: block; margin-top: 0.8em; }
 .moo1-scene { position: relative; overflow: hidden; margin: 0 auto 0.5em; background: #000; max-width: 100%; }
 .moo1-scene .scene-text { position: absolute; overflow-y: auto; color: #f0e6d0; font-size: 0.9em; line-height: 1.25; text-shadow: 0 1px 2px #000; }
 .anim-sprite { background-repeat: no-repeat; }
+/* MOO1's smaller screens (web/src/screens.ts): a picture beside its text, MOO1 scenes. */
+.screen-row { display: flex; gap: 1em; align-items: flex-start; }
+.screen-row > img, .screen-row > .art-placeholder, .screen-row > .anim-sprite, .screen-row > .sabotage-scene { flex: none; border: 2px solid var(--border); border-radius: 3px; }
+.screen-row > img.pixel { image-rendering: pixelated; }
+.screen-text { flex: 1; min-width: 12em; }
+.screen-text .lead { font-weight: bold; margin-top: 0; }
+.screen-text h3 { margin: 0.3em 0 0.2em; }
+.stage { margin-bottom: 0; }
+.stage > .art-placeholder { margin: 0; }
+.stage-text { color: #e8f0ff; font-size: 13px; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.stage-text.upper { text-align: center; text-transform: uppercase; font-weight: bold; }
+/* MOO1 writes these in its small font 0 (6 pixels high): twice that on the 2x stage. */
+:root[data-moofonts] .stage-text { font-family: "MOO1 0", var(--font); font-size: 12px; font-weight: normal; }
+:root[data-moofonts] .stage-button { font-size: 18px; }
+.stage-portrait { border: 1px solid #000; }
+.stage-button { padding: 0; font-size: 0.85em; line-height: 1; }
+.stage-button:disabled { opacity: 0.35; }
+.scene-caption { text-align: center; color: #ffe9a8; font-weight: bold; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.scene-namebox { width: 180px; padding: 6px 8px; background: rgba(10, 14, 24, 0.85); border: 2px solid #8a96a8; color: #e8f0ff; font-size: 0.9em; }
+.scene-input { width: 100%; margin-top: 4px; }
+.sabotage-scene { display: flex; flex-direction: column; background: #000; }
+.sabotage-colony { display: block; }
+.sabotage-scene .sabotage-colony { height: 96px !important; object-fit: cover; object-position: bottom; }
+.sab-pick { display: flex; align-items: center; gap: 0.5em; margin: 0.3em 0; }
+.newships { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6em; }
+.newship { text-align: center; }
+.newship-pic { position: relative; height: 80px; border: 2px solid var(--border); border-radius: 3px; background: radial-gradient(circle, #10213a, #000); display: flex; align-items: center; justify-content: center; }
+.newship-pic img { width: 64px; height: 48px; object-fit: contain; }
+.newship-pic b { position: absolute; right: 6px; bottom: 4px; color: #ffe9a8; text-shadow: 0 1px 2px #000; }
 .art-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3em; margin: 0 auto 0.5em; max-width: 100%; border: 2px dashed var(--parchment-dark); border-radius: 4px; color: var(--muted); background: repeating-linear-gradient(45deg, transparent 0 12px, rgba(127, 127, 127, 0.08) 12px 24px); }
 .art-placeholder code { font-size: 0.8em; opacity: 0.8; }
 .pixel.anim-sprite, .moo1-scene img.pixel { image-rendering: pixelated; }

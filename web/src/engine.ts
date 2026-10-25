@@ -74,6 +74,11 @@ export class Game {
     this.g.endTurn();
   }
 
+  /** Turns from (x, y) to planet `dest` at `speed`, slower inside nebulae (the core's own count). */
+  eta(x: number, y: number, dest: number, speed: number, transport = false): number {
+    return this.g.eta(x, y, dest, speed, transport);
+  }
+
   free(): void {
     this.g.free();
   }

@@ -11,6 +11,8 @@ Every picture of the Classic theme but the race portraits is an SVG drawn by
 six empire colours, stars, nebulae, the battle screen's pieces, the ten races' envoys,
 scientists, spies and soldiers, the embassy, the newscast and its 22 news pictures, the
 laboratories, a blueprint for each of the 193 techs, the colonization and invasion scenes,
+the explorers' view of each kind of planet, the colony transport landing and its colonists,
+the bombs falling, the explosions of a sabotage and the espionage panel (with animations),
 and the pictures only a world map uses (sites, colonies, views, battlefields, throne rooms).
 It also writes the few pictures of the Age theme the game used to draw itself (interface
 icons, camps, the Guardian's standard, the free companies' banners, mists).

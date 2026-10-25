@@ -218,6 +218,14 @@ pub fn import(files: &[(String, Vec<u8>)]) -> ImportResult {
             });
             text.push(path);
         }
+        if let Some(msgs) = (name == "DIPLOMAT").then(|| diplomat(archive)).flatten() {
+            let path = "text/lbx/diplomat.json".to_string();
+            out.push(AssetFile {
+                path: path.clone(),
+                bytes: serde_json::to_vec_pretty(&msgs).expect("json"),
+            });
+            text.push(path);
+        }
         archives.insert(
             name.clone(),
             ArchiveInfo {
@@ -351,6 +359,68 @@ fn text_table(name: &str, archive: &Archive) -> Option<Vec<String>> {
     )
 }
 
+/// DIPLOMAT.LBX's placeholders (byte 0x80 + code, 1oom `audience_build_diplo_msg`) as the
+/// game's own: the races, rulers, planet, treaty, tech and amounts of the message.
+fn diplomat_token(code: u8) -> &'static str {
+    match code {
+        0 => "{me}",
+        1 => "{race}",
+        2 => "{sabotage}",
+        3 => "{player}",
+        4 => "{field}",
+        5 => "{planet}",
+        6 | 8 | 0xc | 0x11 | 0x12 => "{empire}",
+        7 | 0x13 | 0x15 => "{bc}",
+        9 => "{leader}",
+        0xa => " {recalled}",
+        0xb => "{treaty}",
+        0xd => "{gift}.",
+        0xe | 0x14 => "{tech} tech.",
+        0xf => "{year}",
+        0x10 => "{tech}",
+        0x16 => "{an}",
+        0x17 => "{broken}",
+        _ => "",
+    }
+}
+
+/// DIPLOMAT.LBX: the messages of the computer rulers, up to 15 wordings for each of the 81
+/// kinds of message (1oom `DIPLOMAT_MSG_PTR`, `diplomat.d0`), as `[kind][wording]` =
+/// `[text, music]` (music 2: the tense tune of the race's audience).
+fn diplomat(archive: &Archive) -> Option<Vec<Vec<(String, u8)>>> {
+    let counts = Table::parse(archive.entry(0)?).ok()?;
+    let msgs = Table::parse(archive.entry(1)?).ok()?;
+    let recs = msgs.records();
+    let out = counts
+        .records()
+        .iter()
+        .enumerate()
+        .map(|(t, c)| {
+            let n = (u16::from_le_bytes([c[0], c[1]]) as usize).min(15);
+            (0..n)
+                .filter_map(|r| recs.get(t * 15 + r))
+                .map(|m| {
+                    let text: String = m
+                        .iter()
+                        .take(0xc4)
+                        .take_while(|&&b| b != 0)
+                        .map(|&b| match b {
+                            0x80.. => diplomat_token(b & 0x7f).to_string(),
+                            0x20..=0x7f => (b as char).to_string(),
+                            _ => String::new(),
+                        })
+                        .collect();
+                    (
+                        text.split_whitespace().collect::<Vec<_>>().join(" "),
+                        m.get(0xc6).copied().unwrap_or(0),
+                    )
+                })
+                .collect()
+        })
+        .collect();
+    Some(out)
+}
+
 /// The animations the game plays (1oom draws them frame by frame): alias -> (sheet,
 /// [frames, width, height, loop frame]).
 /// Their first frames also have static aliases (`ship/<look>`, `star/<k>`, ...).
@@ -399,6 +469,16 @@ fn animations(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, (Str
     // NEWSCAST.LBX (1oom `uinews.c`): the newscaster 2 and the globe 3.
     put("anim/news/anchor".into(), sheet("NEWSCAST", 2));
     put("anim/news/world".into(), sheet("NEWSCAST", 3));
+    // LANDING.LBX (1oom `uilanding.c`): the transport coming down 0, the colonists walking
+    // out 0x15 + banner. BACKGRND.LBX: the bombs falling 0x10 (1oom `uibomb.c`), missile
+    // bases 7 and factories 8 blowing up (`uispy_sab.c`).
+    put("anim/landing/transport".into(), sheet("LANDING", 0));
+    for b in 0..6 {
+        put(format!("anim/landing/walk/{b}"), sheet("LANDING", 0x15 + b));
+    }
+    put("anim/bombard".into(), sheet("BACKGRND", 0x10));
+    put("anim/sabotage/bases".into(), sheet("BACKGRND", 7));
+    put("anim/sabotage/factories".into(), sheet("BACKGRND", 8));
     // SPIES.LBX (1oom `uinewtech.c`): 10 * source + race; source 0 is research, 1 spies,
     // 2 artifacts.
     for i in 0..30 {
@@ -545,6 +625,36 @@ fn aliases(archives: &BTreeMap<String, ArchiveInfo>) -> BTreeMap<String, String>
         if let Some(p) = png0("NEWSCAST", 3 + t) {
             a.insert(format!("news/icon/{t}"), p);
         }
+    }
+    // LANDING.LBX: the colonists walking out of the transport, by banner.
+    for b in 0..6 {
+        if let Some(p) = png0("LANDING", 0x15 + b) {
+            a.insert(format!("landing/walk/{b}"), p);
+        }
+    }
+    // COLONIES.LBX (1oom `uiexplore.c`): each kind of planet, 2 * type without a colony and
+    // 2 * type + 1 with one.
+    for t in 0..14 {
+        if let Some(p) = png("COLONIES", 2 * t) {
+            a.insert(format!("explore/{t}"), p);
+        }
+        if let Some(p) = png("COLONIES", 2 * t + 1) {
+            a.insert(format!("explore/{t}/colony"), p);
+        }
+    }
+    // BACKGRND.LBX: the bombs falling (0x10), missile bases (7) and factories (8) blowing up,
+    // the espionage panel with the two agents (0xd, 1oom `uispy_esp.c`).
+    for (alias, i) in [
+        ("bombard", 0x10),
+        ("sabotage/bases", 7),
+        ("sabotage/factories", 8),
+    ] {
+        if let Some(p) = png0("BACKGRND", i) {
+            a.insert(alias.into(), p);
+        }
+    }
+    if let Some(p) = png("BACKGRND", 0xd) {
+        a.insert("spy/espionage".into(), p);
     }
     // SOUNDFX.LBX (1oom `ui_sound_play_sfx`).
     if let Some(f) = archives.get("SOUNDFX") {

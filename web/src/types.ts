@@ -315,6 +315,17 @@ export interface Incoming {
   needs_answer: boolean;
 }
 
+export interface SabotageTarget {
+  planet: number;
+  name: string;
+  kind: PlanetType;
+  pop: number;
+  factories: number;
+  bases: number;
+  /** Numbers from the last report (out of scanner range). */
+  last_report: boolean;
+}
+
 export type SpyChance =
   | { type: "steal"; target: number; techs: TechRef[]; framed: boolean; penalty: number }
   | { type: "sabotage"; target: number; strength: number; framed: boolean; penalty: number };
@@ -398,6 +409,8 @@ export interface View {
   relations: RelationView[];
   messages: [number, Incoming][];
   spy_chances: [number, SpyChance][];
+  /** For each spy chance, the colonies a sabotage can strike. */
+  spy_targets: SabotageTarget[][];
   election: Election | null;
   final_war: boolean;
   high_master: number | null;
@@ -406,7 +419,13 @@ export interface View {
   /** The battle the turn waits for. */
   battle: Battle | null;
   in_battle: boolean;
+  /** The question the turn waits for (crates/core/src/state.rs `Question`). */
+  question: Question | null;
 }
+
+export type Question =
+  | { type: "colonize"; empire: number; planet: number; ship: number; first: boolean }
+  | { type: "bomb"; empire: number; planet: number; pop: number; factories: number; bio: number; inbound: number };
 
 // ------------------------------------------------------------- battles (crates/core/src/battle.rs)
 
@@ -536,6 +555,8 @@ export type BattleAction =
   | { type: "retreat" };
 
 export type Command =
+  | { type: "answer"; yes: boolean }
+  | { type: "rename_planet"; planet: number; name: string }
   | { type: "set_sliders"; planet: number; sliders: number[] }
   | { type: "set_build"; planet: number; design: number }
   | { type: "send_fleet"; from: number; to: number; ships: number[] }
@@ -576,6 +597,7 @@ export interface NewGameOptions {
   star_names?: string[];
   home_names?: string[];
   leader_names?: string[];
+  leader_name_lists?: string[][];
   leader?: string | null;
   orion_name?: string | null;
   start_design_names?: string[];

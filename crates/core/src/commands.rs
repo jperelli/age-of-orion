@@ -142,6 +142,16 @@ pub enum Command {
     AcceptCouncil {
         accept: bool,
     },
+    /// Answers the question the turn is waiting for (`State::question`): build the colony,
+    /// bomb the planet.
+    Answer {
+        yes: bool,
+    },
+    /// Names one of the empire's colonies (MOO1 asks for the name of a new colony).
+    RenamePlanet {
+        planet: PlanetId,
+        name: String,
+    },
     /// Begins the battle the turn is waiting for (1oom `ui_battle_init`).
     StartBattle {
         mode: BattleMode,
@@ -256,6 +266,30 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
         return err("game_over");
     }
     let battle_cmd = matches!(cmd, Command::StartBattle { .. } | Command::Battle { .. });
+    match cmd {
+        Command::Answer { yes } => {
+            if st.question.as_ref().map(Question::empire) != Some(empire) || st.answer.is_some() {
+                return err("no_question");
+            }
+            st.answer = Some(*yes);
+            return Ok(());
+        }
+        Command::RenamePlanet { planet, name } => {
+            own(st, empire, *planet)?;
+            let name: String = name
+                .trim()
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(16)
+                .collect();
+            if name.is_empty() {
+                return err("invalid_name");
+            }
+            st.planets[*planet].name = name;
+            return Ok(());
+        }
+        _ => {}
+    }
     if st.progress.is_some() && !battle_cmd {
         return err("battle_in_progress");
     }
@@ -593,7 +627,10 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
                 return err("invalid_planet");
             }
         }
-        Command::StartBattle { .. } | Command::Battle { .. } => unreachable!(),
+        Command::StartBattle { .. }
+        | Command::Battle { .. }
+        | Command::Answer { .. }
+        | Command::RenamePlanet { .. } => unreachable!(),
         Command::Vote { candidate } => {
             council::vote(st, empire, candidate).map_err(|code| CommandError { code })?
         }

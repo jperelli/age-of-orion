@@ -4,6 +4,7 @@ import math
 import random
 
 OUT = {}  # (theme, picture name) -> SVG text
+ANIMS = {}  # (theme, "anim/<name>") -> {"frames", "w", "h", "loop"}
 
 
 def num(x):
@@ -29,6 +30,14 @@ def put(theme, name, w, h, body, defs="", vb=None):
     vb = vb or f"0 0 {num(w)} {num(h)}"
     d = f"<defs>{defs}</defs>" if defs else ""
     OUT[(theme, name)] = f'<svg xmlns="http://www.w3.org/2000/svg" width="{num(w)}" height="{num(h)}" viewBox="{vb}">{d}{body}</svg>\n'
+
+
+def put_anim(theme, name, w, h, frames, loop, draw, defs=""):
+    """Registers animation `anim/<name>`: a strip of `frames` frames of `w` x `h`, `draw(i)`
+    giving frame i's body; after the last frame it goes on from frame `loop`."""
+    body = "".join(f'<g transform="translate({num(i * w)} 0)"><svg x="0" y="0" width="{num(w)}" height="{num(h)}" viewBox="0 0 {num(w)} {num(h)}" overflow="hidden">{draw(i)}</svg></g>' for i in range(frames))
+    put(theme, f"anim/{name}", w * frames, h, body, defs)
+    ANIMS[(theme, f"anim/{name}")] = {"frames": frames, "w": w, "h": h, "loop": loop}
 
 
 def rng(*key):

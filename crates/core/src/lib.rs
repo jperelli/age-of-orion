@@ -152,10 +152,14 @@ impl Game {
         if self.st.battle.as_ref().is_some_and(|b| b.winner.is_none()) {
             return;
         }
+        if self.st.question.is_some() && self.st.answer.is_none() {
+            return;
+        }
         turn::process(&mut self.st);
     }
 
-    /// Ends the turn and lets the computer fight the human players' battles (tools, tests).
+    /// Ends the turn and lets the computer fight the human players' battles and answer their
+    /// questions (tools, tests).
     pub fn end_turn_auto(&mut self) {
         self.end_turn();
         for _ in 0..500 {
@@ -176,11 +180,21 @@ impl Game {
                     },
                 );
             }
+            // Questions: colonies are built, planets bombed as the empire's standing order.
+            if let Some(q) = self.st.question.clone() {
+                let yes = match q {
+                    state::Question::Colonize { .. } => true,
+                    state::Question::Bomb { empire, .. } => {
+                        self.st.empires[empire as usize].bombard
+                    }
+                };
+                let _ = self.command(q.empire(), &Command::Answer { yes });
+            }
             self.end_turn();
         }
     }
 
-    /// Whether the turn waits for a human battle.
+    /// Whether the turn waits for a human battle or question.
     pub fn in_battle(&self) -> bool {
         self.st.progress.is_some()
     }
@@ -704,6 +718,126 @@ mod tests {
         assert!(p.base_max_pop > before);
     }
 
+    /// The nearest free planet to the player's home that its colony ship can settle.
+    fn free_planet(st: &State) -> PlanetId {
+        let home = st.empires[0].home;
+        (0..st.planets.len())
+            .filter(|&p| {
+                let pl = &st.planets[p];
+                pl.owner.is_none()
+                    && p != st.orion
+                    && pl.kind >= PlanetType::Minimal
+                    && st.empires.iter().all(|e| !e.explored[p])
+            })
+            .min_by_key(|&p| st.parsecs(home, p))
+            .unwrap()
+    }
+
+    #[test]
+    fn humans_are_asked_before_building_a_colony() {
+        for yes in [true, false] {
+            let mut g = Game::new(&opts(21)).unwrap();
+            let target = free_planet(&g.st);
+            g.st.empires[0].orbit[target][4] = 1; // the colony ship
+            g.end_turn();
+            let q = g.view(0).question.expect("a question");
+            assert!(
+                matches!(q, Question::Colonize { planet, first: true, .. } if planet == target)
+            );
+            assert!(g.in_battle());
+            // The turn waits for the answer; other orders are refused meanwhile.
+            g.end_turn();
+            assert!(g.view(0).question.is_some());
+            g.command(0, &Command::Answer { yes }).unwrap();
+            assert!(g.command(0, &Command::Answer { yes }).is_err());
+            g.end_turn();
+            assert!(!g.in_battle());
+            assert_eq!(g.st.planets[target].owner == Some(0), yes);
+            assert_eq!(g.st.empires[0].orbit[target][4], if yes { 0 } else { 1 });
+            if yes {
+                g.command(
+                    0,
+                    &Command::RenamePlanet {
+                        planet: target,
+                        name: "  New Hope ".into(),
+                    },
+                )
+                .unwrap();
+                assert_eq!(g.st.planets[target].name, "New Hope");
+            }
+        }
+    }
+
+    #[test]
+    fn humans_get_a_report_of_new_star_systems() {
+        let mut g = Game::new(&opts(22)).unwrap();
+        let target = free_planet(&g.st);
+        g.st.empires[0].orbit[target][0] = 1; // a scout
+        g.end_turn_auto();
+        assert!(g.st.empires[0].explored[target]);
+        assert!(g.st.events.iter().any(|e| matches!(e.kind, EventKind::Explored { planet, by_scanner: false } if planet == target) && e.to == vec![0]));
+    }
+
+    #[test]
+    fn humans_are_asked_before_bombing() {
+        for yes in [true, false] {
+            let mut g = Game::new(&opts(16)).unwrap();
+            let target = g.st.empires[1].home;
+            g.st.empires[0].orbit[target][3] = 20; // bombers
+            let pop = g.st.planets[target].pop;
+            g.st.progress = Some(Progress {
+                stage: 2,
+                ..Default::default()
+            });
+            assert!(combat::bomb(&mut g.st));
+            let Some(Question::Bomb {
+                planet,
+                pop: killed,
+                ..
+            }) = g.view(0).question
+            else {
+                panic!("no question");
+            };
+            assert_eq!(planet, target);
+            assert!(killed > 0);
+            // The turn waits for the answer.
+            g.end_turn();
+            assert!(g.view(0).question.is_some());
+            g.command(0, &Command::Answer { yes }).unwrap();
+            assert!(!combat::bomb(&mut g.st));
+            assert!(g.st.question.is_none());
+            assert_eq!(g.st.planets[target].pop < pop, yes);
+            assert_eq!(
+                g.st.events
+                    .iter()
+                    .any(|e| matches!(e.kind, EventKind::Bombed { .. })),
+                yes
+            );
+        }
+    }
+
+    #[test]
+    fn leaders_get_one_of_their_race_names() {
+        let lists: Vec<Vec<String>> = (0..10)
+            .map(|r| (0..6).map(|k| format!("Leader {r}-{k}")).collect())
+            .collect();
+        let g = Game::new(&NewGameOptions {
+            seed: 5,
+            leader: Some("Me".into()),
+            leader_name_lists: lists.clone(),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(g.st.empires[0].leader, "Me");
+        for e in &g.st.empires[1..] {
+            assert!(lists[e.race.index()].contains(&e.leader), "{}", e.leader);
+        }
+        let mut names: Vec<_> = g.st.empires.iter().map(|e| e.leader.clone()).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), g.st.empires.len());
+    }
+
     #[test]
     fn nebulae_slow_ships_and_block_shields() {
         let g = Game::new(&NewGameOptions {
@@ -727,7 +861,10 @@ mod tests {
         let target = g.st.empires[1].home;
         g.st.empires[0].orbit[target][3] = 20; // bombers
         let pop = g.st.planets[target].pop;
-        combat::bomb(&mut g.st);
+        // The human is asked first; with the standing order of `end_turn_auto`, yes.
+        assert!(combat::bomb(&mut g.st));
+        g.st.answer = Some(true);
+        assert!(!combat::bomb(&mut g.st));
         assert!(g.st.planets[target].pop < pop);
         assert!(g
             .st

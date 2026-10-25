@@ -227,6 +227,9 @@ pub struct View {
     pub messages: Vec<(usize, Incoming)>,
     /// Spy successes waiting for a choice, with their index.
     pub spy_chances: Vec<(usize, SpyChance)>,
+    /// For each spy chance (same order), the colonies a sabotage can strike: all the
+    /// target's, with what the spies know of them (1oom `ui_spy_sabotage_ask`).
+    pub spy_targets: Vec<Vec<SabotageTarget>>,
     pub election: Option<Election>,
     pub final_war: bool,
     pub high_master: Option<EmpireId>,
@@ -234,8 +237,48 @@ pub struct View {
     pub monsters: Vec<MonsterView>,
     /// The battle this empire is fighting: the turn waits until it is over.
     pub battle: Option<Battle>,
-    /// The turn is interrupted by a battle.
+    /// The turn is interrupted by a battle or a question.
     pub in_battle: bool,
+    /// The question the turn asks this empire (build a colony, bomb a planet).
+    pub question: Option<Question>,
+}
+
+/// A colony a sabotage can strike: its numbers now when in scanner range, else the last
+/// ones seen (`last_report`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SabotageTarget {
+    pub planet: PlanetId,
+    pub name: String,
+    pub kind: PlanetType,
+    pub pop: i32,
+    pub factories: i32,
+    pub bases: i32,
+    pub last_report: bool,
+}
+
+fn sabotage_targets(st: &State, me: EmpireId, c: &SpyChance) -> Vec<SabotageTarget> {
+    let SpyChance::Sabotage { target, .. } = c else {
+        return Vec::new();
+    };
+    st.colonies(*target)
+        .map(|(i, p)| {
+            let now = sees(st, me, p.x, p.y);
+            let seen = st.empires[me as usize]
+                .seen
+                .get(i)
+                .cloned()
+                .unwrap_or_default();
+            SabotageTarget {
+                planet: i,
+                name: p.name.clone(),
+                kind: p.kind,
+                pop: if now { p.pop } else { seen.pop },
+                factories: if now { p.factories } else { seen.factories },
+                bases: if now { p.bases } else { seen.bases },
+                last_report: !now,
+            }
+        })
+        .collect()
 }
 
 /// 1oom `game_check_coord_is_visible` with the empire's scanner range.
@@ -540,6 +583,13 @@ pub fn view(st: &State, me: EmpireId) -> View {
             .filter(|(_, (o, _))| *o == me)
             .map(|(i, (_, c))| (i, c.clone()))
             .collect(),
+        spy_targets: st
+            .pending
+            .spy
+            .iter()
+            .filter(|(o, _)| *o == me)
+            .map(|(_, c)| sabotage_targets(st, me, c))
+            .collect(),
         election: st.council.pending.clone(),
         final_war: st.council.final_war,
         high_master: st.council.winner,
@@ -562,5 +612,9 @@ pub fn view(st: &State, me: EmpireId) -> View {
             .filter(|b| b.s.iter().any(|s| s.party == me as i32))
             .map(|b| (**b).clone()),
         in_battle: st.progress.is_some(),
+        question: st
+            .question
+            .clone()
+            .filter(|q| q.empire() == me && st.answer.is_none()),
     }
 }

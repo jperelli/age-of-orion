@@ -534,12 +534,37 @@ fn move_ships(st: &mut State) {
     misc::update_visibility(st);
 }
 
-/// 1oom `game_turn_explore`: ships reveal planets and colony ships settle them.
-fn explore(st: &mut State) {
+/// 1oom `game_turn_explore`: ships reveal planets and colony ships settle them. A human is
+/// asked before a colony is built (`Question::Colonize`): the exploration stops there and
+/// goes on from the same planet and empire once answered; true while it waits.
+fn explore(st: &mut State) -> bool {
     let n = st.empires.len();
-    for pli in 0..st.planets.len() {
-        st.planets[pli].artifact_looter = None;
-        for i in 0..n {
+    let (mut p0, mut i0) = st.progress.as_ref().map_or((0, 0), |p| p.at);
+    if let Some(Question::Colonize {
+        empire,
+        planet,
+        ship,
+        ..
+    }) = st.question.clone()
+    {
+        let Some(yes) = st.answer.take() else {
+            return true;
+        };
+        st.question = None;
+        if yes {
+            colonize(st, empire as usize, planet, ship);
+        }
+        (p0, i0) = if empire as usize + 1 < n {
+            (planet, empire as usize + 1)
+        } else {
+            (planet + 1, 0)
+        };
+    }
+    for pli in p0..st.planets.len() {
+        for i in if pli == p0 { i0 } else { 0 }..n {
+            if i == 0 {
+                st.planets[pli].artifact_looter = None;
+            }
             let explored_i = st.empires[i].explored[pli];
             if explored_i && st.planets[pli].owner.is_some() {
                 continue;
@@ -592,23 +617,52 @@ fn explore(st: &mut State) {
                 best_colonize = 0;
             }
             st.empires[i].explored[pli] = true;
-            if best_colonize != 0 {
-                let p = &mut st.planets[pli];
-                p.owner = Some(i as u8);
-                p.pop = 2;
-                st.empires[i].orbit[pli][best_ship] -= 1;
-                st.push_event(vec![i as u8], EventKind::ColonyFounded { planet: pli });
-                if pli == st.orion {
+            if !st.empires[i].ai {
+                if best_colonize != 0 {
+                    st.question = Some(Question::Colonize {
+                        empire: i as u8,
+                        planet: pli,
+                        ship: best_ship,
+                        first: !explored_i,
+                    });
+                    st.answer = None;
+                    if let Some(p) = st.progress.as_mut() {
+                        p.at = (pli, i);
+                    }
+                    return true;
+                }
+                if !explored_i {
                     st.push_event(
-                        vec![],
-                        EventKind::OrionColonized {
+                        vec![i as u8],
+                        EventKind::Explored {
                             planet: pli,
-                            by: i as u8,
+                            by_scanner,
                         },
                     );
                 }
+            } else if best_colonize != 0 {
+                colonize(st, i, pli, best_ship);
             }
         }
+    }
+    false
+}
+
+/// Empire `i` builds a colony on `pli` with a ship of design `ship` from its orbit.
+fn colonize(st: &mut State, i: usize, pli: PlanetId, ship: usize) {
+    let p = &mut st.planets[pli];
+    p.owner = Some(i as u8);
+    p.pop = 2;
+    st.empires[i].orbit[pli][ship] -= 1;
+    st.push_event(vec![i as u8], EventKind::ColonyFounded { planet: pli });
+    if pli == st.orion {
+        st.push_event(
+            vec![],
+            EventKind::OrionColonized {
+                planet: pli,
+                by: i as u8,
+            },
+        );
     }
 }
 
@@ -753,7 +807,34 @@ pub fn process(st: &mut State) {
         combat::finish_battle(st);
         st.battle = None;
     }
-    if combat::battles(st) {
+    let stage = |st: &State| st.progress.as_ref().map_or(0, |p| p.stage);
+    let next = |st: &mut State, stage: u8| {
+        if let Some(p) = st.progress.as_mut() {
+            p.stage = stage;
+            p.at = (0, 0);
+        }
+    };
+    if stage(st) == 0 {
+        if combat::battles(st) {
+            return;
+        }
+        spy::turn(st);
+        tech::research(st);
+        if st.guardian {
+            let o = st.orion;
+            for e in st.empires.iter_mut() {
+                e.orbit[o][0] = 0;
+            }
+        }
+        next(st, 1);
+    }
+    if stage(st) == 1 {
+        if explore(st) {
+            return;
+        }
+        next(st, 2);
+    }
+    if combat::bomb(st) {
         return;
     }
     let old_contact = st
@@ -807,17 +888,8 @@ fn before_battles(st: &mut State) -> Vec<Vec<bool>> {
     old_contact
 }
 
+/// The rest of the turn, after battles, exploration and bombing.
 fn after_battles(st: &mut State, old_contact: Vec<Vec<bool>>) {
-    spy::turn(st);
-    tech::research(st);
-    if st.guardian {
-        let o = st.orion;
-        for e in st.empires.iter_mut() {
-            e.orbit[o][0] = 0;
-        }
-    }
-    explore(st);
-    combat::bomb(st);
     ground::land(st);
     ground::resolve_all(st);
     events::coup(st);

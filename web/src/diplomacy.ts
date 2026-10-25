@@ -6,7 +6,7 @@ import { shipParts } from "./engine";
 import { moo1Scene, picImg, picUrl } from "./pictures";
 import { techName } from "./research";
 import { slider } from "./sliders";
-import { FIELDS, RACES, type AudienceOptions, type Incoming, type MsgParams, type RelationView, type Reply, type SabotageKind, type Talk, type TechRef } from "./types";
+import { FIELDS, RACES, type AudienceOptions, type Incoming, type MsgParams, type RelationView, type Reply, type Talk, type TechRef } from "./types";
 import { append, clear, h, keepScroll, modal, toast } from "./ui";
 
 type T = (k: string, p?: Record<string, string | number>) => string;
@@ -106,10 +106,39 @@ export function msgText(ctx: Ctx, kind: number, from: number, p: Partial<MsgPara
   if (p.empire !== null && p.empire !== undefined) params.empire = empireName(ctx, p.empire);
   if (p.tech) params.tech = techRefName(ctx, p.tech);
   params.gift = p.tech ? techRefName(ctx, p.tech) : `${p.bc ?? 0} ${t("unit.bc")}`;
-  let text = t(`diplo.${kind}`, params);
+  const moo1 = ctx.theme.diplomat?.[kind];
+  let text = moo1?.length ? moo1Wording(ctx, moo1, kind, from, p, params) : t(`diplo.${kind}`, params);
   const offer = offerText(ctx, p.offer_bc ?? 0, p.offer_tech ?? null);
   if (offer && kind >= 24 && kind <= 30) text += " " + t("diplo.offer", { offer });
   return text;
+}
+
+/**
+ * One of MOO1's wordings of a message (DIPLOMAT.LBX; 1oom picks one at random, here the same
+ * one for the same message), with its words: races by their singular name, the player's
+ * name, "a"/"an", the treaty, what was sabotaged.
+ */
+function moo1Wording(ctx: Ctx, wordings: [string, number][], kind: number, from: number, p: Partial<MsgParams>, params: Record<string, string | number>): string {
+  const t = tr(ctx);
+  const v = ctx.view();
+  const race = (i: number) => t(`race.${v.empires[i].race}`);
+  const rel = v.relations.find((r) => r.empire === from);
+  const treaty = rel?.treaty === "alliance" || rel?.treaty === "non_aggression" ? t(`treaty.${rel.treaty}`) : rel?.trade_bc ? t("diplo.word.trade") : t("diplo.word.treaty");
+  const words: Record<string, string | number> = {
+    ...params,
+    race: race(from),
+    me: race(v.player),
+    player: v.empires[v.player].leader,
+    an: /^[aeiou]/i.test(race(from)) ? "n" : "",
+    treaty,
+    broken: t("diplo.word.treaty"),
+    sabotage: t(p.field === 1 ? "diplo.word.bases" : "diplo.word.factories"),
+    recalled: t("diplo.word.recalled"),
+    field: params.field !== undefined ? String(params.field).toLowerCase() : "",
+    empire: p.empire !== null && p.empire !== undefined ? race(p.empire) : "",
+  };
+  const pick = wordings[(v.year * 7 + kind * 13 + from * 31) % wordings.length][0];
+  return pick.replace(/\{(\w+)\}/g, (m, k: string) => (k in words ? String(words[k]) : m));
 }
 
 // ------------------------------------------------------------- empires screen
@@ -431,48 +460,6 @@ async function showMessage(ctx: Ctx, m: Incoming): Promise<{ accept: boolean; pi
 }
 
 // ------------------------------------------------------------- spies
-
-/** Lets the player use what the spies achieved this turn. Skipped chances lapse. */
-export async function spyChances(ctx: Ctx): Promise<void> {
-  const t = tr(ctx);
-  // Last first: using a chance removes it, which does not move the earlier ones.
-  for (const [index, c] of [...ctx.view().spy_chances].reverse()) {
-    const target = empireName(ctx, c.target);
-    if (c.type === "steal") {
-      const r = await modal(
-        t("spy.steal_title"),
-        h("p", {}, t("spy.steal_text", { empire: target })),
-        [...c.techs.map((x) => `${t(`field.${FIELDS[x[0]]}`)}: ${techRefName(ctx, x)}`), t("spy.skip")],
-      );
-      if (r >= 0 && r < c.techs.length && ctx.command({ type: "steal_tech", index, field: c.techs[r][0] })) {
-        toast(t("spy.stolen", { tech: techRefName(ctx, c.techs[r]) }));
-      }
-      continue;
-    }
-    const planets = ctx.view().planets.filter((p) => p.owner === c.target);
-    if (!planets.length) continue;
-    const select = h(
-      "select",
-      {},
-      ...planets.map((p) => h("option", { value: p.id }, `${p.name} (${t("planet.factories")} ${p.factories ?? "?"}, ${t("planet.bases")} ${p.bases ?? "?"})`)),
-    );
-    const kinds: SabotageKind[] = ["factories", "bases", "revolt"];
-    const r = await modal(
-      t("spy.sabotage_title"),
-      [h("p", {}, t("spy.sabotage_text", { empire: target })), h("label", { class: "field" }, h("span", {}, t("spy.target")), select)],
-      [...kinds.map((k) => t(`spy.sabotage.${k}`)), t("spy.skip")],
-    );
-    if (r < 0 || r >= 3) continue;
-    const planet = Number(select.value);
-    const before = ctx.view().planets[planet];
-    if (ctx.command({ type: "sabotage", index, planet, kind: kinds[r] })) {
-      const after = ctx.view().planets[planet];
-      const n =
-        kinds[r] === "factories" ? (before.factories ?? 0) - (after.factories ?? 0) : kinds[r] === "bases" ? (before.bases ?? 0) - (after.bases ?? 0) : 0;
-      toast(t(`spy.done.${kinds[r]}`, { n, planet: after.name }));
-    }
-  }
-}
 
 // ------------------------------------------------------------- council
 

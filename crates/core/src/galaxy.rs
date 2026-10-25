@@ -310,6 +310,10 @@ pub struct NewGameOptions {
     pub home_names: Vec<String>,
     /// Leader name per race (10 entries).
     pub leader_names: Vec<String>,
+    /// Several leader names per race (MOO1's NAMES.LBX has six): when given, each ruler gets
+    /// one of its race's at random, no two alike (1oom `game_generate_emperor_names`).
+    #[serde(default)]
+    pub leader_name_lists: Vec<Vec<String>>,
     pub leader: Option<String>,
     pub orion_name: Option<String>,
     /// Names of the starting designs (5 entries).
@@ -333,6 +337,7 @@ impl Default for NewGameOptions {
             star_names: Vec::new(),
             home_names: Vec::new(),
             leader_names: Vec::new(),
+            leader_name_lists: Vec::new(),
             leader: None,
             orion_name: None,
             start_design_names: Vec::new(),
@@ -918,6 +923,8 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         pending: Default::default(),
         battle: None,
         progress: None,
+        question: None,
+        answer: None,
         ai_id: opts.ai_id,
         galaxy_seed: opts.seed,
         galaxy_w: 0,
@@ -1067,8 +1074,48 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
     for (i, &home) in homes.iter().enumerate() {
         st.empires[i].explored[home] = true;
     }
+    if !opts.leader_name_lists.is_empty() {
+        pick_leader_names(&mut st, opts);
+    }
     st.init_star_dist();
     Ok(st)
+}
+
+/// 1oom `game_generate_emperor_names`: each ruler not named by its player gets one of its
+/// race's names at random, trying again (up to 200 times) while another ruler has it.
+fn pick_leader_names(st: &mut State, opts: &NewGameOptions) {
+    let named = |i: usize| i == 0 && opts.leader.is_some() && !opts.all_ai;
+    let mut names: Vec<String> = (0..st.empires.len())
+        .map(|i| {
+            if named(i) {
+                st.empires[i].leader.clone()
+            } else {
+                String::new()
+            }
+        })
+        .collect();
+    for i in 0..st.empires.len() {
+        if named(i) {
+            continue;
+        }
+        let Some(list) = opts
+            .leader_name_lists
+            .get(st.empires[i].race.index())
+            .filter(|l| !l.is_empty())
+        else {
+            continue;
+        };
+        for _ in 0..200 {
+            let name = list[st.rng.below(list.len() as u16) as usize]
+                .trim()
+                .to_string();
+            if !names.iter().any(|n| n.eq_ignore_ascii_case(&name)) {
+                names[i] = name.clone();
+                st.empires[i].leader = name;
+                break;
+            }
+        }
+    }
 }
 
 #[cfg(test)]

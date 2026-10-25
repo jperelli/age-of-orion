@@ -26,13 +26,35 @@ export const TUNE = {
   ground_win: "ground_win",
   ground_lose: "ground_lose",
   council: "council",
+  colonize: "colonize",
+  bomb: "bomb",
+  bomb_destroyed: "bomb_destroyed",
+  espionage: "espionage",
+  sabotage: "sabotage",
+  sabotage_done: "sabotage_done",
 } as const;
 
 /** Tunes played once (the others loop). */
 const ONCE = new Set<string>([TUNE.ending_win, TUNE.ending_lose, TUNE.ground_win, TUNE.ground_lose]);
 
 // 1oom ui/classic: which MUSIC.LBX tune each screen plays.
-const LBX_TUNE: Record<string, number> = { menu: 1, ending_win: 2, ending_lose: 3, battle: 8, news: 9, ground: 0x26, ground_win: 0xc, ground_lose: 0xb, council: 0x27 };
+const LBX_TUNE: Record<string, number> = {
+  menu: 1,
+  ending_win: 2,
+  ending_lose: 3,
+  battle: 8,
+  news: 9,
+  ground: 0x26,
+  ground_win: 0xc,
+  ground_lose: 0xb,
+  council: 0x27,
+  colonize: 0xa,
+  bomb: 0xd,
+  bomb_destroyed: 0xe,
+  espionage: 0xf,
+  sabotage: 0x10,
+  sabotage_done: 0x11,
+};
 
 /** 1oom `tbl_audience_music`, by race (MOO1 order, as `RACES`). */
 const AUDIENCE_TUNE = [0x16, 0x14, 0x22, 0x20, 0x1c, 0x12, 0x18, 0x24, 0x1a, 0x1e];

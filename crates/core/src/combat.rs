@@ -518,10 +518,30 @@ fn bomb_damage(st: &mut State, planet: PlanetId, attacker: EmpireId) -> (i32, i3
     (pop, fact, bio)
 }
 
-/// 1oom `game_turn_bomb`: ships in orbit of an enemy colony may bomb it.
-pub fn bomb(st: &mut State) {
-    for planet in 0..st.planets.len() {
-        for ei in 0..st.empires.len() {
+/// 1oom `game_turn_bomb`: ships holding the orbit of enemy colonies bomb them. A human is
+/// asked first (`Question::Bomb`, with the damage already rolled, as 1oom does): the bombing
+/// stops there and goes on from the same planet and empire once answered; true while it waits.
+pub fn bomb(st: &mut State) -> bool {
+    let n = st.empires.len();
+    let (mut p0, mut e0) = st.progress.as_ref().map_or((0, 0), |p| p.at);
+    if let Some(Question::Bomb {
+        empire,
+        planet,
+        pop,
+        factories,
+        bio,
+        ..
+    }) = st.question.clone()
+    {
+        let Some(yes) = st.answer.take() else {
+            return true;
+        };
+        st.question = None;
+        apply_bomb(st, planet, empire, pop, factories, bio, yes);
+        (p0, e0) = (planet, empire as usize + 1);
+    }
+    for planet in p0..st.planets.len() {
+        for ei in if planet == p0 { e0 } else { 0 }..n {
             let Some(owner) = st.planets[planet].owner else {
                 break;
             };
@@ -545,51 +565,80 @@ pub fn bomb(st: &mut State) {
             } else if st.empires[ei].ai {
                 crate::ai::bomb(st, ei as u8, planet, inbound)
             } else {
-                st.empires[ei].bombard
-            };
-            // MOO1 applies biological damage even when the planet is not bombed.
-            if bio > 0 {
-                let p = &mut st.planets[planet];
-                p.max_pop = (p.max_pop - bio).max(10);
-            }
-            if !go {
-                continue;
-            }
-            let p = &mut st.planets[planet];
-            p.pop -= pop_dmg;
-            p.factories -= fact_dmg;
-            p.rebels = (p.rebels - (pop_dmg / 2 + 1)).max(0);
-            st.push_event(
-                vec![ei as u8, owner],
-                EventKind::Bombed {
+                st.question = Some(Question::Bomb {
+                    empire: ei as u8,
                     planet,
-                    attacker: ei as u8,
-                    pop_killed: pop_dmg,
-                    factories_destroyed: fact_dmg,
-                },
-            );
-            let destroyed = st.planets[planet].pop <= 0;
-            if destroyed {
-                destroy_colony(st, planet);
-            }
-            if destroyed && !st.empires[ei].ai {
-                let dv = if diplo::treaty(st, ei as u8, owner) < Treaty::War {
-                    // 1oom `game_diplo_start_war_swap`.
-                    if st.ai_id == 0 {
-                        diplo::start_war(st, owner, ei as u8);
-                    } else {
-                        diplo::start_war(st, ei as u8, owner);
-                    }
-                    13
-                } else {
-                    10
-                };
-                let v = -50 - st.rng.one_to(50) as i32;
-                diplo::act(st, v, ei as u8, owner, dv, planet, 0);
-            } else {
-                diplo::battle_finish(st, owner, ei as u8, pop_dmg, 0, bio, 0, planet);
-            }
+                    pop: pop_dmg,
+                    factories: fact_dmg,
+                    bio,
+                    inbound,
+                });
+                st.answer = None;
+                if let Some(p) = st.progress.as_mut() {
+                    p.at = (planet, ei);
+                }
+                return true;
+            };
+            apply_bomb(st, planet, ei as u8, pop_dmg, fact_dmg, bio, go);
         }
+    }
+    false
+}
+
+/// The bombs of `ei` on `planet` (when `go`), and the biological damage MOO1 applies even
+/// when the planet is not bombed.
+fn apply_bomb(
+    st: &mut State,
+    planet: PlanetId,
+    ei: EmpireId,
+    pop_dmg: i32,
+    fact_dmg: i32,
+    bio: i32,
+    go: bool,
+) {
+    let Some(owner) = st.planets[planet].owner else {
+        return;
+    };
+    if bio > 0 {
+        let p = &mut st.planets[planet];
+        p.max_pop = (p.max_pop - bio).max(10);
+    }
+    if !go {
+        return;
+    }
+    let p = &mut st.planets[planet];
+    p.pop -= pop_dmg;
+    p.factories -= fact_dmg;
+    p.rebels = (p.rebels - (pop_dmg / 2 + 1)).max(0);
+    st.push_event(
+        vec![ei, owner],
+        EventKind::Bombed {
+            planet,
+            attacker: ei,
+            pop_killed: pop_dmg,
+            factories_destroyed: fact_dmg,
+        },
+    );
+    let destroyed = st.planets[planet].pop <= 0;
+    if destroyed {
+        destroy_colony(st, planet);
+    }
+    if destroyed && !st.empires[ei as usize].ai {
+        let dv = if diplo::treaty(st, ei, owner) < Treaty::War {
+            // 1oom `game_diplo_start_war_swap`.
+            if st.ai_id == 0 {
+                diplo::start_war(st, owner, ei);
+            } else {
+                diplo::start_war(st, ei, owner);
+            }
+            13
+        } else {
+            10
+        };
+        let v = -50 - st.rng.one_to(50) as i32;
+        diplo::act(st, v, ei, owner, dv, planet, 0);
+    } else {
+        diplo::battle_finish(st, owner, ei, pop_dmg, 0, bio, 0, planet);
     }
 }
 

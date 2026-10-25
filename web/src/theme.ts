@@ -122,6 +122,9 @@ export class Theme {
   readonly sounds = new Map<string, string>();
   /** The theme's own stylesheet (colours, fonts), if it has one. */
   css: string | null = null;
+  /** MOO1's wordings of each diplomatic message (DIPLOMAT.LBX, English only), by kind:
+   * `[text, music]`. */
+  diplomat: [string, number][][] | null = null;
 
   constructor(
     readonly def: ThemeDef,
@@ -280,10 +283,15 @@ export async function loadTheme(settings: Settings): Promise<Theme> {
         if (d && !mod?.text[key]) text[key] = d.replace(/\s+/g, " ").trim();
       });
     }
+    // DIPLOMAT.LBX: MOO1's wordings of the rulers' messages, chosen among in `msgText`.
+    const diplomat = english ? await store.get<Blob>("assets", "text/lbx/diplomat.json") : null;
+    if (diplomat) theme.diplomat = JSON.parse(await diplomat.text()) as [string, number][][];
+    // NAMES.LBX: six leader names per race; each new game picks one for every ruler.
     const names = await store.get<Blob>("assets", "text/lbx/names.json");
     if (names && !mod?.text["names.leaders"]) {
       const all = JSON.parse(await names.text()) as string[];
       text["names.leaders"] = Array.from({ length: 10 }, (_, r) => all[r * 6] ?? "");
+      text["names.leaders.all"] = all.map((n) => n.trim());
     }
   }
   for (const [alias, blob] of Object.entries(mod?.images ?? {})) await theme.addImage(alias, blob);

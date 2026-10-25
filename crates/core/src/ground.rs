@@ -199,6 +199,8 @@ pub fn land(st: &mut State) {
                 p.bc_to_refit = 0;
                 p.pop_oper_fact = 1;
                 p.owner = Some(owner);
+                // 1oom shows the landing (`ui_landing`) to a human settling it this way.
+                st.push_event(vec![owner], EventKind::ColonyFounded { planet: dest });
             } else if po == owner {
                 if p.unrest == Unrest::Rebellion {
                     p.inbound[owner as usize] = (p.inbound[owner as usize] + pop3).min(MAX_INBOUND);

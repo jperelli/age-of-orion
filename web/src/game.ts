@@ -3,19 +3,20 @@
 import { battleScreen } from "./battle";
 import type { Ctx } from "./ctx";
 import { designDialog } from "./designer";
-import { councilDialog, deliverMessages, diplomacyDialog, spyChances, techRefName } from "./diplomacy";
+import { councilDialog, deliverMessages, diplomacyDialog, techRefName } from "./diplomacy";
 import type { Game } from "./engine";
 import { groundScreen, isGroundScreen } from "./ground";
-import { CITY_MARKS, MapView, cityLevel, etaTurns } from "./map";
+import { CITY_MARKS, MapView, cityLevel } from "./map";
 import { growthLines, kindLines, raceLines, specialLines, starLines } from "./explain";
 import { designPicture, iconRow, picImg, picUrl, uiIcon } from "./pictures";
 import { explained, pictureSelect } from "./widgets";
 import { newscast, newsType } from "./news";
+import { bombAskScreen, bombShowScreen, caughtScreen, exploreScreen, landingScreen, newShipsScreen, sabotageDoneScreen, spyChances, stolenScreen } from "./screens";
 import { adjustGroup, slider, sliders } from "./sliders";
 import { chooseTechs, needsChoice, newTechScreen, techScreen } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
-import { BUILD_STARGATE, FIELDS, PLANET_TYPES, RACES, SLIDERS, type Command, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
+import { BUILD_STARGATE, FIELDS, PLANET_TYPES, RACES, SLIDERS, type Command, type SabotageKind, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
 import { append, clear, download, h, modal, pickFiles, toast } from "./ui";
 
 export const AUTOSAVE = "autosave";
@@ -45,6 +46,7 @@ export class GameScreen {
     this.el = h("div", { class: `game theme-${theme.def.id}` }, h("div", { class: "main" }, canvas, h("aside", { class: "panel" }, this.head, this.panel)), this.bar);
     this.map = new MapView(canvas, theme);
     this.map.onSelect = () => this.renderPanel();
+    this.map.eta = (from, dest, speed, transport) => this.game.eta(from.x, from.y, dest, speed, transport);
     this.map.setView(this.view);
     document.addEventListener("keydown", this.keyHandler);
     const home = this.view.planets.find((p) => p.owner === this.view.player);
@@ -182,7 +184,19 @@ export class GameScreen {
       const tr = this.view.transports.find((t) => t.id === s.id);
       if (tr) this.transportPanel(tr);
       else this.overviewPanel();
-    } else this.overviewPanel();
+    } else if (s?.kind === "nebula") this.nebulaPanel();
+    else this.overviewPanel();
+  }
+
+  /** A nebula: what it does to the ships and planets inside (1oom `game_xy_is_in_nebula`). */
+  private nebulaPanel(): void {
+    const inside = this.view.planets.filter((p) => p.nebula && p.explored);
+    append(
+      this.panel,
+      h("h2", {}, this.t("nebula.title")),
+      h("ul", { class: "effects" }, ...["ships", "transports", "shields", "battle"].map((k) => h("li", {}, this.t(`nebula.${k}`)))),
+      inside.length ? h("p", { class: "muted small" }, this.t("nebula.planets", { planets: inside.map((p) => p.name).join(", ") })) : null,
+    );
   }
 
   private overviewPanel(): void {
@@ -481,7 +495,7 @@ export class GameScreen {
     }
     const target = this.map.targeting!.dest ?? null;
     const gate = target !== null && p.stargate && v.planets[target].stargate && v.planets[target].owner === v.player;
-    const eta = target !== null ? (gate ? 1 : etaTurns(p, v.planets[target], limits.speed)) : 0;
+    const eta = target !== null ? (gate ? 1 : this.game.eta(p.x, p.y, target, limits.speed)) : 0;
     const change = (i: number, n: number) => {
       ships[i] = Math.max(0, Math.min(f.ships[i], n));
       this.renderPanel();
@@ -543,7 +557,7 @@ export class GameScreen {
     if (t && t.key === `fleet/${f.id}`) {
       append(
         this.panel,
-        h("p", {}, target !== null ? this.t("orbit.destination", { planet: v.planets[target].name, turns: etaTurns(f, v.planets[target], speed) }) : this.t("orbit.choose_destination")),
+        h("p", {}, target !== null ? this.t("orbit.destination", { planet: v.planets[target].name, turns: this.game.eta(f.x, f.y, target, speed) }) : this.t("orbit.choose_destination")),
         h(
           "div",
           { class: "row" },
@@ -694,6 +708,7 @@ export class GameScreen {
               from: { x: tr.x, y: tr.y },
               range,
               speed: v.abilities.engine_warp,
+              transport: true,
               ok: (id) => v.planets[id].range <= range,
               pick: (to) => {
                 this.map.targeting = null;
@@ -720,6 +735,7 @@ export class GameScreen {
       from: p,
       range,
       speed: v.abilities.engine_warp,
+      transport: true,
       ok: (id) => id !== p.id && v.planets[id].range <= range && v.planets[id].explored && v.planets[id].kind !== "not_habitable",
       pick: (to) => {
         this.map.targeting = null;
@@ -747,14 +763,26 @@ export class GameScreen {
     this.map.targeting = null;
     this.game.endTurn();
     this.refresh();
-    // Battles with the player interrupt the turn: fight each, then let the turn go on.
+    // Events already shown as a screen this turn (by their index in the turn's events).
+    const shown = new Set<number>();
+    const landed = new Set<number>();
+    // Battles and questions interrupt the turn: fight each battle, answer each question,
+    // then let the turn go on.
     for (let guard = 0; this.view.in_battle && guard < 200; guard++) {
+      const q = this.view.question;
       if (this.view.battle && this.view.battle.winner === null) {
         await store.put("kv", AUTOSAVE, this.game.save());
         await battleScreen(this.ctx);
+      } else if (q?.type === "colonize") {
+        const yes = await exploreScreen(this.ctx, q.planet, { colony: true, byScanner: false });
+        this.command({ type: "answer", yes });
+      } else if (q?.type === "bomb") {
+        const yes = await bombAskScreen(this.ctx, q.planet, q.inbound);
+        this.command({ type: "answer", yes });
       }
       this.game.endTurn();
       this.refresh();
+      await this.turnScreens(shown, landed, true);
     }
     await store.put("kv", AUTOSAVE, this.game.save());
     const v = this.view;
@@ -769,14 +797,53 @@ export class GameScreen {
         ranking: ((e.ranking as number[] | undefined) ?? []).map((i) => this.t(`race.${v.empires[i].race}.plural`)),
       })),
     );
-    const events = v.events.filter((e) => (!["ships_built", "factories_complete"].includes(e.type) || e.to.includes(v.player)) && !news.includes(e));
-    if (events.length) {
-      const list = h("ul", { class: "events" }, ...events.map((e) => h("li", { class: `ev-${e.type}`, onclick: () => this.focusEvent(e) }, this.eventText(e))));
+    await this.turnScreens(shown, landed, false);
+    const own = (e: GameEvent) => e.to.includes(v.player);
+    const screened = ["explored", "colony_founded", "bombed", "spies_caught", "tech_stolen", "sabotaged", "ships_built", "factories_complete"];
+    const events = v.events.filter((e) => !screened.includes(e.type) && !news.includes(e) && visible(e));
+    const others = v.events.filter((e) => e.type === "factories_complete" && own(e));
+    if (events.length || others.length) {
+      const list = h("ul", { class: "events" }, ...[...events, ...others].map((e) => h("li", { class: `ev-${e.type}`, onclick: () => this.focusEvent(e) }, this.eventText(e))));
       await modal(this.t("report.title", { year: v.year }), list, [this.t("btn.ok")], "report");
     }
     for (const e of v.events) if (e.type === "tech_discovered" && e.to.includes(v.player)) await newTechScreen(this.ctx, e, this.eventText(e));
+    await newShipsScreen(this.ctx, v.events.filter((e) => e.type === "ships_built" && own(e)));
     if (await this.checkEnd()) return;
     await this.decisions();
+  }
+
+  /**
+   * The turn's screens for the player, each once: new colonies landing, exploration
+   * reports, bombings and, once the turn is over, spies caught, techs stolen and sabotage.
+   * `during`: the turn is still interrupted (only what happened so far).
+   */
+  private async turnScreens(shown: Set<number>, landed: Set<number>, during: boolean): Promise<void> {
+    const events = this.view.events;
+    const me = this.view.player;
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i];
+      if (shown.has(i) || !e.to.includes(me)) continue;
+      if (e.type === "colony_founded" && !landed.has(e.planet as number) && this.view.planets[e.planet as number].owner === me) {
+        shown.add(i);
+        landed.add(e.planet as number);
+        await landingScreen(this.ctx, e.planet as number);
+        this.refresh();
+      } else if (e.type === "explored") {
+        shown.add(i);
+        await exploreScreen(this.ctx, e.planet as number, { colony: false, byScanner: !!e.by_scanner });
+      } else if (e.type === "bombed") {
+        shown.add(i);
+        await bombShowScreen(this.ctx, e);
+      }
+    }
+    if (during) return;
+    const caught = events.filter((e, i) => e.type === "spies_caught" && e.to.includes(me) && !shown.has(i));
+    await caughtScreen(this.ctx, caught);
+    for (const e of events) {
+      if (!e.to.includes(me)) continue;
+      if (e.type === "tech_stolen") await stolenScreen(this.ctx, e);
+      else if (e.type === "sabotaged" && e.by !== me) await sabotageDoneScreen(this.ctx, (e.by as number | null) ?? null, e.kind as SabotageKind, e.count as number, e.planet as number);
+    }
   }
 
   /** Votes, messages, spy successes and research choices waiting for the player. */

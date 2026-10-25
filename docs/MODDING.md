@@ -121,6 +121,11 @@ The name of each picture (its path in `images/`), with MOO1's file when it has o
 | `embassy/room`, `embassy/<race>`, `embassy/emperor/<banner>`, `embassy/border` | *space*: MOO1's audience: the room, the envoy of race 0..9 (175x130 at 96,0), the player's emperor seen from behind and the frame (EMBASSY.LBX 1, 2 + race, 0x0c + banner, 0) |
 | `newtech/lab/<n>` | The new-tech screen's background: 0 the laboratory, 1 the spies' den, 2 the ruins (TECHNO.LBX 0..2); the tech's picture goes at 145,54 |
 | `newtech/<n>` | Who brought the tech, over the background: 10 * source + race, source 0 the race's scientist, 1 its spy, 2 an explorer (SPIES.LBX) |
+| `explore/<type>`, `explore/<type>/colony` | The exploration report and the sabotage screen: a planet of type 0..13 without and with a colony, 84x102 (COLONIES.LBX 2 * type, + 1) |
+| `landing/colonize/<type>`, `landing/transport`, `landing/walk/<banner>` | A new colony's landing: the land, the transport coming down (142x103, its last frame landed) and the colonists walking out with their banner (62x200) (LANDING.LBX 6 + type, 0, 0x15 + banner) |
+| `bombard` | Bombs falling on a colony, 84x102, on the bombing screens (BACKGRND.LBX 0x10) |
+| `sabotage/bases`, `sabotage/factories` | Missile bases and factories blowing up, 82x33 (BACKGRND.LBX 7, 8) |
+| `spy/espionage` | The espionage panel, 216x139: the agents, the target's portrait at 96,19 and six field buttons (BACKGRND.LBX 0xd) |
 | `tech/<field>/<n>`, `tech/<field>/advanced` | The blueprint of tech `n` of field 0..5, and the one of a field's advanced techs, shown on the new-tech screen and the research cards (TECHNO.LBX, picture from RESEARCH.LBX entry 0) |
 
 | `view/<type>`, `view/orion`, `view/city/<0..2>` | *world*: the wide view at the top of the side panel and in the planet window, for a site of that planet type, Orion, or a city by size (population under 25, under 60, more) |
@@ -147,16 +152,19 @@ from frame `loop`.
 | `anim/embassy/<race>` | The envoy of race 0..9 in audiences and messages (EMBASSY.LBX 2 + race) |
 | `anim/news/anchor`, `anim/news/world` | The newscaster talking and the turning globe (NEWSCAST.LBX 2, 3) |
 | `anim/newtech/<n>` | Who brought a tech (SPIES.LBX) |
+| `anim/landing/transport`, `anim/landing/walk/<banner>` | The transport coming down, the colonists walking (LANDING.LBX) |
+| `anim/bombard`, `anim/sabotage/bases`, `anim/sabotage/factories` | The bombs, the explosions of a sabotage (BACKGRND.LBX) |
 | `unit/<look>/march/<0..3>`, `unit/<look>/attack/<0..3>` | *world*: frames of a battle stack, played while it moves and when it shoots or strikes |
 
 ## Sounds
 
 | Name | Used for |
 |---|---|
-| `music/<tune>` | `menu`, `battle`, `news`, `ground` (siege), `ground_win`, `ground_lose`, `council`, `ending_win`, `ending_lose`, and `audience/<race>` (0..9) for audiences; the endings and the siege's outcome play once, the others loop |
+| `music/<tune>` | `menu`, `battle`, `news`, `ground` (siege), `ground_win`, `ground_lose`, `council`, `ending_win`, `ending_lose`, `colonize` (a new colony's landing), `bomb`, `bomb_destroyed` (a colony bombed out), `espionage`, `sabotage`, `sabotage_done`, and `audience/<race>` (0..9) for audiences; the endings and the siege's outcome play once, the others loop |
 | `sfx/<effect>` | `button` (every button), `click`, `beam`, `heavy_beam`, `missile`, `explosion`, `hit`, `bomb`, `special`, and on a world map `arrow` and `clash` |
 
-With `use_lbx`, MOO1's tunes (MUSIC.LBX) and samples (SOUNDFX.LBX, weapons with their own,
+With `use_lbx`, MOO1's tunes (MUSIC.LBX), the rulers' messages in English (DIPLOMAT.LBX, one
+of MOO1's wordings for each), six leader names per race for new games (NAMES.LBX) and samples (SOUNDFX.LBX, weapons with their own,
 1oom `tbl_shiptech_weap[].sound`) take their place, and `font/<n>` (n = 0..5) are MOO1's
 fonts as TrueType, used when fonts 3 and 4 are present (`--font`, `--title-font`,
 `--button-font`).

@@ -349,6 +349,11 @@ pub enum EventKind {
     ColonyFounded {
         planet: PlanetId,
     },
+    /// A human's scouts or scanners explored a star system (1oom `ui_explore`).
+    Explored {
+        planet: PlanetId,
+        by_scanner: bool,
+    },
     ShipsBuilt {
         planet: PlanetId,
         design: usize,
@@ -536,9 +541,14 @@ pub struct State {
     /// The battle a human is fighting; the turn waits for it.
     #[serde(default)]
     pub battle: Option<Box<crate::battle::Battle>>,
-    /// A turn interrupted by a human battle.
+    /// A turn interrupted by a human battle or question.
     #[serde(default)]
     pub progress: Option<Progress>,
+    /// The question the turn waits for, and its answer once given.
+    #[serde(default)]
+    pub question: Option<Question>,
+    #[serde(default)]
+    pub answer: Option<bool>,
     /// 1oom `ai_id`: 0 classic (as MOO1), 1 classic+ (1oom's improved AI).
     #[serde(default)]
     pub ai_id: u8,
@@ -570,6 +580,45 @@ pub struct Progress {
     pub battle_planet: usize,
     /// Parties left out of the battles at `battle_planet` (treaties, ceasefires).
     pub skipped: Vec<i32>,
+    /// Step of the turn: 0 battles, 1 exploration, 2 bombing.
+    pub stage: u8,
+    /// Planet and empire where the exploration or the bombing goes on after a question.
+    pub at: (usize, usize),
+}
+
+/// A question 1oom asks a human player in the middle of the turn; the turn waits for the
+/// answer (`Command::Answer`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Question {
+    /// 1oom `ui_explore` with a colony ship in orbit: build a colony there?
+    Colonize {
+        empire: EmpireId,
+        planet: PlanetId,
+        /// The design that settles it.
+        ship: usize,
+        /// The planet was not explored before.
+        first: bool,
+    },
+    /// 1oom `ui_bomb_ask`: bomb the enemy colony held by our ships?
+    Bomb {
+        empire: EmpireId,
+        planet: PlanetId,
+        /// What the bombs would destroy (1oom computes it before asking).
+        pop: i32,
+        factories: i32,
+        bio: i32,
+        /// Troops on their way to the planet.
+        inbound: i32,
+    },
+}
+
+impl Question {
+    pub fn empire(&self) -> EmpireId {
+        match self {
+            Question::Colonize { empire, .. } | Question::Bomb { empire, .. } => *empire,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

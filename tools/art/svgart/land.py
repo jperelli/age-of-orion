@@ -3,7 +3,7 @@ views of places and the battlefields of a world map, and the planets as map mark
 import math
 
 from .kit import blob, blur, circle, dark, ellipse, g, light, lin, mix, num, path, poly, put, rad, rect, ridge, rng, starfield
-from .space import globe, ship
+from .space import globe
 
 KINDS = ["not_habitable", "radiated", "toxic", "inferno", "dead", "tundra", "barren", "minimal", "desert", "steppe", "arid", "ocean", "jungle", "terran"]
 
@@ -102,12 +102,10 @@ ORION = lin("orion", 0, 0, 0, 1, (0, "#fff4c0"), (1, "#a08a40"))
 
 def build():
     for t, kind in enumerate(KINDS):
-        # MOO1's colonization scene: the colony ship coming down.
+        # MOO1's colonization scene: the land where the transport comes down (the landing
+        # screen draws the transport, `landing/transport`).
         defs, body = landscape(kind, 320, 200, 1)
-        d, b = ship("#c8d0dc", 3, 2, "cs")
-        flame = rad("fl", 0.5, 0.2, 0.8, (0, "#ffffff"), (0.4, "#ffd04a"), (1, "#ff6a1a", 0))
-        body += ellipse(176, 118, 26, 30, fill="url(#fl)") + f'<g transform="translate(176 86) rotate(-90) scale(2.6) translate(-16 -12)">{b}</g>'
-        put("classic", f"landing/colonize/{t}", 320, 200, body, defs + d + flame)
+        put("classic", f"landing/colonize/{t}", 320, 200, body, defs)
         # The invasion: the defenders' colony in the distance, room for the troops in front.
         defs, body = landscape(kind, 320, 200, 2, 0.38)
         body += colony(160, 88, 0.9, 3, rng("inv", kind))

@@ -89,6 +89,21 @@ impl WasmGame {
     pub fn end_turn(&mut self) {
         self.game.end_turn();
     }
+
+    /// Turns from (x, y) to planet `dest` at `speed` (1oom `game_calc_eta_ship`, or
+    /// `game_calc_eta_trans` for transports): slower inside nebulae.
+    pub fn eta(&self, x: i32, y: i32, dest: usize, speed: i32, transport: bool) -> u32 {
+        let st = self.game.state();
+        if dest >= st.planets.len() {
+            return 0;
+        }
+        let p = &st.planets[dest];
+        if transport {
+            st.eta_trans(speed, x, y, p.x, p.y).max(0) as u32
+        } else {
+            st.eta(x, y, dest, speed)
+        }
+    }
 }
 
 /// Converts LBX files into the open asset tree: `add` every file, then `run`.

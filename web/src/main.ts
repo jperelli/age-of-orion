@@ -206,6 +206,8 @@ function newGame(): void {
       star_names: theme.list("names.sites"),
       home_names: theme.list("names.homes"),
       leader_names: RACES.map((r, i) => theme.list("names.leaders")[i] || t(`race.${r}.leader`)),
+      // MOO1's six names per race, when imported: every ruler gets one of them.
+      leader_name_lists: theme.list("names.leaders.all").length >= 60 ? RACES.map((_, r) => theme.list("names.leaders.all").slice(r * 6, r * 6 + 6)) : [],
       leader: leader.value.trim() || null,
       orion_name: theme.has("names.orion") ? t("names.orion") : null,
       start_design_names: ["scout", "fighter", "destroyer", "bomber", "colony_ship"].map((k) => t(`design.${k}`)),
