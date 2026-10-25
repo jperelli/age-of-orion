@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-25
+
 ### Added
 
 - MOO1's screens around a turn, with MOO1's pictures and tunes when imported and Classic's
@@ -28,8 +30,8 @@ All notable changes to this project are documented here. The format follows
 - With MOO1's files imported (English), the rulers speak with MOO1's own words (DIPLOMAT.LBX),
   and every computer ruler gets one of its race's six MOO1 names (NAMES.LBX). Import the files
   again to get them.
-- Classic has its own pictures and six new tunes for all of these.
-
+- Classic has its own pictures and six new tunes for all of these; Age shows placeholders
+  for the pictures it does not have yet.
 - Age has its own music: a medieval tune for every screen (lute, recorder, shawm, sackbut,
   fiddle, choir in organum, bells, tabor and war drums) and one for each people's audience.
   The game's synthesizer gains a tambourine and a wood block.
@@ -524,7 +526,8 @@ First playable version.
 - CI (fmt, clippy, tests, web and desktop builds), tag-driven releases and GitHub Pages
   deployment.
 
-[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/jperelli/age-of-orion/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/jperelli/age-of-orion/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/jperelli/age-of-orion/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/jperelli/age-of-orion/compare/v0.9.0...v0.10.0
