@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/lbx", "crates/core", "crates/cli", "crates/wasm", "crates/harness"]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.15.0"
 edition = "2021"
 license = "GPL-2.0-only"
 repository = "https://github.com/jperelli/age-of-orion"

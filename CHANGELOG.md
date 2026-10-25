@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-25
+
 ### Added
 
 - A statistics screen, opened by clicking the year in the panel: charts year by year of what
@@ -557,7 +559,8 @@ First playable version.
 - CI (fmt, clippy, tests, web and desktop builds), tag-driven releases and GitHub Pages
   deployment.
 
-[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/jperelli/age-of-orion/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/jperelli/age-of-orion/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/jperelli/age-of-orion/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/jperelli/age-of-orion/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/jperelli/age-of-orion/compare/v0.11.0...v0.12.0
