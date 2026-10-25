@@ -554,8 +554,34 @@ export type BattleAction =
   | { type: "special" }
   | { type: "retreat" };
 
+/** The stats screen's data (crates/core/src/stats.rs `StatsView`). */
+export interface EmpireStats {
+  empire: number;
+  race: Race;
+  banner: number;
+  leader: string;
+  alive: boolean;
+  /** One value per year of `StatsView.years`. */
+  series: Record<string, number[]>;
+  totals: Record<string, number>;
+  /** (year index, running total) where it changed. */
+  history: Record<string, [number, number][]>;
+  ships_built: Record<string, number>;
+  /** Against each empire, by id. */
+  versus: Record<string, number[]>;
+}
+
+export interface StatsView {
+  years: number[];
+  player: number;
+  /** Every empire (the game is over for the player), else only the player's. */
+  all: boolean;
+  empires: EmpireStats[];
+}
+
 export type Command =
   | { type: "answer"; yes: boolean }
+  | { type: "tally"; counts: Record<string, number> }
   | { type: "rename_planet"; planet: number; name: string }
   | { type: "set_sliders"; planet: number; sliders: number[] }
   | { type: "set_build"; planet: number; design: number }

@@ -1,6 +1,6 @@
 // Typed wrapper around the WebAssembly build of the Rust core (crates/wasm).
 import init, { LbxImporter, WasmGame, defaultRules as wasmDefaultRules, parts, version } from "./wasm/aoo.js";
-import type { Command, DesignStats, NewGameOptions, Parts, Reply, ShipDesign, Talk, View } from "./types";
+import type { Command, DesignStats, NewGameOptions, Parts, Reply, ShipDesign, StatsView, Talk, View } from "./types";
 
 let ready: Promise<unknown> | null = null;
 
@@ -72,6 +72,11 @@ export class Game {
 
   endTurn(): void {
     this.g.endTurn();
+  }
+
+  /** The stats screen's data: the player's empire, every empire once the game is over. */
+  stats(): StatsView {
+    return JSON.parse(this.g.stats()) as StatsView;
   }
 
   /** Turns from (x, y) to planet `dest` at `speed`, slower inside nebulae (the core's own count). */

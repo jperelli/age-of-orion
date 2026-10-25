@@ -152,6 +152,10 @@ pub enum Command {
         planet: PlanetId,
         name: String,
     },
+    /// Adds the player's own counts to its stats (`ui_` names: clicks, time played...).
+    Tally {
+        counts: std::collections::BTreeMap<String, i64>,
+    },
     /// Begins the battle the turn is waiting for (1oom `ui_battle_init`).
     StartBattle {
         mode: BattleMode,
@@ -259,6 +263,13 @@ fn scrap_all(st: &mut State, empire: EmpireId, design: usize) {
 }
 
 pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), CommandError> {
+    // The player's own counts change nothing in the game: kept even once it is over.
+    if let Command::Tally { counts } = cmd {
+        if (empire as usize) < st.empires.len() {
+            crate::stats::tally(st, empire, counts);
+        }
+        return Ok(());
+    }
     let accepting = matches!(cmd, Command::AcceptCouncil { .. });
     if (st.winner.is_some() && !accepting)
         || !st.empires.get(empire as usize).is_some_and(|e| e.alive)
@@ -630,6 +641,7 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
         Command::StartBattle { .. }
         | Command::Battle { .. }
         | Command::Answer { .. }
+        | Command::Tally { .. }
         | Command::RenamePlanet { .. } => unreachable!(),
         Command::Vote { candidate } => {
             council::vote(st, empire, candidate).map_err(|code| CommandError { code })?

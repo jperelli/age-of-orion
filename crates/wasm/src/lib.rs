@@ -90,6 +90,11 @@ impl WasmGame {
         self.game.end_turn();
     }
 
+    /// The stats screen's data (JSON): the player's empire, every empire once the game is over.
+    pub fn stats(&self) -> String {
+        serde_json::to_string(&self.game.stats(self.player)).expect("stats serialize")
+    }
+
     /// Turns from (x, y) to planet `dest` at `speed` (1oom `game_calc_eta_ship`, or
     /// `game_calc_eta_trans` for transports): slower inside nebulae.
     pub fn eta(&self, x: i32, y: i32, dest: usize, speed: i32, transport: bool) -> u32 {

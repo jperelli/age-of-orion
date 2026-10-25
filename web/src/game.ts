@@ -13,11 +13,12 @@ import { explained, pictureSelect } from "./widgets";
 import { newscast, newsType } from "./news";
 import { bombAskScreen, bombShowScreen, caughtScreen, exploreScreen, landingScreen, newShipsScreen, sabotageDoneScreen, spyChances, stolenScreen } from "./screens";
 import { adjustGroup, slider, sliders } from "./sliders";
+import { statsScreen } from "./stats";
 import { chooseTechs, needsChoice, newTechScreen, techScreen } from "./research";
 import * as store from "./storage";
 import type { Theme } from "./theme";
 import { BUILD_STARGATE, FIELDS, PLANET_TYPES, RACES, SLIDERS, type Command, type SabotageKind, type EmpireView, type FleetView, type GameEvent, type PlanetView, type TransportView, type View } from "./types";
-import { append, clear, download, h, modal, pickFiles, toast } from "./ui";
+import { append, clear, download, h, modal, opened, pickFiles, toast } from "./ui";
 
 export const AUTOSAVE = "autosave";
 
@@ -31,6 +32,12 @@ export class GameScreen {
   /** Ships chosen in the fleet deployment panel, by design (MOO1's FLEET DEPLOYMENT). */
   private deploy: { key: string; ships: number[] } | null = null;
   private keyHandler = (e: KeyboardEvent) => this.onKey(e);
+  /** The player's own counts since they were last sent to the core (`ui_*` stats). */
+  private tally: Record<string, number> = {};
+  private dialogsSeen = opened.dialogs;
+  private countClick = () => this.count("ui_clicks");
+  private countKey = () => this.count("ui_keys");
+  private clock = 0;
 
   constructor(
     private game: Game,
@@ -49,6 +56,13 @@ export class GameScreen {
     this.map.eta = (from, dest, speed, transport) => this.game.eta(from.x, from.y, dest, speed, transport);
     this.map.setView(this.view);
     document.addEventListener("keydown", this.keyHandler);
+    document.addEventListener("pointerdown", this.countClick, true);
+    document.addEventListener("keydown", this.countKey, true);
+    canvas.addEventListener("wheel", () => this.count("ui_zooms"), { passive: true });
+    // Time played: the seconds the game is in front of the player.
+    this.clock = window.setInterval(() => {
+      if (!document.hidden && this.el.isConnected) this.count("ui_seconds");
+    }, 1000);
     const home = this.view.planets.find((p) => p.owner === this.view.player);
     if (home) this.map.selection = { kind: "planet", id: home.id };
     this.render();
@@ -64,7 +78,29 @@ export class GameScreen {
 
   destroy(): void {
     document.removeEventListener("keydown", this.keyHandler);
+    document.removeEventListener("pointerdown", this.countClick, true);
+    document.removeEventListener("keydown", this.countKey, true);
+    clearInterval(this.clock);
     this.game.free();
+  }
+
+  private count(key: string, n = 1): void {
+    this.tally[key] = (this.tally[key] ?? 0) + n;
+  }
+
+  /** Sends the player's counts to the core, which keeps them in the save (before each turn
+   * and each save). */
+  private flushTally(): void {
+    this.count("ui_dialogs", opened.dialogs - this.dialogsSeen);
+    this.dialogsSeen = opened.dialogs;
+    const counts = Object.fromEntries(Object.entries(this.tally).filter(([, n]) => n > 0));
+    this.tally = {};
+    if (Object.keys(counts).length) this.game.command({ type: "tally", counts });
+  }
+
+  private async openStats(): Promise<void> {
+    this.flushTally();
+    await statsScreen(this.ctx);
   }
 
   private t(key: string, params?: Record<string, string | number>): string {
@@ -99,6 +135,8 @@ export class GameScreen {
   }
 
   private command(cmd: Command): boolean {
+    this.count("ui_orders");
+    if (cmd.type === "start_battle") this.count(cmd.mode === "auto" ? "ui_battles_auto" : cmd.mode === "retreat" ? "ui_retreats" : "ui_battles_commanded");
     const err = this.game.command(cmd);
     if (err) {
       toast(this.t(`error.${err}`));
@@ -127,7 +165,7 @@ export class GameScreen {
     const stat = (icon: string, n: number, title: string) => h("span", { class: "stat", title }, h("img", { src: uiIcon(this.theme, icon), alt: "" }), String(n));
     clear(this.head).append(
       h("div", { class: "crest", style: `--banner:${this.theme.banner(me.banner)}` }),
-      h("b", { class: "year" }, String(v.year)),
+      h("button", { class: "year", title: this.t("stats.open"), onclick: () => void this.openStats() }, String(v.year)),
       h(
         "button",
         { class: "stats", title: this.t("game.stats_hint"), onclick: () => void this.treasuryDialog() },
@@ -761,6 +799,7 @@ export class GameScreen {
 
   private async processTurn(): Promise<void> {
     this.map.targeting = null;
+    this.flushTally();
     this.game.endTurn();
     this.refresh();
     // Events already shown as a screen this turn (by their index in the turn's events).
@@ -861,17 +900,22 @@ export class GameScreen {
   /** Shows the end of the game; true when the player has to leave. */
   private async checkEnd(): Promise<boolean> {
     const v = this.view;
+    // The ending, with the history of every empire side by side a button away.
+    const ending = async (title: string, text: string) => {
+      this.flushTally();
+      while ((await modal(title, h("p", {}, text), [this.t("btn.ok"), this.t("end.stats")], "required")) === 1) await statsScreen(this.ctx);
+    };
     if (v.winner === v.player) {
       if (this.shownVictory) return false;
       this.shownVictory = true;
-      await modal(this.t("end.victory_title"), h("p", {}, this.t(v.victory === "council" ? "end.victory_council" : "end.victory")), [this.t("btn.ok")]);
+      await ending(this.t("end.victory_title"), this.t(v.victory === "council" ? "end.victory_council" : "end.victory"));
     } else if (!v.alive) {
-      await modal(this.t("end.defeat_title"), h("p", {}, this.t("end.defeat")), [this.t("btn.ok")]);
+      await ending(this.t("end.defeat_title"), this.t("end.defeat"));
       this.onQuit();
       return true;
     } else if (v.winner !== null) {
       const key = v.victory === "council" ? "end.lost_council" : "end.lost_to";
-      await modal(this.t("end.defeat_title"), h("p", {}, this.t(key, { empire: this.empireName(v.winner) })), [this.t("btn.ok")]);
+      await ending(this.t("end.defeat_title"), this.t(key, { empire: this.empireName(v.winner) }));
       this.onQuit();
       return true;
     }
@@ -1033,7 +1077,11 @@ export class GameScreen {
       h("p", {}, this.t("menu.ingame_text")),
       [this.t("menu.save_file"), this.t("menu.load_file"), this.t("menu.help"), this.t("menu.quit"), this.t("btn.close")],
     );
-    if (r === 0) download(`age-of-orion-${this.view.year}.json`, this.game.save());
+    if (r === 0) {
+      this.count("ui_saves");
+      this.flushTally();
+      download(`age-of-orion-${this.view.year}.json`, this.game.save());
+    }
     if (r === 1) {
       const [f] = await pickFiles({ accept: ".json,application/json" });
       if (f) this.onLoad(await f.text());

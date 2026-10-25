@@ -41,7 +41,11 @@ export function setCloseLabel(label: string): void {
  * With "required" among the classes it has no × and Escape does nothing (a choice must be
  * made).
  */
+/** How many dialogs have opened (the player's stats). */
+export const opened = { dialogs: 0 };
+
 export function modal(title: string, body: Child | Child[], buttons: string[] = ["OK"], cls = "", onOpen?: (close: (i: number) => void) => void): Promise<number> {
+  opened.dialogs++;
   return new Promise((resolve) => {
     const close = (i: number) => {
       document.removeEventListener("keydown", onKey);

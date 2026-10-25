@@ -510,6 +510,8 @@ fn sabotage(
         ));
         return;
     }
+    crate::stats::add(st, spy, "sabotages", 1);
+    crate::stats::add(st, target, "sabotaged", 1);
     if !st.empires[target as usize].ai {
         if st.rng.below(4) == 0 {
             let p = &mut st.planets[pl];
@@ -653,6 +655,8 @@ pub fn do_sabotage(
         return None;
     }
     st.pending.spy.remove(idx);
+    crate::stats::add(st, spy, "sabotages", 1);
+    crate::stats::add(st, target, "sabotaged", 1);
     let mut snum = strength;
     match kind {
         SabotageKind::Factories => {

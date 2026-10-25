@@ -137,7 +137,8 @@ input[type="range"] { accent-color: var(--accent); }
   color: var(--on-wood);
   border-bottom: 3px solid var(--border);
 }
-.panel-head .year { color: var(--gold); font-size: 1.15em; }
+.panel-head .year { color: var(--gold); font-size: 1.15em; font-weight: bold; background: none; border: 1px solid transparent; box-shadow: none; padding: 0 0.25em; text-shadow: 0 1px 1px #000; cursor: pointer; }
+.panel-head .year:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(0, 0, 0, 0.3); }
 .panel-head .stats { display: flex; gap: 0.7em; margin: 0 0 0 auto; padding: 0.1em 0.3em; background: none; border: 1px solid transparent; box-shadow: none; color: inherit; text-shadow: 0 1px 1px #000; }
 .panel-head .stats:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); border-color: rgba(0, 0, 0, 0.3); }
 .panel-head .stat { display: inline-flex; align-items: center; gap: 0.2em; font-weight: bold; font-variant-numeric: tabular-nums; }
@@ -514,3 +515,26 @@ label.checkbox { display: block; margin-top: 0.8em; }
 .news-herald .news-icon.painted { width: 260px; image-rendering: auto; border: 2px solid var(--border); border-radius: 3px; }
 .news-herald-figure { height: 88px; vertical-align: middle; margin-right: 0.3em; }
 .news-ranking { columns: 2; margin: 0.3em 0 0; }
+
+/* The stats screen (web/src/stats.ts). */
+.stats-tabs { display: flex; gap: 0.4em; margin-bottom: 0.6em; }
+.stats-pane { min-height: min(30em, 58vh); }
+.stats-tabs button.active, .stats-toggle button.active { background: var(--accent, #8a3a24); color: #fff; }
+.stats-charts { display: grid; grid-template-columns: 15em 1fr; gap: 1em; height: min(30em, 58vh); }
+.stats-list { overflow-y: auto; min-height: 0; border-right: 1px solid var(--parchment-dark); padding-right: 0.5em; }
+.stats-group { font-weight: bold; margin: 0.6em 0 0.2em; opacity: 0.8; }
+.stats-pick { display: block; width: 100%; text-align: left; padding: 0.15em 0.4em; margin: 1px 0; background: none; border: 1px solid transparent; box-shadow: none; color: inherit; font-size: 0.92em; }
+.stats-pick:hover { background: rgba(127, 127, 127, 0.12); }
+.stats-pick.active { background: rgba(127, 127, 127, 0.22); border-color: var(--parchment-dark); font-weight: bold; }
+.stats-plot { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.stats-plot-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+.stats-plot-head h3 { margin: 0.2em 0; }
+.stats-toggle { display: flex; gap: 0.3em; }
+.stats-chart { display: block; width: 100%; flex: 1 1 0; min-height: 8em; }
+.stats-legend { display: flex; flex-wrap: wrap; gap: 0.3em 1em; margin-top: 0.3em; font-size: 0.9em; }
+.stats-legend i { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; margin-right: 0.3em; vertical-align: -0.1em; }
+.stats-readout { margin-top: 0.3em; min-height: 1.3em; }
+.stats-table td:not(:first-child), .stats-table th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.stats-ships { display: grid; grid-template-columns: repeat(auto-fill, minmax(14em, 1fr)); gap: 1em; }
+.stats-ships h3 { margin: 0 0 0.3em; }
+.stats-ships td:last-child { text-align: right; }

@@ -925,6 +925,7 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         progress: None,
         question: None,
         answer: None,
+        stats: Default::default(),
         ai_id: opts.ai_id,
         galaxy_seed: opts.seed,
         galaxy_w: 0,
@@ -1078,6 +1079,7 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
         pick_leader_names(&mut st, opts);
     }
     st.init_star_dist();
+    crate::stats::sample(&mut st);
     Ok(st)
 }
 

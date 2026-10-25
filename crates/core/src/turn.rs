@@ -843,6 +843,7 @@ pub fn process(st: &mut State) {
         .map(|p| p.old_contact)
         .unwrap_or_default();
     after_battles(st, old_contact);
+    crate::stats::sample(st);
 }
 
 fn before_battles(st: &mut State) -> Vec<Vec<bool>> {

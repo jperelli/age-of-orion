@@ -13,6 +13,7 @@
 
 - The core is pure: no I/O, deterministic for a given state (all randomness through `State.rng`).
 - A battle with a human player interrupts the turn (`State.battle`, `State.progress`); tests that end turns with a human use `Game::end_turn_auto`, which lets the computer fight those battles.
+- The stats screen's numbers (`crates/core/src/stats.rs`) are counted from events as they are pushed (`State::push_event`) and sampled after each turn; a new event kind that matters to the player gets its count there, and something done without an event uses `stats::add`. Counting never changes the game.
 - Everything crossing to the UI is JSON (`View`, `Command`, `Event` with `type` tags in snake_case).
 - Every user-visible string is a text key (`themes/classic/text/en.json`, the base of every theme); other themes override in `themes/<id>/text/en.json`. Add every new key to the Spanish files too (`themes/classic/text/es.json`, `themes/age/text/es.json`); missing keys fall back to English.
 - Every picture and sound is a file of a theme folder named by what the game asks for (`themes/<id>/images/ship/3.svg` is `ship/3`); the code draws no substitute art, a missing picture shows a placeholder. Classic's folder has every file the game uses: when the UI asks for a new picture or sound, add Classic's (`python3 tools/art/gen_svg.py`, `tools/sound/gen_music.py`, `tools/sound/gen_sfx.py`). `python3 tools/themes_check.py` lists what other themes lack.

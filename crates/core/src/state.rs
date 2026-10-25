@@ -547,6 +547,9 @@ pub struct State {
     /// The question the turn waits for, and its answer once given.
     #[serde(default)]
     pub question: Option<Question>,
+    /// What each empire had and did, year by year (the stats screen).
+    #[serde(default)]
+    pub stats: crate::stats::Stats,
     #[serde(default)]
     pub answer: Option<bool>,
     /// 1oom `ai_id`: 0 classic (as MOO1), 1 classic+ (1oom's improved AI).
@@ -746,6 +749,7 @@ impl State {
     }
 
     pub fn push_event(&mut self, to: Vec<EmpireId>, kind: EventKind) {
+        crate::stats::count(self, &to, &kind);
         self.events.push(Event { to, kind });
     }
 

@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A statistics screen, opened by clicking the year in the panel: charts year by year of what
+  your empire has (population, colonies, factories, production, reserve, ships, missile
+  bases, techs, star systems explored, trade) and of what it did, as totals or per year:
+  colonies founded, worlds conquered and lost, colonies wiped out, battles fought, won and
+  lost, ships built, destroyed and lost, bombings, invasions, rebellions, techs researched,
+  stolen, traded and captured, spies caught and lost, sabotage, councils and their votes, and
+  more. Also your own: clicks, keys pressed, map zooms, windows opened, orders given, battles
+  commanded or left to the captains, retreats, games saved and time played. Tabs show every
+  total, the ships built by design and your record against each empire.
+- When the game ends, its Statistics button shows the same for every empire side by side
+  (your own clicks and time only for you). The statistics are kept in the save; games saved
+  before start them from the year they are loaded.
+
 ## [0.14.0] - 2026-10-25
 
 ### Changed

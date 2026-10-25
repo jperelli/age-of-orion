@@ -33,6 +33,7 @@ mod rng;
 mod rules;
 pub mod spy;
 mod state;
+pub mod stats;
 pub mod tech;
 pub mod techinfo;
 mod turn;
@@ -197,6 +198,11 @@ impl Game {
     /// Whether the turn waits for a human battle or question.
     pub fn in_battle(&self) -> bool {
         self.st.progress.is_some()
+    }
+
+    /// The stats screen's data for `empire` (all empires once its game is over).
+    pub fn stats(&self, empire: EmpireId) -> stats::StatsView {
+        stats::view(&self.st, empire)
     }
 
     pub fn view(&self, empire: EmpireId) -> View {
@@ -836,6 +842,80 @@ mod tests {
         names.sort();
         names.dedup();
         assert_eq!(names.len(), g.st.empires.len());
+    }
+
+    #[test]
+    fn stats_sample_every_year_and_count_deeds() {
+        let mut g = Game::new(&NewGameOptions {
+            seed: 9,
+            all_ai: true,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(g.st.stats.years, vec![g.st.year]);
+        let start = g.st.turn;
+        for _ in 0..150 {
+            g.end_turn_auto();
+        }
+        let s = &g.st.stats;
+        assert!(g.st.turn - start > 50);
+        assert_eq!(s.years.len() as u32, 1 + g.st.turn - start);
+        assert!(s.years.windows(2).all(|w| w[1] == w[0] + 1));
+        let total = |k: &str| {
+            s.empires
+                .iter()
+                .map(|e| e.totals.get(k).copied().unwrap_or(0))
+                .sum::<i64>()
+        };
+        for k in [
+            "colonies_founded",
+            "ships_built",
+            "techs_researched",
+            "battles",
+        ] {
+            assert!(total(k) > 0, "{k}");
+        }
+        // Every battle has a winner and a loser among empires, or a monster.
+        assert!(total("battles_won") + total("battles_lost") == total("battles"));
+        for e in &s.empires {
+            for v in e.series.values() {
+                assert_eq!(v.len(), s.years.len());
+            }
+            assert_eq!(
+                e.ships_built.values().sum::<i64>(),
+                e.totals.get("ships_built").copied().unwrap_or(0)
+            );
+            for (k, h) in &e.history {
+                assert!(h.windows(2).all(|w| w[0].0 < w[1].0), "{k}");
+                assert_eq!(h.last().map(|x| x.1), e.totals.get(k).copied(), "{k}");
+            }
+        }
+    }
+
+    #[test]
+    fn players_tally_their_own_counts_and_see_all_stats_at_the_end() {
+        let mut g = Game::new(&opts(10)).unwrap();
+        let counts = [("ui_clicks".to_string(), 12), ("score".to_string(), 99)]
+            .into_iter()
+            .collect();
+        g.command(0, &Command::Tally { counts }).unwrap();
+        let t = &g.st.stats.empires[0].totals;
+        assert_eq!(t.get("ui_clicks"), Some(&12));
+        assert!(!t.contains_key("score"));
+        let v = g.stats(0);
+        assert!(!v.all);
+        assert_eq!(v.empires.len(), 1);
+        g.st.stats.empires[1].totals.insert("ui_clicks".into(), 3);
+        g.st.winner = Some(1);
+        // Still counted once the game is over.
+        let counts = [("ui_clicks".to_string(), 1)].into_iter().collect();
+        g.command(0, &Command::Tally { counts }).unwrap();
+        assert_eq!(g.st.stats.empires[0].totals.get("ui_clicks"), Some(&13));
+        let v = g.stats(0);
+        assert!(v.all);
+        assert_eq!(v.empires.len(), g.st.empires.len());
+        assert_eq!(v.empires[0].stats.totals.get("ui_clicks"), Some(&13));
+        assert!(!v.empires[1].stats.totals.contains_key("ui_clicks"));
     }
 
     #[test]
