@@ -111,6 +111,9 @@ export class MapView {
   private panX = 0;
   private panY = 0;
   private hover: number | null = null;
+  /** What was drawn where at the last frame (map units), for clicks: troops above places
+   * above names, and the last drawn above the rest. */
+  private hits: { x0: number; y0: number; x1: number; y1: number; rank: number; sel: Exclude<Selection, null> }[] = [];
   private terrain: HTMLCanvasElement | null = null;
   private terrainKey = "";
   private fog: HTMLCanvasElement | null = null;
@@ -186,22 +189,29 @@ export class MapView {
     return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr];
   }
 
+  /** Registers a clickable picture drawn at (x, y, w, h), at least 14 screen pixels wide. */
+  private hit(sel: Exclude<Selection, null>, rank: number, x: number, y: number, w: number, hgt: number): void {
+    const pad = this.px(3);
+    const min = this.px(14);
+    const cx = x + w / 2, cy = y + hgt / 2;
+    const hw = Math.max(w, min) / 2 + pad, hh = Math.max(hgt, min) / 2 + pad;
+    this.hits.push({ x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh, rank, sel });
+  }
+
+  /** What is under the cursor: any part of a troop's, a city's or a star's picture (or its
+   * name); else the nearest place close by; else a nebula. Choosing a destination, only places. */
   private pick(sx: number, sy: number): Selection {
     const v = this.view;
     if (!v) return null;
     const [mx, my] = this.toMap(sx, sy);
-    const near = (x: number, y: number, px: number) => Math.hypot(x - mx, y - my) * this.zoom < px;
-    if (!this.targeting) {
-      const f = v.fleets.find((f) => f.id !== null && f.owner === v.player && near(f.x, f.y, 10));
-      if (f && f.id !== null) return { kind: "fleet", id: f.id };
-      const tr = v.transports.find((t) => t.owner === v.player && near(t.x, t.y, 10));
-      if (tr) return { kind: "transport", id: tr.id };
-      for (const p of v.planets) {
-        const here = v.fleets.filter((f) => f.at === p.id);
-        const i = here.findIndex((_, i) => near(...orbitSpot(p, i), 9));
-        if (i >= 0) return { kind: "orbit", id: p.id, owner: here[i].owner };
-      }
+    let found: (typeof this.hits)[number] | null = null;
+    for (const h of this.hits) {
+      if (mx < h.x0 || mx > h.x1 || my < h.y0 || my > h.y1) continue;
+      // Choosing a destination: a place, or the troops standing at one.
+      if (this.targeting && h.sel.kind !== "planet" && h.sel.kind !== "orbit") continue;
+      if (!found || h.rank >= found.rank) found = h;
     }
+    if (found) return this.targeting && found.sel.kind === "orbit" ? { kind: "planet", id: found.sel.id } : found.sel;
     let best: number | null = null;
     let bd = Infinity;
     for (const p of v.planets) {
@@ -219,6 +229,7 @@ export class MapView {
   private bind(): void {
     let down: { x: number; y: number; px: number; py: number; moved: boolean } | null = null;
     this.canvas.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
       const [x, y] = this.screen(e);
       down = { x, y, px: this.panX, py: this.panY, moved: false };
       this.canvas.setPointerCapture(e.pointerId);
@@ -240,7 +251,17 @@ export class MapView {
         this.dirty = true;
       }
     });
+    // Right click: nothing selected any more (and no destination being chosen).
+    this.canvas.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      down = null;
+      this.targeting = null;
+      this.selection = null;
+      this.onSelect(null);
+      this.dirty = true;
+    });
     this.canvas.addEventListener("pointerup", (e) => {
+      if (e.button !== 0) return;
       const [x, y] = this.screen(e);
       if (down && !down.moved) {
         const s = this.pick(x, y);
@@ -402,6 +423,7 @@ export class MapView {
     else if (this.terrain) ctx.drawImage(this.terrain, 0, 0, v.width, v.height);
 
     const world = this.theme.def.map === "world";
+    this.hits = [];
     this.drawNebulae(v);
     if (world) this.drawBiomes(v);
     this.drawFog(v);
@@ -410,7 +432,7 @@ export class MapView {
     for (const t of v.transports) this.drawRoute(v, t.x, t.y, t.dest, this.theme.banner(v.empires[t.owner].banner));
     for (const p of v.planets) (world ? this.drawSite : this.drawStar).call(this, v, p.id);
     for (const p of v.planets) this.drawOrbit(v, p.id);
-    for (const f of v.fleets) if (f.at === null) this.drawFleet(v, f, f.x, f.y);
+    for (const f of v.fleets) if (f.at === null) this.drawFleet(v, f, f.x, f.y, f.id !== null && f.owner === v.player ? { kind: "fleet", id: f.id } : null);
     for (const t of v.transports) this.drawCaravan(v, t);
     for (const m of v.monsters ?? []) this.drawMonster(m);
     this.drawSelection(v);
@@ -528,6 +550,7 @@ export class MapView {
     const s = this.px(1);
     const u = Math.max(1.6, Math.min(4, 12 / this.zoom + 1.2));
     if (!p.explored) {
+      this.hit({ kind: "planet", id }, 1, p.x - u * 1.1, p.y - u * 1.1, u * 2.2, u * 2.2);
       ctx.fillStyle = "rgba(60,55,45,0.85)";
       ctx.beginPath();
       ctx.arc(p.x, p.y, u * 1.1, 0, Math.PI * 2);
@@ -543,7 +566,11 @@ export class MapView {
       const s = u * (3.6 + cityLevel(p.pop ?? 0) * 0.5);
       drawPic(ctx, this.theme, CITY_MARKS[cityLevel(p.pop ?? 0)], p.x - s / 2, p.y - s * 0.6, s, s);
       this.flag(p.x, p.y - s * 0.45, u, this.theme.banner(v.empires[p.owner].banner));
-    } else drawPic(ctx, this.theme, `site/${p.kind}`, p.x - u * 2, p.y - u * 2, u * 4, u * 4);
+      this.hit({ kind: "planet", id }, 1, p.x - s / 2, p.y - s * 0.45 - u * 1.3, s, s * 0.85 + u * 1.3);
+    } else {
+      drawPic(ctx, this.theme, `site/${p.kind}`, p.x - u * 2, p.y - u * 2, u * 4, u * 4);
+      this.hit({ kind: "planet", id }, 1, p.x - u * 2, p.y - u * 2, u * 4, u * 4);
+    }
     if (p.guardian) this.drawGuardian(p.x, p.y - u * 2.2, u);
     if (p.stargate) this.drawGate(p.x - u * 2.4, p.y + u * 0.4, u);
   }
@@ -607,6 +634,8 @@ export class MapView {
       drawPic(ctx, this.theme, `star/${star}`, p.x - w / 2, p.y - hgt / 2, w, hgt);
       ctx.restore();
     }
+    const reach = Math.max(w / 2, hgt / 2, p.owner !== null ? r * 4.2 : 0);
+    this.hit({ kind: "planet", id }, 1, p.x - reach, p.y - reach, reach * 2, reach * 2);
     if (p.owner !== null) {
       ctx.strokeStyle = this.theme.banner(v.empires[p.owner].banner);
       ctx.lineWidth = this.px(1.5);
@@ -629,17 +658,21 @@ export class MapView {
   private drawOrbit(v: View, id: number): void {
     const p = v.planets[id];
     const here = v.fleets.filter((f) => f.at === id);
-    here.forEach((f, i) => this.drawFleet(v, f, ...orbitSpot(p, i)));
+    here.forEach((f, i) => this.drawFleet(v, f, ...orbitSpot(p, i), { kind: "orbit", id, owner: f.owner }));
   }
 
-  private drawFleet(v: View, f: FleetView, x: number, y: number): void {
+  /** A fleet's marker; `sel` is what clicking it selects (none: enemies in flight). */
+  private drawFleet(v: View, f: FleetView, x: number, y: number, sel: Selection): void {
     const ctx = this.ctx;
     const u = Math.max(1.2, Math.min(3, 9 / this.zoom + 0.9));
     const color = this.theme.banner(v.empires[f.owner].banner);
+    const label = this.zoom > 3 ? this.px(11) * (0.7 * String(f.ships.reduce((a, b) => a + b, 0)).length + 0.4) : 0;
     if (this.theme.def.map === "world") {
       drawPic(ctx, this.theme, "army", x - u * 1.7, y - u * 1.9, u * 3.4, u * 3.4);
       this.flag(x + u * 0.9, y - u * 0.6, u * 0.8, color);
+      if (sel) this.hit(sel, 2, x - u * 1.7, y - u * 1.9, Math.max(u * 3.4, u * 1.7 + label), u * 3.4);
     } else {
+      if (sel) this.hit(sel, 2, x - u, y - u * 0.9, Math.max(u * 2.3, u * 2.7 + label), u * 1.8);
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.moveTo(x + u * 1.3, y);
@@ -667,11 +700,12 @@ export class MapView {
     const u = Math.max(1.2, Math.min(3, 9 / this.zoom + 0.9));
     drawPic(ctx, this.theme, "caravan", t.x - u * 1.6, t.y - u * 1.6, u * 3.2, u * 3.2);
     this.flag(t.x + u * 0.8, t.y - u * 0.5, u * 0.7, this.theme.banner(v.empires[t.owner].banner));
+    if (t.owner === v.player) this.hit({ kind: "transport", id: t.id }, 2, t.x - u * 1.6, t.y - u * 1.6, u * 3.2, u * 3.2);
   }
 
   private drawSelection(v: View): void {
     const s = this.selection;
-    if (!s) return;
+    if (!s || s.kind === "nebula") return;
     let x: number, y: number;
     if (s.kind === "planet") ({ x, y } = v.planets[s.id]);
     else if (s.kind === "orbit") {
@@ -689,7 +723,12 @@ export class MapView {
     ctx.strokeStyle = "#ffe9a8";
     ctx.lineWidth = this.px(2);
     ctx.beginPath();
-    ctx.arc(x, y, this.px((s.kind === "orbit" ? 9 : 16) + Math.sin(t) * 2), 0, Math.PI * 2);
+    // Around the selected picture, as big as it is drawn.
+    const same = (o: Exclude<Selection, null>) => o.kind === s.kind && o.id === s.id && (o.kind !== "orbit" || s.kind !== "orbit" || o.owner === s.owner);
+    const hit = this.hits.find((h) => h.rank > 0 && same(h.sel));
+    const pulse = this.px(Math.sin(t) * 2);
+    if (hit) ctx.ellipse((hit.x0 + hit.x1) / 2, (hit.y0 + hit.y1) / 2, (hit.x1 - hit.x0) / 2 + pulse, (hit.y1 - hit.y0) / 2 + pulse, 0, 0, Math.PI * 2);
+    else ctx.arc(x, y, this.px(s.kind === "orbit" ? 9 : 16) + pulse, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -708,6 +747,8 @@ export class MapView {
       ctx.fillStyle = p.owner !== null ? this.theme.banner(v.empires[p.owner].banner) : p.explored ? "#f3ead2" : "#a49c88";
       ctx.strokeText(p.name, p.x, y);
       ctx.fillText(p.name, p.x, y);
+      const w = ctx.measureText(p.name).width;
+      this.hit({ kind: "planet", id: p.id }, 0, p.x - w / 2, y, w, size);
     }
   }
 

@@ -30,6 +30,14 @@ All notable changes to this project are documented here. The format follows
   again to get them.
 - Classic has its own pictures and six new tunes for all of these.
 
+### Changed
+
+- Map clicks: clicking any part of a city's, star's or troop's picture, or of a place's name,
+  selects it, or picks it as the destination when choosing one (also clicking troops standing
+  at a place); before, only a small spot at its centre worked, smaller still when zoomed in.
+  A right click on the map deselects, and drops a destination being chosen. The selection
+  ring surrounds the picture selected.
+
 ## [0.12.0] - 2026-10-24
 
 ### Added
