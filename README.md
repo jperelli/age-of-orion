@@ -60,7 +60,8 @@ in MOO1 and what differs, with tables of the Age theme's empires, words and tech
 - Two themes: **Age** (medieval world map, the default) and **Classic** (starfield, with
   your original MOO1 art when imported). Each theme is a folder of `themes/` with all its
   pictures, music, sounds and texts; Classic's has every one the game uses (drawn as SVG,
-  with its own music), so a new theme can start as a copy of it. Every text and picture can
+  with its own music), so a new theme can start as a copy of it. Age has its own medieval
+  music and sounds of steel, bows and stone. Every text and picture can
   also be replaced by a mod.
 - The MOO1 soundtrack from your own MUSIC.LBX, converted to MIDI and played by a built-in
   synthesizer; MOO1's sound effects (SOUNDFX.LBX) and fonts (FONTS.LBX, converted to

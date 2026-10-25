@@ -319,10 +319,13 @@ class Synth {
     const f = this.ctx.createBiquadFilter();
     const hat = [42, 44, 46].includes(note);
     const cymbal = [49, 51, 52, 55, 57, 59].includes(note);
-    f.type = hat || cymbal ? "highpass" : "bandpass";
-    f.frequency.value = hat ? 7000 : cymbal ? 5000 : 1800;
-    const len = note === 46 ? 0.25 : hat ? 0.06 : cymbal ? 0.9 : 0.18;
-    g.gain.setValueAtTime((hat ? 0.12 : 0.3) * level, t);
+    const tambourine = note === 54;
+    const block = note === 76 || note === 77;
+    f.type = hat || cymbal || tambourine ? "highpass" : "bandpass";
+    f.frequency.value = hat ? 7000 : cymbal ? 5000 : tambourine ? 6000 : block ? (note === 76 ? 1300 : 1000) : 1800;
+    if (block) f.Q.value = 8;
+    const len = note === 46 ? 0.25 : hat ? 0.06 : cymbal ? 0.9 : tambourine ? 0.2 : block ? 0.05 : 0.18;
+    g.gain.setValueAtTime((hat || tambourine ? 0.12 : block ? 0.6 : 0.3) * level, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + len);
     src.connect(f);
     f.connect(g);

@@ -17,9 +17,13 @@ and the pictures only a world map uses (sites, colonies, views, battlefields, th
 It also writes the few pictures of the Age theme the game used to draw itself (interface
 icons, camps, the Guardian's standard, the free companies' banners, mists).
 
-The music is composed by `tools/sound/gen_music.py`: MIDI files for the game's synthesizer, a
-tune per screen and one per race for audiences. `tools/sound/gen_sfx.py` renders the sound
-effects (tones and filtered noise) to WAV files for both themes.
+The music of both themes is composed by `tools/sound/gen_music.py`: MIDI files for the game's
+synthesizer, a tune per screen and one per race for audiences. Classic's is orchestral and
+synthetic; Age's is medieval (modes, drones, organum, lute, recorder, shawm, sackbut, fiddle,
+bells, tabor and war drums, and each people's audience in its own manner).
+`tools/sound/gen_sfx.py` renders the sound effects to WAV files: Classic's tones and filtered
+noise, and Age's steel, bows and stone (struck-metal synthesis: swords clashing, blades on
+armour, arrows loosed and striking shields, trebuchet stones, a bell).
 
 ```sh
 python3 tools/art/gen_svg.py

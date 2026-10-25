@@ -30,8 +30,16 @@ All notable changes to this project are documented here. The format follows
   again to get them.
 - Classic has its own pictures and six new tunes for all of these.
 
+- Age has its own music: a medieval tune for every screen (lute, recorder, shawm, sackbut,
+  fiddle, choir in organum, bells, tabor and war drums) and one for each people's audience.
+  The game's synthesizer gains a tambourine and a wood block.
+
 ### Changed
 
+- Age's sound effects are steel, bows and stone instead of Classic's tones: swords clashing
+  and ringing, blades biting into armour, a bow loosed and its arrow striking a shield,
+  volleys, a war hammer, a trebuchet stone hitting a wall, a company falling with its armour
+  clattering, a bell for special weapons and a dagger tapping a buckle for clicks.
 - Map clicks: clicking any part of a city's, star's or troop's picture, or of a place's name,
   selects it, or picks it as the destination when choosing one (also clicking troops standing
   at a place); before, only a small spot at its centre worked, smaller still when zoomed in.
