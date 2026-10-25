@@ -1197,7 +1197,6 @@
  "research.pick": "Research this",
  "research.new_title": "New research: {field}",
  "research.new_text": "Choose what your scientists research next in {field}.",
- "research.later": "Later",
  "research.in_progress": "researching, {pct}%",
  "research.breakthrough": "breakthrough possible",
  "research.nothing": "Nothing left to research.",

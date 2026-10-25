@@ -279,6 +279,7 @@ button.explain:hover:not(:disabled) { background: none; color: var(--accent); }
 .dialog-close:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); border-color: rgba(0, 0, 0, 0.3); }
 .dialog-body { padding: 0.8em 1em; overflow-y: auto; }
 .dialog-buttons { display: flex; gap: 0.5em; justify-content: flex-end; padding: 0.6em 1em; border-top: 1px solid var(--parchment-dark); flex-wrap: wrap; }
+.dialog-buttons:empty { display: none; }
 .events { margin: 0; padding-left: 1.2em; }
 .events li { margin: 0.3em 0; cursor: pointer; }
 .events li:hover { text-decoration: underline; }

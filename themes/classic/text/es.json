@@ -1186,7 +1186,6 @@
  "research.pick": "Investigar esto",
  "research.new_title": "Nueva investigación: {field}",
  "research.new_text": "Elige qué investigan tus científicos ahora en {field}.",
- "research.later": "Más tarde",
  "research.in_progress": "en investigación, {pct}%",
  "research.breakthrough": "descubrimiento posible",
  "research.nothing": "No queda nada por investigar.",

@@ -202,4 +202,5 @@ export async function groundScreen(ctx: Ctx, e: GroundEvent): Promise<void> {
     document.addEventListener("keydown", onKey);
     ok.onclick = done;
   });
+  audio.stopMusic();
 }

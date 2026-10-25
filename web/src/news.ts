@@ -104,4 +104,5 @@ export async function newscast(ctx: Ctx, items: NewsItem[]): Promise<void> {
     });
   }
   overlay.remove();
+  audio.stopMusic();
 }

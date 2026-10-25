@@ -8,9 +8,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Choosing what a field studies next is required, as in MOO1: the dialog has no "Later" and
+  closes only once a subject is chosen.
+
 - Zooming the map scales cities, sites, stars, troops, fleets and transports with it, so they
   keep their size relative to the land; before, they grew less than the map when zooming in
   and crowded it when zooming out. Names and lines keep their size on screen.
+
+### Fixed
+
+- The newscast's tune (the Herald's in Age) and the siege's victory or defeat tune kept
+  playing after their screens closed, under the next dialogs. A tune still loading when its
+  screen closes no longer starts afterwards.
 
 ## [0.13.0] - 2026-10-25
 

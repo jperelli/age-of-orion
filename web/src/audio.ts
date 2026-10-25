@@ -359,7 +359,7 @@ class AudioOut {
     this.prefs = p;
     if (this.musicGain) this.musicGain.gain.value = p.music;
     if (this.sfxGain) this.sfxGain.gain.value = p.sfx;
-    if (p.music === 0) this.stopMusic();
+    if (p.music === 0) this.halt();
     else if (this.wanted !== null && this.tuneId !== this.wanted) void this.play(this.wanted);
   }
 
@@ -369,9 +369,8 @@ class AudioOut {
     this.lbx = theme.def.use_lbx;
     this.sounds.clear();
     this.preload();
-    const wanted = this.wanted;
-    this.stopMusic();
-    if (wanted !== null) void this.play(wanted);
+    this.halt();
+    if (this.wanted !== null) void this.play(this.wanted);
   }
 
   /** Creates the audio context on the first user gesture. */
@@ -431,9 +430,8 @@ class AudioOut {
     if (!this.ctx || !this.synth || this.prefs.music === 0 || this.tuneId === name) return;
     const file = await this.tuneFile(name);
     if (this.wanted !== name) return;
-    if (!file) return this.stopMusic();
-    this.stopMusic();
-    this.wanted = name;
+    if (!file) return this.halt();
+    this.halt();
     this.tuneId = name;
     this.loops = file.loops;
     if (!file.midi) {
@@ -459,7 +457,14 @@ class AudioOut {
     this.pump();
   }
 
+  /** Stops the music, also a tune still loading (it will not start once loaded). */
   stopMusic(): void {
+    this.wanted = null;
+    this.halt();
+  }
+
+  /** Stops what plays, keeping the tune the screen wants (muted, or changing theme). */
+  private halt(): void {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.tune = null;

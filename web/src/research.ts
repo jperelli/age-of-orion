@@ -51,7 +51,8 @@ export function needsChoice(ctx: Ctx): boolean {
   return ctx.view().tech.some((f) => f.project === 0 && f.choices.length > 0);
 }
 
-/** MOO1's new-tech dialog: the next project of field `i`, chosen among what can be researched. */
+/** MOO1's new-tech dialog: the next project of field `i`, chosen among what can be researched.
+ * A field always studies something, so it closes only once a project is chosen. */
 async function chooseTech(ctx: Ctx, i: number): Promise<void> {
   const t = (k: string, p?: Record<string, string | number>) => ctx.theme.t(k, p);
   const f = ctx.view().tech[i];
@@ -87,8 +88,8 @@ async function chooseTech(ctx: Ctx, i: number): Promise<void> {
   await modal(
     t("research.new_title", { field: t(`field.${f.field}`) }),
     [lab, h("p", {}, t("research.new_text", { field: t(`field.${f.field}`) })), list],
-    [t("research.later")],
-    "wide",
+    [],
+    "wide required",
     (c) => (close = c),
   );
 }
