@@ -119,6 +119,9 @@ export class MapView {
   private fog: HTMLCanvasElement | null = null;
   private dirty = true;
   private fitted = false;
+  /** The zoom showing the whole map, when it was first shown: pictures keep the size they
+   * have there, in map units, so zooming scales them with the map. */
+  private ref = 1;
   private sized = false;
   private readonly S = 4; // terrain pixels per map unit
 
@@ -174,6 +177,7 @@ export class MapView {
     const v = this.view;
     if (!v || !this.sized) return;
     this.zoom = Math.min(this.canvas.width / v.width, this.canvas.height / v.height);
+    this.ref = this.zoom;
     this.panX = (this.canvas.width - v.width * this.zoom) / 2;
     this.panY = (this.canvas.height - v.height * this.zoom) / 2;
     this.fitted = true;
@@ -441,8 +445,24 @@ export class MapView {
     if (this.targeting && this.hover !== null) this.drawTargetLine(v, this.hover);
   }
 
+  /** `n` screen pixels in map units, now (lines and text keep their size on screen). */
   private px(n: number): number {
     return n / this.zoom;
+  }
+
+  /** `n` screen pixels of the whole-map view in map units (pictures grow with the map). */
+  private mpx(n: number): number {
+    return n / this.ref;
+  }
+
+  /** The unit of places' and monsters' pictures, in map units. */
+  private get siteU(): number {
+    return Math.max(1.6, Math.min(4, 12 / this.ref + 1.2));
+  }
+
+  /** The unit of troops' and transports' pictures, in map units. */
+  private get troopU(): number {
+    return Math.max(1.2, Math.min(3, 9 / this.ref + 0.9));
   }
 
   /** Nebulae (`nebula/<kind>`, drawn at half their pixel size, like MOO1's over its 1oom rectangles). */
@@ -547,8 +567,8 @@ export class MapView {
   private drawSite(v: View, id: number): void {
     const p = v.planets[id];
     const ctx = this.ctx;
-    const s = this.px(1);
-    const u = Math.max(1.6, Math.min(4, 12 / this.zoom + 1.2));
+    const s = this.mpx(1);
+    const u = this.siteU;
     if (!p.explored) {
       this.hit({ kind: "planet", id }, 1, p.x - u * 1.1, p.y - u * 1.1, u * 2.2, u * 2.2);
       ctx.fillStyle = "rgba(60,55,45,0.85)";
@@ -599,7 +619,7 @@ export class MapView {
 
   /** Space monsters and the Age theme's free companies (1oom crystal and amoeba). */
   private drawMonster(m: MonsterView): void {
-    const u = Math.max(1.6, Math.min(4, 12 / this.zoom + 1.2));
+    const u = this.siteU;
     drawPic(this.ctx, this.theme, `monster/${m.kind}`, m.x - u * 2, m.y - u * 2, u * 4, u * 4);
   }
 
@@ -611,16 +631,16 @@ export class MapView {
   private drawStar(v: View, id: number): void {
     const p = v.planets[id];
     const ctx = this.ctx;
-    // Sizes in screen pixels, growing a little with the zoom.
-    const k = Math.max(1, Math.min(3, this.zoom * 0.45));
-    const r = this.px(1.3 * k);
+    // Sizes as on the whole map, growing with the map as it is zoomed.
+    const k = Math.max(1, Math.min(3, this.ref * 0.45));
+    const r = this.mpx(1.3 * k);
     const star = STAR_INDEX[p.star] + (p.look ? 6 : 0);
     const anim = this.theme.anim(`anim/star/${star}`);
     const sprite = this.theme.img(`star/${star}`);
     const sw = anim?.w ?? sprite?.width ?? (p.look ? 13 : 7);
     const sh = anim?.h ?? sprite?.height ?? (p.look ? 11 : 7);
-    const w = this.px(sw * k);
-    const hgt = this.px(sh * k);
+    const w = this.mpx(sw * k);
+    const hgt = this.mpx(sh * k);
     if (anim?.img) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
@@ -664,7 +684,7 @@ export class MapView {
   /** A fleet's marker; `sel` is what clicking it selects (none: enemies in flight). */
   private drawFleet(v: View, f: FleetView, x: number, y: number, sel: Selection): void {
     const ctx = this.ctx;
-    const u = Math.max(1.2, Math.min(3, 9 / this.zoom + 0.9));
+    const u = this.troopU;
     const color = this.theme.banner(v.empires[f.owner].banner);
     const label = this.zoom > 3 ? this.px(11) * (0.7 * String(f.ships.reduce((a, b) => a + b, 0)).length + 0.4) : 0;
     if (this.theme.def.map === "world") {
@@ -697,7 +717,7 @@ export class MapView {
 
   private drawCaravan(v: View, t: TransportView): void {
     const ctx = this.ctx;
-    const u = Math.max(1.2, Math.min(3, 9 / this.zoom + 0.9));
+    const u = this.troopU;
     drawPic(ctx, this.theme, "caravan", t.x - u * 1.6, t.y - u * 1.6, u * 3.2, u * 3.2);
     this.flag(t.x + u * 0.8, t.y - u * 0.5, u * 0.7, this.theme.banner(v.empires[t.owner].banner));
     if (t.owner === v.player) this.hit({ kind: "transport", id: t.id }, 2, t.x - u * 1.6, t.y - u * 1.6, u * 3.2, u * 3.2);
@@ -742,7 +762,7 @@ export class MapView {
     ctx.lineWidth = this.px(3);
     for (const p of v.planets) {
       if (!p.explored) continue;
-      const y = p.y + this.px(14) + 2;
+      const y = p.y + this.mpx(14) + 2;
       ctx.strokeStyle = world ? "rgba(30,22,12,0.85)" : "#000";
       ctx.fillStyle = p.owner !== null ? this.theme.banner(v.empires[p.owner].banner) : p.explored ? "#f3ead2" : "#a49c88";
       ctx.strokeText(p.name, p.x, y);

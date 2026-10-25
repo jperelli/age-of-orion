@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Zooming the map scales cities, sites, stars, troops, fleets and transports with it, so they
+  keep their size relative to the land; before, they grew less than the map when zooming in
+  and crowded it when zooming out. Names and lines keep their size on screen.
+
 ## [0.13.0] - 2026-10-25
 
 ### Added
