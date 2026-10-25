@@ -741,7 +741,6 @@
  "colony.rally_set": "Rally point",
  "orbit.scrap": "Disband",
  "orbit.scrap_confirm": "Disband {ships}? A quarter of their cost goes back to the treasury.",
- "empire.bombard": "Besiege enemy cities when our armies hold them",
  "research.choose": "Choose a subject...",
  "research.known": "{n} known subjects",
  "event.tech_discovered.research": "{field}: {tech} mastered.",

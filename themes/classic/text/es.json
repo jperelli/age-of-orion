@@ -717,7 +717,6 @@
  "colony.rally_clear": "Quitar",
  "orbit.scrap": "Desguazar",
  "orbit.scrap_confirm": "¿Desguazar {ships}? Un cuarto de su costo vuelve a la reserva.",
- "empire.bombard": "Bombardear planetas enemigos cuando nuestras naves controlan su órbita",
  "research.choose": "Elige una tecnología...",
  "research.known": "{n} tecnologías conocidas",
  "tech.advanced": "Tecnología avanzada {n}",

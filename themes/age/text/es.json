@@ -607,7 +607,6 @@
  "colony.rally_set": "Punto de reunión",
  "orbit.scrap": "Licenciar",
  "orbit.scrap_confirm": "¿Licenciar {ships}? Un cuarto de su costo vuelve al tesoro.",
- "empire.bombard": "Sitiar ciudades enemigas cuando nuestros ejércitos las rodean",
  "research.choose": "Elige un tema...",
  "research.known": "{n} temas conocidos",
  "event.tech_discovered.research": "{field}: se domina {tech}.",

@@ -731,7 +731,6 @@
  "colony.rally_clear": "Clear",
  "orbit.scrap": "Scrap",
  "orbit.scrap_confirm": "Scrap {ships}? A quarter of their cost goes back to the reserve.",
- "empire.bombard": "Bomb enemy planets when our ships hold their orbit",
  "research.choose": "Choose a technology...",
  "research.known": "{n} known technologies",
  "tech.advanced": "Advanced technology {n}",

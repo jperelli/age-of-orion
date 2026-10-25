@@ -14,8 +14,9 @@ All notable changes to this project are documented here. The format follows
   - with a colony ship in orbit the turn asks "Build a new colony?", as in MOO1, instead of
     settling by itself; then the transport lands, the colonists walk out with their banner and
     the new colony gets the name you type (also when transports settle an empty planet);
-  - bombing: the turn asks before bombing an enemy colony, as in MOO1, then the bombs fall and
-    the losses show (also when your colonies are bombed);
+  - bombing: the turn asks before bombing an enemy colony, as in MOO1 (in place of the
+    "bomb enemy planets" setting of the Planets screen), then the bombs fall and the losses
+    show (also when your colonies are bombed);
   - espionage: MOO1's panel with the target's portrait and a button per field to steal from,
     then the stolen tech in the spies' den; a notice when a tech is stolen from you;
   - sabotage: choose one of the target's colonies (with its last report) and what to destroy,

@@ -999,8 +999,6 @@ export class GameScreen {
         ),
       ),
     );
-    const bombard = h("input", { type: "checkbox", checked: v.bombard });
-    bombard.addEventListener("change", () => this.command({ type: "set_bombard", enabled: bombard.checked }));
     const tax = slider({
       label: this.t("empire.tax"),
       title: this.t("empire.tax_hint"),
@@ -1017,7 +1015,6 @@ export class GameScreen {
         table,
         tax,
         h("p", { class: "muted small" }, this.t("empire.income", { trade: v.total_trade, spies: v.spying_maint, reserve: v.reserve })),
-        h("label", { class: "checkbox" }, bombard, " ", this.t("empire.bombard")),
       ],
       [this.t("btn.close")],
       "wide",
