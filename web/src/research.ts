@@ -47,8 +47,13 @@ function progress(f: FieldView): number {
   return f.project !== 0 && f.cost > 0 ? Math.floor((f.invested * 100) / f.cost) : 0;
 }
 
+/** 1oom `game_tech_finish_new`: a field asks for its next project when it has none and
+ * research has gone into it, so the first choices come after the first turn's research (as
+ * in MOO1), not when the game starts. */
+const choosing = (f: FieldView) => f.project === 0 && f.invested > 0 && f.choices.length > 0;
+
 export function needsChoice(ctx: Ctx): boolean {
-  return ctx.view().tech.some((f) => f.project === 0 && f.choices.length > 0);
+  return ctx.view().tech.some(choosing);
 }
 
 /** MOO1's new-tech dialog: the next project of field `i`, chosen among what can be researched.
@@ -56,7 +61,7 @@ export function needsChoice(ctx: Ctx): boolean {
 async function chooseTech(ctx: Ctx, i: number): Promise<void> {
   const t = (k: string, p?: Record<string, string | number>) => ctx.theme.t(k, p);
   const f = ctx.view().tech[i];
-  if (f.project !== 0 || !f.choices.length) return;
+  if (!choosing(f)) return;
   let close: (i: number) => void = () => {};
   const list = h(
     "div",

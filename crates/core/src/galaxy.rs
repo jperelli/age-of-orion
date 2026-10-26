@@ -1070,7 +1070,8 @@ pub fn new_game(opts: &NewGameOptions) -> Result<State, String> {
     }
     // First research projects: computers pick at random (1oom
     // `game_ai_classic_new_game_tech`); humans start without any and choose them in the
-    // new-tech dialogs, as in MOO1.
+    // new-tech dialogs once the first turn's research has gone into each field, as in MOO1
+    // (1oom `game_tech_finish_new`).
     crate::ai::new_game_tech(&mut st);
     for (i, &home) in homes.iter().enumerate() {
         st.empires[i].explored[home] = true;

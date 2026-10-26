@@ -515,8 +515,8 @@ pub fn apply(st: &mut State, empire: EmpireId, cmd: &Command) -> Result<(), Comm
             {
                 return err("invalid_tech");
             }
-            // As in MOO1, a field's project is chosen when it has none (at the start of the
-            // game or once a tech is discovered) and stays until it is discovered.
+            // As in MOO1, a field's project is chosen when it has none (after the first
+            // turn's research, or once a tech is discovered) and stays until it is discovered.
             let project = st.empires[empire as usize].tech.project[field];
             if project != 0 && project != tech {
                 return err("project_locked");

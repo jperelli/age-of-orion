@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A new game no longer opens with the research choices: as in MOO1, each field asks what to
+  study once research has gone into it, after the first turn (1oom `game_tech_finish_new`).
+
 ## [0.15.0] - 2026-10-25
 
 ### Added
